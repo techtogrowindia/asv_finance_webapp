@@ -14,69 +14,70 @@ This mirrors how the other apps on the server are run.
              └── frontend/  → build → nginx serves frontend/dist
 ```
 
-- **Server:** `85.208.51.93`, Ubuntu 24.04, Node v20 (nvm), pm2, nginx.
+- **Server:** `85.208.51.93`, Ubuntu 24.04, Node v20 (root's nvm), pm2, nginx.
 - **Domain:** `asvsmallfinance.com` → nginx → static frontend + `/api` proxy to the API.
 - **Database:** PostgreSQL `asvfinance` (see [`db-setup.sql`](db-setup.sql)).
+- **Execution model:** the `asv-finance` account is **login-only**. Everything runs
+  via `sudo` as **root**, using **root's** nvm/node/npm/pm2 — same as the other apps
+  on this box. `sudo` resets PATH, so commands must load root's nvm first. Define a
+  helper for the session:
+
+  ```bash
+  # loads root's Node toolchain, then runs the given command as root
+  RUN() { sudo bash -c 'export NVM_DIR=/root/.nvm; . "$NVM_DIR/nvm.sh"; '"$*"; }
+  ```
 
 ---
 
 ## One-time server setup
 
 ```bash
-# 1. Repo access: add a read-only deploy key (or use a GitHub PAT) so the VPS
-#    can pull. Prefer a per-repo deploy key over personal credentials.
-#    (Private repo → the VPS needs its own key; do NOT store passwords in git.)
+# 1. Repo access: add a read-only deploy key (or a GitHub PAT) so the VPS can pull.
+#    Prefer a per-repo deploy key. (Do NOT store passwords in git.)
 
-# 2. Clone into /var/www
-cd /var/www
-git clone git@github.com:techtogrowindia/asv_finance_webapp.git
-# (or https with a PAT)
-
-# 2b. Node toolchain for the deploy user.
-#     The server's npm/pm2 belong to ROOT's nvm and are NOT usable by asv-finance.
-#     Give this user its own nvm + Node v20.20.2 + pm2 (isolated):
-sudo -iu asv-finance bash /var/www/asv_finance_webapp/deploy/setup-node-user.sh
-#     Then enable pm2 on boot (run the sudo command it prints).
+# 2. Clone into /var/www (as root)
+sudo git clone git@github.com:techtogrowindia/asv_finance_webapp.git /var/www/asv_finance_webapp
+cd /var/www/asv_finance_webapp
 
 # 3. Database (run once, as postgres — set real passwords first)
-sudo -u postgres psql -f /var/www/asv_finance_webapp/deploy/db-setup.sql
+sudo -u postgres psql -f deploy/db-setup.sql
 
-# 4. Environment files (NEVER committed — created on the server only)
-#    backend/.env  → DB URLs, JWT secret, etc.  (see backend/.env.example)
-cp backend/.env.example backend/.env   # then edit with real values
+# 4. Environment file (NEVER committed — created on the server only)
+sudo cp backend/.env.example backend/.env
+sudo nano backend/.env                 # set real DB URLs + JWT secrets
 
-# 5. Backend: install, migrate (as owner), build, start under pm2
-cd backend
-npm ci
-npm run migrate:deploy          # runs migrations as asvfinance_owner
-npm run build
-pm2 start ecosystem.config.js   # process name: asvfinance-api
-pm2 save
+# 5. Backend: install, migrate + RLS, seed, start under pm2 (all via root's nvm)
+RUN 'cd /var/www/asv_finance_webapp/backend && npm ci && npm run prisma:generate'
+RUN 'cd /var/www/asv_finance_webapp/backend && npm run migrate:deploy'   # migrate + apply rls.sql
+RUN 'cd /var/www/asv_finance_webapp/backend && npm run seed'             # demo tenant + logins
+RUN 'cd /var/www/asv_finance_webapp/backend && npm run build && pm2 start ecosystem.config.js && pm2 save'
 
-# 6. Frontend: install, build (nginx serves the static output)
-cd ../frontend
-npm ci
-npm run build                   # outputs frontend/dist
+# 6. Frontend: install + build (nginx serves the static output)
+RUN 'cd /var/www/asv_finance_webapp/frontend && npm ci && npm run build'
 
-# 7. nginx: point the domain at frontend/dist and proxy /api → 127.0.0.1:<port>
-#    then: sudo nginx -t && sudo systemctl reload nginx
-# 8. HTTPS: sudo certbot --nginx -d asvsmallfinance.com
+# 7. nginx: install the site config, test, reload
+sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/asvsmallfinance.com
+sudo ln -sf /etc/nginx/sites-available/asvsmallfinance.com /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+# 8. HTTPS
+sudo certbot --nginx -d asvsmallfinance.com -d www.asvsmallfinance.com
 ```
 
 ## Routine updates (each release)
 
 ```bash
 cd /var/www/asv_finance_webapp
-git pull origin main
+sudo git pull origin main
 
 # backend changed?
-cd backend && npm ci && npm run migrate:deploy && npm run build && pm2 restart asvfinance-api
+RUN 'cd /var/www/asv_finance_webapp/backend && npm ci && npm run migrate:deploy && npm run build && pm2 restart asvfinance-api'
 
 # frontend changed?
-cd ../frontend && npm ci && npm run build   # nginx picks up new dist automatically
+RUN 'cd /var/www/asv_finance_webapp/frontend && npm ci && npm run build'   # nginx serves new dist
 ```
 
-> A small `deploy/update.sh` script can wrap the above once the apps exist.
+> A small `deploy/update.sh` can wrap the above once the app stabilises.
 
 ---
 
@@ -93,9 +94,11 @@ cd ../frontend && npm ci && npm run build   # nginx picks up new dist automatica
 
 ## Notes
 
-- **Node toolchain:** `asv-finance` uses its **own** nvm/Node/pm2 (root's are not
-  accessible). Non-interactive SSH must load nvm first:
-  `ssh asvfinance 'export NVM_DIR=~/.nvm; . $NVM_DIR/nvm.sh; <cmd>'`.
+- **Execution as root via sudo:** `asv-finance` is login-only with passwordless
+  sudo; all commands run as root using **root's** nvm/node/pm2. Because `sudo`
+  resets PATH, always load nvm first (the `RUN` helper above, or
+  `sudo bash -c 'export NVM_DIR=/root/.nvm; . "$NVM_DIR/nvm.sh"; <cmd>'`). pm2
+  therefore runs under root — consistent with the server's other apps.
 - **Secrets stay on the server** in `.env` (gitignored). The repo never holds
   passwords, keys, or the DB dump.
 - **Uploads** (KYC images) and **backups** live outside the git tree so `git pull`

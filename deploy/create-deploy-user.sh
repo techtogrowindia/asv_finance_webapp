@@ -34,19 +34,20 @@ chmod 600 "$HOME_DIR/.ssh/authorized_keys"
 chown -R "$USERNAME:$USERNAME" "$HOME_DIR/.ssh"
 echo "Installed deploy public key."
 
-# 3. Grant sudo (you asked to give sudo access).
+# 3. Grant sudo. This account is LOGIN-ONLY: all real work (git, npm, pm2, psql,
+#    nginx) is run via `sudo` as root, using root's existing nvm/node/pm2 — the
+#    same way the server's other apps run. So we enable PASSWORDLESS sudo, which
+#    lets automated deploys run without an interactive password prompt.
 usermod -aG sudo "$USERNAME"
-echo "Added $USERNAME to the sudo group."
+SUDOERS="/etc/sudoers.d/90-$USERNAME"
+echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > "$SUDOERS"
+chmod 440 "$SUDOERS"
+visudo -cf "$SUDOERS"   # validate; aborts (set -e) if malformed
+echo "Granted passwordless sudo to $USERNAME."
 
-# 4. OPTIONAL — passwordless sudo so automated deploys don't need a password.
-#    Leave commented if you prefer to type the password. Uncomment to enable:
-# echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/90-$USERNAME"
-# chmod 440 "/etc/sudoers.d/90-$USERNAME"
-# echo "Enabled passwordless sudo for $USERNAME."
-
-# 5. Give the user a home for the app under /var/www (matches the house layout).
-install -d -o "$USERNAME" -g "$USERNAME" "/var/www/asv_finance_webapp" || true
+# 4. App directory under /var/www (root-owned; git/build run as root via sudo).
+install -d -o root -g root "/var/www/asv_finance_webapp" || true
 
 echo
 echo "Done. Test from the developer machine:"
-echo "  ssh -i ~/.ssh/asv_finance_deploy $USERNAME@85.208.51.93"
+echo "  ssh -i ~/.ssh/asv_finance_deploy $USERNAME@85.208.51.93 'sudo whoami'   # -> root"
