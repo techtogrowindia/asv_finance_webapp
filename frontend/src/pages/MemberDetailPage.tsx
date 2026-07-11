@@ -61,6 +61,44 @@ export function MemberDetailPage() {
       </div>
 
       <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">Government ID proofs (KYC)</div>
+        <div className="panel-body">
+          {m.kyc ? (
+            <div className="detail-grid">
+              <Item k="Aadhaar / UID" v={m.kyc.uid ?? '—'} />
+              <Item k="Voter ID" v={m.kyc.voterId ?? '—'} />
+              <Item k="PAN" v={m.kyc.pan ?? '—'} />
+              <Item k="Ration card" v={m.kyc.rationCard ?? '—'} />
+              <Item k="Smart card" v={m.kyc.smartCard ?? '—'} />
+              <Item k="Other ID" v={m.kyc.otherId ?? '—'} />
+            </div>
+          ) : (
+            <div className="empty">No KYC documents recorded yet.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">Co-applicant / nominee</div>
+        <div className="panel-body">
+          {m.coApplicant ? (
+            <div className="detail-grid">
+              <Item k="Name" v={m.coApplicant.name} />
+              <Item k="Relation" v={m.coApplicant.relation ?? '—'} />
+              <Item k="Gender" v={m.coApplicant.gender ?? '—'} />
+              <Item k="Date of birth" v={date(m.coApplicant.dob)} />
+              <Item k="Mobile" v={m.coApplicant.mobile ?? '—'} />
+              <Item k="Voter ID" v={m.coApplicant.voterId ?? '—'} />
+              <Item k="PAN" v={m.coApplicant.pan ?? '—'} />
+              <Item k="Other ID" v={m.coApplicant.otherId ?? '—'} />
+            </div>
+          ) : (
+            <div className="empty">No co-applicant / nominee recorded yet.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-head">Loans</div>
         <div className="panel-body">
           <div className="empty">Loan history appears here once the Loan module is live.</div>

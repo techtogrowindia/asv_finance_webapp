@@ -46,11 +46,13 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  branches  Branch[]
-  employees Employee[]
-  centers   Center[]
-  groups    GroupUnit[]
-  clients   Client[]
+  branches     Branch[]
+  employees    Employee[]
+  centers      Center[]
+  groups       GroupUnit[]
+  clients      Client[]
+  kycs         Kyc[]
+  coApplicants CoApplicant[]
 
   @@map("tenant")
 }
@@ -192,10 +194,57 @@ model Client {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  tenant Tenant    @relation(fields: [tenantId], references: [id])
-  center Center    @relation(fields: [centerId], references: [id])
-  group  GroupUnit @relation(fields: [groupId], references: [id])
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  center      Center       @relation(fields: [centerId], references: [id])
+  group       GroupUnit    @relation(fields: [groupId], references: [id])
+  kyc         Kyc?
+  coApplicant CoApplicant?
 
   @@index([tenantId, centerId])
   @@map("client")
+}
+
+// ---- KYC (government ID proofs) — 1:1 with Client --------------------------
+// Sensitive fields (uid = Aadhaar) are masked on API read (see clients.service).
+model Kyc {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  clientId   String   @unique @map("client_id") @db.Uuid
+  voterId    String?  @map("voter_id")
+  otherId    String?  @map("other_id")
+  pan        String?
+  smartCard  String?  @map("smart_card")
+  rationCard String?  @map("ration_card")
+  uid        String? // Aadhaar number
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId])
+  @@map("kyc")
+}
+
+// ---- Co-Applicant / Nominee — 1:1 with Client ------------------------------
+model CoApplicant {
+  id       String    @id @default(uuid()) @db.Uuid
+  tenantId String    @map("tenant_id") @db.Uuid
+  clientId String    @unique @map("client_id") @db.Uuid
+  name     String
+  gender   String?
+  dob      DateTime? @db.Date
+  relation String?   @map("relation_with_client")
+  mobile   String?
+  voterId  String?   @map("voter_id")
+  otherId  String?   @map("other_id")
+  pan      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId])
+  @@map("co_applicant")
 }

@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsInt,
   IsNumber,
@@ -8,7 +9,10 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { KycDto } from './kyc.dto';
+import { CoApplicantDto } from './co-applicant.dto';
 
 export class CreateClientDto {
   @IsUUID()
@@ -45,4 +49,14 @@ export class CreateClientDto {
   @IsOptional() @IsString() @MaxLength(120) fatherName?: string;
 
   @IsOptional() @IsString() dateOfJoining?: string; // ISO date
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => KycDto)
+  kyc?: KycDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CoApplicantDto)
+  coApplicant?: CoApplicantDto;
 }

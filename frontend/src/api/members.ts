@@ -32,6 +32,26 @@ export interface MemberListItem {
   dateOfJoining: string | null;
 }
 
+export interface KycInfo {
+  voterId: string | null;
+  otherId: string | null;
+  pan: string | null;
+  smartCard: string | null;
+  rationCard: string | null;
+  uid: string | null; // masked by the API, e.g. "XXXX XXXX 3250"
+}
+
+export interface CoApplicantInfo {
+  name: string;
+  gender: string | null;
+  dob: string | null;
+  relation: string | null;
+  mobile: string | null;
+  voterId: string | null;
+  otherId: string | null;
+  pan: string | null;
+}
+
 export interface MemberDetail extends MemberListItem {
   dob: string | null;
   gender: string | null;
@@ -44,6 +64,8 @@ export interface MemberDetail extends MemberListItem {
   fatherName: string | null;
   latitude: string | null;
   longitude: string | null;
+  kyc: KycInfo | null;
+  coApplicant: CoApplicantInfo | null;
 }
 
 export interface CreateMemberBody {
@@ -61,6 +83,24 @@ export interface CreateMemberBody {
   monthlyExpense?: number;
   fatherName?: string;
   dateOfJoining?: string;
+  kyc?: {
+    voterId?: string;
+    otherId?: string;
+    pan?: string;
+    smartCard?: string;
+    rationCard?: string;
+    uid?: string;
+  };
+  coApplicant?: {
+    name: string;
+    gender?: string;
+    dob?: string;
+    relation?: string;
+    mobile?: string;
+    voterId?: string;
+    otherId?: string;
+    pan?: string;
+  };
 }
 
 export const listCenters = () => api<CenterLite[]>('/centers');

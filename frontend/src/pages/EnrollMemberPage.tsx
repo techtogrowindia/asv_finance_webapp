@@ -10,6 +10,7 @@ import {
 } from '../api/members';
 
 const GENDERS = ['Female', 'Male', 'Other'];
+const RELATIONS = ['Husband', 'Father', 'Son', 'Brother', 'Mother', 'Other'];
 
 export function EnrollMemberPage() {
   const navigate = useNavigate();
@@ -32,6 +33,22 @@ export function EnrollMemberPage() {
     monthlyIncome: '',
     monthlyExpense: '',
     fatherName: '',
+    // Government ID proofs (KYC)
+    uid: '',
+    voterId: '',
+    pan: '',
+    rationCard: '',
+    smartCard: '',
+    otherId: '',
+    // Co-applicant / nominee
+    coName: '',
+    coGender: '',
+    coDob: '',
+    coRelation: '',
+    coMobile: '',
+    coVoterId: '',
+    coPan: '',
+    coOtherId: '',
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -67,6 +84,29 @@ export function EnrollMemberPage() {
         monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
         monthlyExpense: form.monthlyExpense ? Number(form.monthlyExpense) : undefined,
         fatherName: form.fatherName || undefined,
+        kyc:
+          form.uid || form.voterId || form.pan || form.rationCard || form.smartCard || form.otherId
+            ? {
+                uid: form.uid || undefined,
+                voterId: form.voterId || undefined,
+                pan: form.pan || undefined,
+                rationCard: form.rationCard || undefined,
+                smartCard: form.smartCard || undefined,
+                otherId: form.otherId || undefined,
+              }
+            : undefined,
+        coApplicant: form.coName
+          ? {
+              name: form.coName.trim(),
+              gender: form.coGender || undefined,
+              dob: form.coDob || undefined,
+              relation: form.coRelation || undefined,
+              mobile: form.coMobile || undefined,
+              voterId: form.coVoterId || undefined,
+              pan: form.coPan || undefined,
+              otherId: form.coOtherId || undefined,
+            }
+          : undefined,
       };
       const created = await createMember(body);
       navigate(`/app/clients/${created.id}`, { replace: true });
@@ -175,6 +215,76 @@ export function EnrollMemberPage() {
           </Field>
           <Field label="Monthly expense (₹)">
             <input type="number" min="0" className="input" value={form.monthlyExpense} onChange={(e) => set('monthlyExpense', e.target.value)} />
+          </Field>
+        </div>
+
+        <div className="form-section-title" style={{ marginTop: 20 }}>
+          Government ID proofs (KYC)
+        </div>
+        <div className="hint">Aadhaar is masked everywhere it's shown after saving, for privacy.</div>
+        <div className="form-grid">
+          <Field label="Aadhaar / UID number">
+            <input className="input" value={form.uid} onChange={(e) => set('uid', e.target.value)} />
+          </Field>
+          <Field label="Voter ID">
+            <input className="input" value={form.voterId} onChange={(e) => set('voterId', e.target.value)} />
+          </Field>
+          <Field label="PAN">
+            <input className="input" value={form.pan} onChange={(e) => set('pan', e.target.value)} />
+          </Field>
+          <Field label="Ration card">
+            <input className="input" value={form.rationCard} onChange={(e) => set('rationCard', e.target.value)} />
+          </Field>
+          <Field label="Smart card">
+            <input className="input" value={form.smartCard} onChange={(e) => set('smartCard', e.target.value)} />
+          </Field>
+          <Field label="Other ID">
+            <input className="input" value={form.otherId} onChange={(e) => set('otherId', e.target.value)} />
+          </Field>
+        </div>
+
+        <div className="form-section-title" style={{ marginTop: 20 }}>
+          Co-applicant / nominee
+        </div>
+        <div className="hint">Usually the member's husband or a family nominee.</div>
+        <div className="form-grid">
+          <Field label="Name">
+            <input className="input" value={form.coName} onChange={(e) => set('coName', e.target.value)} />
+          </Field>
+          <Field label="Relation with member">
+            <select className="input" value={form.coRelation} onChange={(e) => set('coRelation', e.target.value)}>
+              <option value="">Select</option>
+              {RELATIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Gender">
+            <select className="input" value={form.coGender} onChange={(e) => set('coGender', e.target.value)}>
+              <option value="">Select</option>
+              {GENDERS.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Date of birth">
+            <input type="date" className="input" value={form.coDob} onChange={(e) => set('coDob', e.target.value)} />
+          </Field>
+          <Field label="Mobile">
+            <input className="input" value={form.coMobile} onChange={(e) => set('coMobile', e.target.value)} />
+          </Field>
+          <Field label="Voter ID">
+            <input className="input" value={form.coVoterId} onChange={(e) => set('coVoterId', e.target.value)} />
+          </Field>
+          <Field label="PAN">
+            <input className="input" value={form.coPan} onChange={(e) => set('coPan', e.target.value)} />
+          </Field>
+          <Field label="Other ID">
+            <input className="input" value={form.coOtherId} onChange={(e) => set('coOtherId', e.target.value)} />
           </Field>
         </div>
 

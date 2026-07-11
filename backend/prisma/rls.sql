@@ -13,7 +13,8 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'branch','employee','center','employee_center','group_unit','client'
+    'branch','employee','center','employee_center','group_unit','client',
+    'kyc','co_applicant'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
     EXECUTE format('ALTER TABLE %I FORCE  ROW LEVEL SECURITY;', t);

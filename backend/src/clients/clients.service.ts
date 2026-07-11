@@ -53,6 +53,8 @@ export class ClientsService {
         include: {
           center: { select: { code: true, name: true, branch: { select: { code: true } } } },
           group: { select: { groupNo: true } },
+          kyc: true,
+          coApplicant: true,
         },
       });
       if (!c) throw new NotFoundException('Member not found');
@@ -101,10 +103,44 @@ export class ClientsService {
           fatherName: dto.fatherName,
           dateOfJoining: dto.dateOfJoining ? new Date(dto.dateOfJoining) : new Date(),
           status: 'ACTIVE',
+          ...(dto.kyc
+            ? {
+                kyc: {
+                  create: {
+                    tenantId: user.tenantId,
+                    voterId: dto.kyc.voterId,
+                    otherId: dto.kyc.otherId,
+                    pan: dto.kyc.pan,
+                    smartCard: dto.kyc.smartCard,
+                    rationCard: dto.kyc.rationCard,
+                    uid: dto.kyc.uid,
+                  },
+                },
+              }
+            : {}),
+          ...(dto.coApplicant
+            ? {
+                coApplicant: {
+                  create: {
+                    tenantId: user.tenantId,
+                    name: dto.coApplicant.name,
+                    gender: dto.coApplicant.gender,
+                    dob: dto.coApplicant.dob ? new Date(dto.coApplicant.dob) : null,
+                    relation: dto.coApplicant.relation,
+                    mobile: dto.coApplicant.mobile,
+                    voterId: dto.coApplicant.voterId,
+                    otherId: dto.coApplicant.otherId,
+                    pan: dto.coApplicant.pan,
+                  },
+                },
+              }
+            : {}),
         },
         include: {
           center: { select: { code: true, name: true, branch: { select: { code: true } } } },
           group: { select: { groupNo: true } },
+          kyc: true,
+          coApplicant: true,
         },
       });
       return this.serialize(created, true);
@@ -191,6 +227,36 @@ export class ClientsService {
       fatherName: c.fatherName,
       latitude: c.latitude,
       longitude: c.longitude,
+      kyc: c.kyc
+        ? {
+            voterId: c.kyc.voterId,
+            otherId: c.kyc.otherId,
+            pan: c.kyc.pan,
+            smartCard: c.kyc.smartCard,
+            rationCard: c.kyc.rationCard,
+            uid: maskUid(c.kyc.uid),
+          }
+        : null,
+      coApplicant: c.coApplicant
+        ? {
+            name: c.coApplicant.name,
+            gender: c.coApplicant.gender,
+            dob: c.coApplicant.dob,
+            relation: c.coApplicant.relation,
+            mobile: c.coApplicant.mobile,
+            voterId: c.coApplicant.voterId,
+            otherId: c.coApplicant.otherId,
+            pan: c.coApplicant.pan,
+          }
+        : null,
     };
   }
+}
+
+/** Aadhaar-style masking: keep only the last 4 characters visible, e.g. "XXXX XXXX 3250". */
+function maskUid(uid: string | null | undefined): string | null {
+  if (!uid) return null;
+  const digits = uid.replace(/\s+/g, '');
+  const last4 = digits.slice(-4);
+  return `XXXX XXXX ${last4}`;
 }
