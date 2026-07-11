@@ -406,7 +406,16 @@ function DocumentTypesTab() {
                 <tr key={d.id}>
                   <td>{d.name}</td>
                   <td>{d.appliesTo}</td>
-                  <td>{d.isMandatory ? 'Yes' : 'No'}</td>
+                  <td>
+                    <button
+                      className={`toggle ${d.isMandatory ? 'on' : ''}`}
+                      title="Click to toggle whether this document is mandatory"
+                      onClick={() => updateDocumentType(d.id, { isMandatory: !d.isMandatory }).then(refresh)}
+                    >
+                      <span className="knob" />
+                      <span className="toggle-label">{d.isMandatory ? 'Mandatory' : 'Optional'}</span>
+                    </button>
+                  </td>
                   <td><StatusBadge active={d.isActive} /></td>
                   <td>
                     <RowActions

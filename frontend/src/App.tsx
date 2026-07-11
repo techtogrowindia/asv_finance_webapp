@@ -12,6 +12,7 @@ import { KycDocumentsPage } from './pages/KycDocumentsPage';
 import { ComingSoon } from './pages/ComingSoon';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
+import { CentersPage } from './pages/admin/CentersPage';
 
 /** Wraps a page in the employee shell + auth guard (FDO only). */
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
@@ -47,6 +48,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/centers"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <CentersPage />
             </RequireAuth>
           }
         />

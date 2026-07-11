@@ -11,6 +11,7 @@ import { ClientsModule } from './clients/clients.module';
 import { MastersModule } from './masters/masters.module';
 import { LoansModule } from './loans/loans.module';
 import { DocumentsModule } from './documents/documents.module';
+import { EmployeesModule } from './employees/employees.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -24,6 +25,7 @@ import { HealthController } from './health.controller';
     MastersModule,
     LoansModule,
     DocumentsModule,
+    EmployeesModule,
   ],
   controllers: [HealthController],
   providers: [
