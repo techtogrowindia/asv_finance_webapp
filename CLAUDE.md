@@ -1,3 +1,53 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Working in this repo (developer guidance)
+
+**Project state:** Foundation / architecture phase. This repo currently contains
+**docs only — no application code yet** (no `package.json`, no build/lint/test
+setup). Do **not** invent build or test commands; when the app is scaffolded, the
+backend and frontend will each carry their own tooling under `backend/` and
+`frontend/`. Update this section with real commands once they exist.
+
+**Read before coding (the big-picture architecture spans multiple files):**
+- `docs/ARCHITECTURE.md` — data model (ERD), multi-tenant RLS design, API surface, repo layout.
+- `deploy/db-setup.sql` — PostgreSQL owner/app role model that the RLS security depends on.
+- `deploy/DEPLOYMENT.md` — git push→pull to VPS, pm2 + nginx.
+- Sections below — full business domain, loan process, and compliance rules.
+
+**Architectural invariants (do not violate):**
+1. **Multi-tenant isolation via PostgreSQL RLS is the core security model.** Every
+   business table has `tenant_id` and uses `ENABLE`+`FORCE ROW LEVEL SECURITY`. The
+   API connects as the least-privilege role **`asvfinance_app`** (never owner /
+   superuser / `BYPASSRLS`); **migrations** run as **`asvfinance_owner`**. Each
+   request runs in a transaction that first sets `SET LOCAL app.tenant_id` (and
+   `app.branch_id`, `app.role`, `app.employee_id`) from the **JWT** — never from
+   the client body. This requires transaction-scoped connections (watch PgBouncer
+   mode). Any new table needs its tenant-isolation policy or it is a data-leak bug.
+2. **API-first.** All business logic (loan math, eligibility, arrears, scoping)
+   lives in the NestJS API; the React web app — and the future mobile app — are
+   thin clients over the versioned `/api/v1`. Never put rules in the frontend.
+3. **Domain hierarchy & scoping:** Tenant → Branch → Center → Group → Client.
+   Roles FDO/BM/HO limit visibility (FDO = own centers, BM = own branch, HO =
+   tenant). Enforce server-side.
+4. **Use the branch `working_date`, never `now()`,** for demand/schedule/EOD logic.
+5. **Money:** `numeric(14,2)`; UUID primary keys; **soft-delete only** on financial
+   data; write an `audit_log` entry for money-affecting actions; **maker-checker**
+   (separate approver) on disbursement.
+6. **Loan schedule = flat interest** (interest added upfront, equal instalments).
+   The exact per-instalment principal/interest split rule is **TBC — confirm with
+   the client, do not hardcode** the 750/250 example.
+7. **UI is original.** The reference product's screenshots are for *concept only* —
+   never clone their layout, colours, or wording (see §6.4).
+8. **Build order:** Employee (Field Officer) portal first; BM and HO later, but the
+   schema/security must support all three from the start.
+
+**Conventions:** DB `snake_case`, API `camelCase`; deploy is git push→pull (secrets
+live only in the server's `backend/.env`, never in git).
+
+---
+
 # ASV Finance — Microfinance Loan Management Software
 
 > This document explains **what we are building, why, and how**, in plain language.
