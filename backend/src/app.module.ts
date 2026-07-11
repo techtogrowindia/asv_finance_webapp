@@ -6,6 +6,8 @@ import { RolesGuard } from './common/auth/roles.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { CentersModule } from './centers/centers.module';
+import { ClientsModule } from './clients/clients.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -14,6 +16,8 @@ import { HealthController } from './health.controller';
     PrismaModule,
     AuthModule,
     DashboardModule,
+    CentersModule,
+    ClientsModule,
   ],
   controllers: [HealthController],
   providers: [

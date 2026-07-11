@@ -39,7 +39,7 @@ async function main() {
     },
   });
 
-  await prisma.employee.upsert({
+  const fdo = await prisma.employee.upsert({
     where: { login: 'kannan' },
     update: {},
     create: {
@@ -52,6 +52,37 @@ async function main() {
       role: 'FDO',
     },
   });
+
+  // A few centers assigned to the demo FDO, each with 5 empty groups, so the
+  // employee portal has real data to enroll members into.
+  const centers = [
+    { code: '029', name: 'NALLAKULAM' },
+    { code: '062', name: 'KUTTUR' },
+    { code: '065', name: 'CHOKKALINGAPURAM' },
+  ];
+  for (const c of centers) {
+    const center = await prisma.center.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: c.code } },
+      update: { fdoId: fdo.id },
+      create: {
+        tenantId: tenant.id,
+        branchId: branch.id,
+        fdoId: fdo.id,
+        code: c.code,
+        name: c.name,
+        meetingDay: 'TUE',
+        formationDate: new Date(),
+        status: 'ACTIVE',
+      },
+    });
+    for (let g = 1; g <= 5; g++) {
+      await prisma.groupUnit.upsert({
+        where: { centerId_groupNo: { centerId: center.id, groupNo: g } },
+        update: {},
+        create: { tenantId: tenant.id, centerId: center.id, groupNo: g },
+      });
+    }
+  }
 
   await prisma.employee.upsert({
     where: { login: 'bm-natham' },
