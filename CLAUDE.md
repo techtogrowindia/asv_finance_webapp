@@ -4,11 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working in this repo (developer guidance)
 
-**Project state:** Foundation / architecture phase. This repo currently contains
-**docs only — no application code yet** (no `package.json`, no build/lint/test
-setup). Do **not** invent build or test commands; when the app is scaffolded, the
-backend and frontend will each carry their own tooling under `backend/` and
-`frontend/`. Update this section with real commands once they exist.
+**Project state:** Employee-portal foundation scaffolded. Monorepo: `backend/`
+(NestJS + Prisma + PostgreSQL/RLS) and `frontend/` (React + Vite). Working today:
+auth (login with portal enforcement + JWT), RLS request-context, `/api/v1/health`,
+`/api/v1/auth/login|me`, `/api/v1/dashboard`; web app with `/login` (employee) and
+`/admin` (admin) portals, guarded routes, dashboard. Most employee sub-screens are
+`ComingSoon` stubs. Loan/collection modules not built yet.
+
+**Commands:**
+
+```bash
+# Frontend (frontend/)
+npm install
+npm run dev        # Vite dev server :5173 (proxies /api → :4001)
+npm run build      # tsc -b && vite build  → frontend/dist
+npm run lint
+
+# Backend (backend/)  — needs PostgreSQL + backend/.env (see .env.example)
+npm install
+npm run prisma:generate
+npm run migrate:dev            # dev migrations (owner via directUrl)
+npm run migrate:deploy         # prod: migrate + apply RLS policies (prisma/rls.sql)
+npm run seed                   # demo tenant + logins (kannan/FDO, bm-natham/BM)
+npm run start:dev              # Nest watch mode :4001
+npm run build && npm run start:prod
+npm test                       # jest;  npm test -- path/to.spec.ts  for one file
+```
+
+**Local run order:** create DB/roles (`deploy/db-setup.sql`) → backend `.env` →
+`migrate:deploy` → `seed` → `start:dev` → frontend `dev`. Demo password `Passw0rd!`.
 
 **Read before coding (the big-picture architecture spans multiple files):**
 - `docs/ARCHITECTURE.md` — data model (ERD), multi-tenant RLS design, API surface, repo layout.

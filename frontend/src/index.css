@@ -1,0 +1,172 @@
+/* =============================================================================
+   ASV Finance — design system (ORIGINAL; not derived from any reference product)
+   Brand: trustworthy microfinance — deep teal + warm amber on soft neutrals.
+   ========================================================================== */
+:root {
+  /* Brand palette */
+  --brand-900: #082e28;
+  --brand-700: #0d6e5e;
+  --brand-600: #0f8a72;
+  --brand-500: #14a085;
+  --brand-050: #e7f4f0;
+  --accent-500: #e8a838; /* warm amber */
+  --accent-600: #cf9021;
+
+  /* Neutrals */
+  --ink-900: #0b1720;
+  --ink-700: #33414c;
+  --ink-500: #64748b;
+  --line: #e2e8ec;
+  --surface: #ffffff;
+  --canvas: #f4f7f6;
+
+  /* Status */
+  --danger: #d1495b;
+  --danger-bg: #fdecee;
+  --ok: #1f9d76;
+
+  /* Shape */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(11, 23, 32, 0.06), 0 1px 3px rgba(11, 23, 32, 0.08);
+  --shadow-md: 0 8px 24px rgba(11, 23, 32, 0.1);
+  --font: 'Segoe UI', system-ui, -apple-system, 'Noto Sans Tamil', sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--ink-900);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--brand-700); text-decoration: none; }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 18px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: background .15s, box-shadow .15s;
+}
+.btn-primary { background: var(--brand-700); color: #fff; }
+.btn-primary:hover { background: var(--brand-600); }
+.btn-primary:disabled { background: #9db8b1; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--ink-700); border-color: var(--line); }
+.btn-ghost:hover { background: #eef2f1; }
+.btn-block { width: 100%; }
+
+/* ---- Inputs ---- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font-size: 13px; font-weight: 600; color: var(--ink-700); }
+.input {
+  padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  font-size: 15px; background: #fff; color: var(--ink-900); transition: border-color .15s, box-shadow .15s;
+}
+.input:focus { outline: none; border-color: var(--brand-500); box-shadow: 0 0 0 3px var(--brand-050); }
+
+/* ---- Alerts ---- */
+.alert-error {
+  background: var(--danger-bg); color: var(--danger); border: 1px solid #f3c6cd;
+  padding: 10px 13px; border-radius: var(--radius-sm); font-size: 14px; margin-bottom: 14px;
+}
+
+/* ---- Brand logo mark ---- */
+.logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .3px; }
+.logo-mark {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--brand-600), var(--brand-900));
+  color: #fff; font-weight: 800; font-size: 16px; box-shadow: var(--shadow-sm);
+}
+.logo-text { font-size: 20px; color: var(--ink-900); }
+.logo-text small { display: block; font-size: 11px; font-weight: 600; color: var(--ink-500); letter-spacing: 1px; }
+
+/* =============================== Auth screen ============================== */
+.auth {
+  min-height: 100%; display: grid; grid-template-columns: 1.05fr 1fr;
+}
+.auth-hero {
+  background: radial-gradient(120% 120% at 0% 0%, var(--brand-600) 0%, var(--brand-900) 70%);
+  color: #fff; padding: 56px; display: flex; flex-direction: column; justify-content: space-between;
+}
+.auth-hero .logo-text, .auth-hero .logo-text small { color: #fff; }
+.auth-hero h1 { font-size: 34px; line-height: 1.2; margin: 0 0 14px; max-width: 15ch; }
+.auth-hero p { color: #cfe7e0; font-size: 16px; max-width: 42ch; line-height: 1.6; }
+.hero-points { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 14px; }
+.hero-points li { display: flex; gap: 12px; align-items: center; color: #e4f2ee; font-size: 15px; }
+.hero-dot { width: 22px; height: 22px; border-radius: 6px; background: rgba(232,168,56,.25); color: var(--accent-500);
+  display: grid; place-items: center; font-size: 13px; flex: none; }
+
+.auth-panel { display: grid; place-items: center; padding: 40px; background: var(--surface); }
+.auth-card { width: 100%; max-width: 380px; }
+.auth-card h2 { margin: 0 0 4px; font-size: 24px; }
+.auth-sub { color: var(--ink-500); margin: 0 0 26px; font-size: 15px; }
+.portal-tag {
+  display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--brand-700); background: var(--brand-050); padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+}
+.portal-tag.admin { color: var(--accent-600); background: #fbf1dc; }
+.auth-foot { margin-top: 22px; font-size: 13px; color: var(--ink-500); text-align: center; }
+
+@media (max-width: 860px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth-hero { display: none; }
+}
+
+/* ============================== App shell ================================ */
+.shell { display: grid; grid-template-columns: 250px 1fr; min-height: 100%; }
+.sidebar { background: var(--brand-900); color: #d7e7e2; padding: 20px 14px; display: flex; flex-direction: column; }
+.sidebar .logo-text, .sidebar .logo-text small { color: #fff; }
+.side-nav { margin-top: 26px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.side-link {
+  display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: var(--radius-sm);
+  color: #bcd4ce; font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.side-link:hover { background: rgba(255,255,255,.06); color: #fff; }
+.side-link.active { background: var(--brand-600); color: #fff; }
+.side-ico { width: 20px; text-align: center; opacity: .9; }
+.side-foot { border-top: 1px solid rgba(255,255,255,.1); padding-top: 14px; font-size: 13px; color: #9dbbb3; }
+
+.main { display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  height: 62px; background: var(--surface); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 24px;
+}
+.topbar .who { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--brand-050); color: var(--brand-700);
+  display: grid; place-items: center; font-weight: 700; }
+.who-name { font-weight: 600; font-size: 14px; }
+.who-meta { font-size: 12px; color: var(--ink-500); }
+.content { padding: 26px 24px; overflow: auto; }
+.page-title { font-size: 22px; margin: 0 0 4px; }
+.page-sub { color: var(--ink-500); margin: 0 0 22px; font-size: 14px; }
+
+/* ---- Cards / grid ---- */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; box-shadow: var(--shadow-sm); display: flex; gap: 14px; align-items: center;
+}
+.card-ico { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; flex: none; }
+.card-ico.teal { background: var(--brand-050); color: var(--brand-700); }
+.card-ico.amber { background: #fbf1dc; color: var(--accent-600); }
+.card-label { font-size: 13px; color: var(--ink-500); }
+.card-value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.panel-head { padding: 16px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.panel-body { padding: 18px; }
+.empty { color: var(--ink-500); font-size: 14px; text-align: center; padding: 28px; }
+
+.link-btn { background: none; border: none; color: #cfe7e0; cursor: pointer; font: inherit; }
+.spinner {
+  width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.5); border-top-color: #fff;
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 720px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+}

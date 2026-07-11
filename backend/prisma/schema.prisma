@@ -1,0 +1,201 @@
+// ASV Finance — Prisma schema (foundation).
+// Runtime uses DATABASE_URL (asvfinance_app, RLS-enforced).
+// Migrations use directUrl = MIGRATION_DATABASE_URL (asvfinance_owner, DDL).
+// Every tenant-scoped table has tenantId; RLS policies are applied by prisma/rls.sql
+// (run via `npm run rls:apply` after migrate). See docs/ARCHITECTURE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("MIGRATION_DATABASE_URL")
+}
+
+enum Role {
+  FDO // Field Officer  (employee portal)
+  BM // Branch Manager (admin portal)
+  HO // Head Office / company
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ClientStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  CLOSED
+}
+
+enum CenterStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ---- Tenant (finance company) ---------------------------------------------
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  code      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branches  Branch[]
+  employees Employee[]
+  centers   Center[]
+  groups    GroupUnit[]
+  clients   Client[]
+
+  @@map("tenant")
+}
+
+// ---- Branch ----------------------------------------------------------------
+model Branch {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  code        String
+  name        String
+  workingDate DateTime @default(now()) @map("working_date") @db.Date
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  employees Employee[]
+  centers   Center[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("branch")
+}
+
+// ---- Employee (FDO / BM / HO) ----------------------------------------------
+model Employee {
+  id           String         @id @default(uuid()) @db.Uuid
+  tenantId     String         @map("tenant_id") @db.Uuid
+  branchId     String?        @map("branch_id") @db.Uuid
+  code         String // e.g. "45" (FDO code) or "BM-NATHAM"
+  name         String
+  login        String         @unique
+  passwordHash String         @map("password_hash")
+  role         Role
+  status       EmployeeStatus @default(ACTIVE)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  branch   Branch?          @relation(fields: [branchId], references: [id])
+  centers  EmployeeCenter[]
+  managing Center[]         @relation("CenterFdo")
+
+  @@index([tenantId])
+  @@map("employee")
+}
+
+// ---- Center ----------------------------------------------------------------
+model Center {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  branchId       String       @map("branch_id") @db.Uuid
+  fdoId          String?      @map("fdo_id") @db.Uuid
+  code           String // e.g. "029"
+  name           String
+  address        String?
+  meetingDay     String?      @map("meeting_day") // MON..SUN
+  meetingTime    String?      @map("meeting_time")
+  meetingPlace   String?      @map("meeting_place")
+  formationDate  DateTime?    @map("formation_date") @db.Date
+  nextMeeting    DateTime?    @map("next_meeting_date") @db.Date
+  mobile         String?
+  latitude       Decimal?     @db.Decimal(10, 7)
+  longitude      Decimal?     @db.Decimal(10, 7)
+  status         CenterStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  tenant    Tenant           @relation(fields: [tenantId], references: [id])
+  branch    Branch           @relation(fields: [branchId], references: [id])
+  fdo       Employee?        @relation("CenterFdo", fields: [fdoId], references: [id])
+  groups    GroupUnit[]
+  clients   Client[]
+  employees EmployeeCenter[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, branchId])
+  @@map("center")
+}
+
+// ---- Employee ⇄ Center assignment (many-to-many) ---------------------------
+model EmployeeCenter {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  employeeId String   @map("employee_id") @db.Uuid
+  centerId   String   @map("center_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  center   Center   @relation(fields: [centerId], references: [id])
+
+  @@unique([employeeId, centerId])
+  @@index([tenantId])
+  @@map("employee_center")
+}
+
+// ---- Group (5 per center) --------------------------------------------------
+model GroupUnit {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  centerId  String   @map("center_id") @db.Uuid
+  groupNo   Int      @map("group_no") // 1..5
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  center  Center   @relation(fields: [centerId], references: [id])
+  clients Client[]
+
+  @@unique([centerId, groupNo])
+  @@index([tenantId])
+  @@map("group_unit")
+}
+
+// ---- Client (member) -------------------------------------------------------
+model Client {
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  centerId      String       @map("center_id") @db.Uuid
+  groupId       String       @map("group_id") @db.Uuid
+  memberNo      Int          @map("member_no") // 1..5
+  clientCode    String       @unique @map("client_code") // e.g. PMF005179
+  name          String
+  dob           DateTime?    @db.Date
+  gender        String?
+  mobile        String?
+  presentAddress String?     @map("present_address")
+  pincode       String?
+  district      String?
+  state         String?
+  monthlyIncome  Decimal?    @map("monthly_income") @db.Decimal(14, 2)
+  monthlyExpense Decimal?    @map("monthly_expense") @db.Decimal(14, 2)
+  fatherName    String?      @map("father_name")
+  latitude      Decimal?     @db.Decimal(10, 7)
+  longitude     Decimal?     @db.Decimal(10, 7)
+  dateOfJoining DateTime?    @map("date_of_joining") @db.Date
+  status        ClientStatus @default(PENDING)
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id])
+  center Center    @relation(fields: [centerId], references: [id])
+  group  GroupUnit @relation(fields: [groupId], references: [id])
+
+  @@index([tenantId, centerId])
+  @@map("client")
+}

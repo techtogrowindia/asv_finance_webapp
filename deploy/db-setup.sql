@@ -16,10 +16,14 @@
 -- =============================================================================
 
 -- ---- Roles -----------------------------------------------------------------
--- Owner role: owns the database and all objects (used for migrations only).
-CREATE ROLE asvfinance_owner LOGIN PASSWORD 'CHANGE_ME_OWNER';
+-- Owner role: owns the database and all objects. Used for migrations, seeding,
+-- and SECURITY DEFINER helper functions (e.g. login lookup). It has BYPASSRLS so
+-- it can read/write across tenants for those bootstrap tasks even though tables
+-- use FORCE ROW LEVEL SECURITY. The running API must NEVER connect as this role.
+CREATE ROLE asvfinance_owner LOGIN PASSWORD 'CHANGE_ME_OWNER' BYPASSRLS;
 
--- Application role: least-privilege, used by the running API. RLS applies to it.
+-- Application role: least-privilege, used by the running API. RLS ALWAYS applies
+-- to it (no BYPASSRLS, not a superuser, not the table owner).
 CREATE ROLE asvfinance_app   LOGIN PASSWORD 'CHANGE_ME_APP';
 
 -- ---- Database --------------------------------------------------------------
