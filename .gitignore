@@ -1,0 +1,38 @@
+# --- Secrets / environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Node / build ---
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+.next/
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Uploads / generated (KYC images, reports) ---
+uploads/
+tmp/
+*.pdf.tmp
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# --- Claude Code local (user-specific) ---
+.claude/settings.local.json
