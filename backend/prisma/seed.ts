@@ -84,6 +84,78 @@ async function main() {
     }
   }
 
+  // ---- Loan module masters -------------------------------------------------
+  const frequencies = [
+    { code: 'DLY', name: 'Daily', daysBetween: 1 },
+    { code: 'WKS', name: 'Weekly', daysBetween: 7 },
+    { code: 'MNS', name: 'Monthly (Short)', daysBetween: 30 },
+    { code: 'MON', name: 'Monthly', daysBetween: 30 },
+  ];
+  const freqByCode: Record<string, { id: string }> = {};
+  for (const f of frequencies) {
+    freqByCode[f.code] = await prisma.frequency.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: f.code } },
+      update: {},
+      create: { tenantId: tenant.id, ...f },
+    });
+  }
+
+  const purposes = [
+    'Petty Shop', 'Tailoring', 'Agri Products', 'Agripurpose', 'Agency',
+    'Agarbathi Sales', 'Air Condition Repair', 'Dairy / Milch Animal',
+    'Vegetable Vending', 'Provision Store',
+  ];
+  for (const name of purposes) {
+    await prisma.purpose.upsert({
+      where: { tenantId_name: { tenantId: tenant.id, name } },
+      update: {},
+      create: { tenantId: tenant.id, name },
+    });
+  }
+
+  // Fixed-tier products (name mirrors amount+dues, matching how the reference
+  // labels them). Interest is a fixed amount per tier, not a % rate — confirmed
+  // with the client (see CLAUDE.md loan-math section).
+  const products = [
+    { name: '50000 LOAN 62 DUE', loanAmount: 50000, totalDues: 62, interestAmount: 12000, freq: 'WKS' },
+    { name: '100000 LOAN 102 DUE', loanAmount: 100000, totalDues: 102, interestAmount: 42800, freq: 'WKS' },
+    { name: '30000 LOAN 40 DUE', loanAmount: 30000, totalDues: 40, interestAmount: 7200, freq: 'WKS' },
+    { name: '20000 LOAN 28 DUE', loanAmount: 20000, totalDues: 28, interestAmount: 4800, freq: 'WKS' },
+  ];
+  for (const p of products) {
+    await prisma.loanProduct.upsert({
+      where: { tenantId_name: { tenantId: tenant.id, name: p.name } },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        name: p.name,
+        loanAmount: p.loanAmount,
+        totalDues: p.totalDues,
+        interestAmount: p.interestAmount,
+        frequencyId: freqByCode[p.freq].id,
+      },
+    });
+  }
+
+  // Required KYC document types (matches the reference's exact warning labels).
+  const documentTypes: { name: string; appliesTo: 'CLIENT' | 'NOMINEE' }[] = [
+    { name: 'CLIENT PHOTO', appliesTo: 'CLIENT' },
+    { name: 'NOMINEE PHOTO', appliesTo: 'NOMINEE' },
+    { name: 'CLIENT UID FRONT', appliesTo: 'CLIENT' },
+    { name: 'CLIENT VID FRONT', appliesTo: 'CLIENT' },
+    { name: 'NOMINEE UID FRONT', appliesTo: 'NOMINEE' },
+    { name: 'NOMINEE VID FRONT', appliesTo: 'NOMINEE' },
+    { name: 'SMART CARD', appliesTo: 'CLIENT' },
+    { name: 'PASSBOOK', appliesTo: 'CLIENT' },
+  ];
+  for (const dt of documentTypes) {
+    await prisma.documentType.upsert({
+      where: { tenantId_name: { tenantId: tenant.id, name: dt.name } },
+      update: {},
+      create: { tenantId: tenant.id, name: dt.name, appliesTo: dt.appliesTo },
+    });
+  }
+
   await prisma.employee.upsert({
     where: { login: 'bm-natham' },
     update: {},

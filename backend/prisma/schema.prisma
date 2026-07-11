@@ -37,6 +37,25 @@ enum CenterStatus {
   INACTIVE
 }
 
+enum LoanApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LoanStatus {
+  OPEN
+  CLOSED
+}
+
+// Which party a document type applies to (matches the reference's
+// CLIENT/NOMINEE-tagged requirement list, e.g. "CLIENT PHOTO", "NOMINEE UID FRONT").
+enum DocumentParty {
+  CLIENT
+  NOMINEE
+  BOTH
+}
+
 // ---- Tenant (finance company) ---------------------------------------------
 model Tenant {
   id        String   @id @default(uuid()) @db.Uuid
@@ -46,13 +65,20 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  branches     Branch[]
-  employees    Employee[]
-  centers      Center[]
-  groups       GroupUnit[]
-  clients      Client[]
-  kycs         Kyc[]
-  coApplicants CoApplicant[]
+  branches         Branch[]
+  employees        Employee[]
+  centers          Center[]
+  groups           GroupUnit[]
+  clients          Client[]
+  kycs             Kyc[]
+  coApplicants     CoApplicant[]
+  frequencies      Frequency[]
+  purposes         Purpose[]
+  loanProducts     LoanProduct[]
+  documentTypes    DocumentType[]
+  kycDocuments     KycDocument[]
+  loanApplications LoanApplication[]
+  loans            Loan[]
 
   @@map("tenant")
 }
@@ -194,11 +220,14 @@ model Client {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  tenant      Tenant       @relation(fields: [tenantId], references: [id])
-  center      Center       @relation(fields: [centerId], references: [id])
-  group       GroupUnit    @relation(fields: [groupId], references: [id])
-  kyc         Kyc?
-  coApplicant CoApplicant?
+  tenant       Tenant            @relation(fields: [tenantId], references: [id])
+  center       Center            @relation(fields: [centerId], references: [id])
+  group        GroupUnit         @relation(fields: [groupId], references: [id])
+  kyc          Kyc?
+  coApplicant  CoApplicant?
+  documents    KycDocument[]
+  applications LoanApplication[]
+  loans        Loan[]
 
   @@index([tenantId, centerId])
   @@map("client")
@@ -247,4 +276,185 @@ model CoApplicant {
 
   @@index([tenantId])
   @@map("co_applicant")
+}
+
+// ---- Masters ----------------------------------------------------------------
+
+// Repayment frequency (DLY/WKS/MNS/MON) — drives schedule spacing.
+model Frequency {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  code        String // DLY | WKS | MNS | MON
+  name        String
+  daysBetween Int      @map("days_between")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  loanProducts LoanProduct[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("frequency")
+}
+
+// Loan purpose (livelihood activity) — large, searchable list.
+model Purpose {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  loanApplications LoanApplication[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("purpose")
+}
+
+// A named loan product tier. Each tier has FIXED totals (not a % rate formula) —
+// e.g. "100000 LOAN 102 DUE" = amount 100000, 102 weekly dues, interest 42800.
+// Per-installment split is even: principal = loanAmount/totalDues,
+// interest = interestAmount/totalDues (confirmed with the client; see
+// backend/src/loans/schedule.util.ts).
+model LoanProduct {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  frequencyId    String   @map("frequency_id") @db.Uuid
+  name           String
+  loanAmount     Decimal  @map("loan_amount") @db.Decimal(14, 2)
+  totalDues      Int      @map("total_dues")
+  interestAmount Decimal  @map("interest_amount") @db.Decimal(14, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  frequency        Frequency         @relation(fields: [frequencyId], references: [id])
+  loanApplications LoanApplication[]
+  loans            Loan[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("loan_product")
+}
+
+// Required KYC document types, tagged to CLIENT / NOMINEE / BOTH — drives the
+// eligibility-gate "X Image Not Uploaded" warnings on the loan application.
+model DocumentType {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  name        String // e.g. "CLIENT PHOTO", "SMART CARD", "PASSBOOK"
+  appliesTo   DocumentParty @default(BOTH) @map("applies_to")
+  isMandatory Boolean       @default(true) @map("is_mandatory")
+  isActive    Boolean       @default(true) @map("is_active")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id])
+  documents KycDocument[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("document_type")
+}
+
+// An uploaded KYC document image for a client (or their nominee). Upload UI is a
+// later "KYC Documents" screen; this table exists now so the loan eligibility
+// gate can correctly report missing documents (empty = all required, missing).
+model KycDocument {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  clientId       String        @map("client_id") @db.Uuid
+  documentTypeId String        @map("document_type_id") @db.Uuid
+  party          DocumentParty @default(CLIENT)
+  filePath       String?       @map("file_path")
+  uploadedAt     DateTime      @default(now()) @map("uploaded_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
+
+  @@unique([clientId, documentTypeId, party])
+  @@index([tenantId, clientId])
+  @@map("kyc_document")
+}
+
+// ---- Loan application (employee submits; BM approves+disburses later) -----
+model LoanApplication {
+  id                String                 @id @default(uuid()) @db.Uuid
+  tenantId          String                 @map("tenant_id") @db.Uuid
+  clientId          String                 @map("client_id") @db.Uuid
+  productId         String                 @map("product_id") @db.Uuid
+  purposeId         String                 @map("purpose_id") @db.Uuid
+  requestedAmount   Decimal                @map("requested_amount") @db.Decimal(14, 2)
+  sanctionedAmount  Decimal?               @map("sanctioned_amount") @db.Decimal(14, 2)
+  status            LoanApplicationStatus  @default(PENDING)
+  warnings          Json? // eligibility warnings captured at submission time
+  createdBy         String?                @map("created_by") @db.Uuid
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id])
+  client  Client      @relation(fields: [clientId], references: [id])
+  product LoanProduct @relation(fields: [productId], references: [id])
+  purpose Purpose     @relation(fields: [purposeId], references: [id])
+  loan    Loan?
+
+  @@index([tenantId, clientId])
+  @@map("loan_application")
+}
+
+// A disbursed loan. Created later by the BM disbursement action (maker-checker);
+// the employee portal only ever reads these (existing-loan panel, ledger).
+model Loan {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @map("tenant_id") @db.Uuid
+  clientId        String     @map("client_id") @db.Uuid
+  applicationId   String?    @unique @map("application_id") @db.Uuid
+  productId       String     @map("product_id") @db.Uuid
+  loanAccount     String     @unique @map("loan_account") // e.g. PMF005179/2
+  cycleNo         Int        @map("cycle_no")
+  loanAmount      Decimal    @map("loan_amount") @db.Decimal(14, 2)
+  interestAmount  Decimal    @map("interest_amount") @db.Decimal(14, 2)
+  totalAmount     Decimal    @map("total_amount") @db.Decimal(14, 2)
+  totalDues       Int        @map("total_dues")
+  disbursalDate   DateTime   @map("disbursal_date") @db.Date
+  dueStartDate    DateTime   @map("due_start_date") @db.Date
+  maturityDate    DateTime   @map("maturity_date") @db.Date
+  closedDate      DateTime?  @map("closed_date") @db.Date
+  loanType        LoanStatus @default(OPEN) @map("loan_type")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id])
+  client      Client              @relation(fields: [clientId], references: [id])
+  product     LoanProduct         @relation(fields: [productId], references: [id])
+  application LoanApplication?    @relation(fields: [applicationId], references: [id])
+  schedule    RepaymentSchedule[]
+
+  @@index([tenantId, clientId])
+  @@map("loan")
+}
+
+// One row per installment: planned (due) vs actual (collected).
+model RepaymentSchedule {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  loanId      String    @map("loan_id") @db.Uuid
+  loan        Loan      @relation(fields: [loanId], references: [id])
+  dueNo       Int       @map("due_no")
+  dueDate     DateTime  @map("due_date") @db.Date
+  duePri      Decimal   @map("due_pri") @db.Decimal(14, 2)
+  dueInt      Decimal   @map("due_int") @db.Decimal(14, 2)
+  dueAmt      Decimal   @map("due_amt") @db.Decimal(14, 2)
+  collDate    DateTime? @map("coll_date") @db.Date
+  collPri     Decimal   @default(0) @map("coll_pri") @db.Decimal(14, 2)
+  collInt     Decimal   @default(0) @map("coll_int") @db.Decimal(14, 2)
+  collAmt     Decimal   @default(0) @map("coll_amt") @db.Decimal(14, 2)
+  dueBalance  Decimal   @map("due_balance") @db.Decimal(14, 2)
+
+  @@unique([loanId, dueNo])
+  @@index([tenantId, loanId])
+  @@map("repayment_schedule")
 }

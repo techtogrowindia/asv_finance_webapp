@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CentersModule } from './centers/centers.module';
 import { ClientsModule } from './clients/clients.module';
+import { MastersModule } from './masters/masters.module';
+import { LoansModule } from './loans/loans.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -18,6 +20,8 @@ import { HealthController } from './health.controller';
     DashboardModule,
     CentersModule,
     ClientsModule,
+    MastersModule,
+    LoansModule,
   ],
   controllers: [HealthController],
   providers: [

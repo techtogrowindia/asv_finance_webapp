@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { MembersPage } from './pages/MembersPage';
 import { EnrollMemberPage } from './pages/EnrollMemberPage';
 import { MemberDetailPage } from './pages/MemberDetailPage';
+import { LoanApplicationPage } from './pages/LoanApplicationPage';
 import { ComingSoon } from './pages/ComingSoon';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 
@@ -33,7 +34,7 @@ export default function App() {
         <Route path="/app/clients" element={<EmployeeRoute><MembersPage /></EmployeeRoute>} />
         <Route path="/app/clients/:id" element={<EmployeeRoute><MemberDetailPage /></EmployeeRoute>} />
         <Route path="/app/enroll" element={<EmployeeRoute><EnrollMemberPage /></EmployeeRoute>} />
-        <Route path="/app/loans" element={<EmployeeRoute><ComingSoon title="Loans" /></EmployeeRoute>} />
+        <Route path="/app/loans" element={<EmployeeRoute><LoanApplicationPage /></EmployeeRoute>} />
         <Route path="/app/collections" element={<EmployeeRoute><ComingSoon title="Collections" /></EmployeeRoute>} />
         <Route path="/app/reports" element={<EmployeeRoute><ComingSoon title="Reports" /></EmployeeRoute>} />
 
