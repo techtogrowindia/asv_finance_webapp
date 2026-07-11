@@ -32,6 +32,12 @@ cd /var/www
 git clone git@github.com:techtogrowindia/asv_finance_webapp.git
 # (or https with a PAT)
 
+# 2b. Node toolchain for the deploy user.
+#     The server's npm/pm2 belong to ROOT's nvm and are NOT usable by asv-finance.
+#     Give this user its own nvm + Node v20.20.2 + pm2 (isolated):
+sudo -iu asv-finance bash /var/www/asv_finance_webapp/deploy/setup-node-user.sh
+#     Then enable pm2 on boot (run the sudo command it prints).
+
 # 3. Database (run once, as postgres — set real passwords first)
 sudo -u postgres psql -f /var/www/asv_finance_webapp/deploy/db-setup.sql
 
@@ -87,6 +93,9 @@ cd ../frontend && npm ci && npm run build   # nginx picks up new dist automatica
 
 ## Notes
 
+- **Node toolchain:** `asv-finance` uses its **own** nvm/Node/pm2 (root's are not
+  accessible). Non-interactive SSH must load nvm first:
+  `ssh asvfinance 'export NVM_DIR=~/.nvm; . $NVM_DIR/nvm.sh; <cmd>'`.
 - **Secrets stay on the server** in `.env` (gitignored). The repo never holds
   passwords, keys, or the DB dump.
 - **Uploads** (KYC images) and **backups** live outside the git tree so `git pull`
