@@ -8,8 +8,10 @@ import { MembersPage } from './pages/MembersPage';
 import { EnrollMemberPage } from './pages/EnrollMemberPage';
 import { MemberDetailPage } from './pages/MemberDetailPage';
 import { LoanApplicationPage } from './pages/LoanApplicationPage';
+import { KycDocumentsPage } from './pages/KycDocumentsPage';
 import { ComingSoon } from './pages/ComingSoon';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { MastersPage } from './pages/admin/MastersPage';
 
 /** Wraps a page in the employee shell + auth guard (FDO only). */
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
@@ -33,6 +35,7 @@ export default function App() {
         <Route path="/app" element={<EmployeeRoute><DashboardPage /></EmployeeRoute>} />
         <Route path="/app/clients" element={<EmployeeRoute><MembersPage /></EmployeeRoute>} />
         <Route path="/app/clients/:id" element={<EmployeeRoute><MemberDetailPage /></EmployeeRoute>} />
+        <Route path="/app/clients/:id/documents" element={<EmployeeRoute><KycDocumentsPage /></EmployeeRoute>} />
         <Route path="/app/enroll" element={<EmployeeRoute><EnrollMemberPage /></EmployeeRoute>} />
         <Route path="/app/loans" element={<EmployeeRoute><LoanApplicationPage /></EmployeeRoute>} />
         <Route path="/app/collections" element={<EmployeeRoute><ComingSoon title="Collections" /></EmployeeRoute>} />
@@ -43,9 +46,15 @@ export default function App() {
           path="/admin/dashboard"
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
-              <div className="shell" style={{ gridTemplateColumns: '1fr' }}>
-                <AdminDashboard />
-              </div>
+              <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/masters"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <MastersPage />
             </RequireAuth>
           }
         />

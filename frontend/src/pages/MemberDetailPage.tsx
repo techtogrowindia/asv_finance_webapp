@@ -33,6 +33,9 @@ export function MemberDetailPage() {
             · <span className={`badge ${m.status.toLowerCase()}`}>{m.status}</span>
           </p>
         </div>
+        <button className="btn btn-primary" onClick={() => navigate(`/app/clients/${m.id}/documents`)}>
+          KYC Documents
+        </button>
       </div>
 
       <div className="panel">

@@ -369,6 +369,8 @@ model KycDocument {
   documentTypeId String        @map("document_type_id") @db.Uuid
   party          DocumentParty @default(CLIENT)
   filePath       String?       @map("file_path")
+  mimeType       String?       @map("mime_type")
+  originalName   String?       @map("original_name")
   uploadedAt     DateTime      @default(now()) @map("uploaded_at")
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id])

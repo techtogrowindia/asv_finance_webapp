@@ -10,6 +10,7 @@ import { CentersModule } from './centers/centers.module';
 import { ClientsModule } from './clients/clients.module';
 import { MastersModule } from './masters/masters.module';
 import { LoansModule } from './loans/loans.module';
+import { DocumentsModule } from './documents/documents.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -22,6 +23,7 @@ import { HealthController } from './health.controller';
     ClientsModule,
     MastersModule,
     LoansModule,
+    DocumentsModule,
   ],
   controllers: [HealthController],
   providers: [
