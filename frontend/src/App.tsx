@@ -17,6 +17,7 @@ import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
 import { EmployeesPage } from './pages/admin/EmployeesPage';
 import { LoanVerificationPage } from './pages/admin/LoanVerificationPage';
+import { EodPage } from './pages/admin/EodPage';
 
 /** Wraps a page in the employee shell + auth guard (FDO only). */
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
@@ -85,6 +86,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <LoanVerificationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/eod"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <EodPage />
             </RequireAuth>
           }
         />

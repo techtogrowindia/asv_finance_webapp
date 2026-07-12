@@ -16,7 +16,7 @@ BEGIN
     'branch','employee','center','employee_center','group_unit','client',
     'co_applicant','frequency','purpose','loan_product','document_type',
     'kyc_document','kyc_number','loan_application','loan','repayment_schedule',
-    'collection','audit_log'
+    'collection','audit_log','eod_closing'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
     EXECUTE format('ALTER TABLE %I FORCE  ROW LEVEL SECURITY;', t);

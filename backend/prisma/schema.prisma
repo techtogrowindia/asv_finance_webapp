@@ -84,6 +84,7 @@ model Tenant {
   loans            Loan[]
   collections      Collection[]
   auditLogs        AuditLog[]
+  eodClosings      EodClosing[]
 
   @@map("tenant")
 }
@@ -99,9 +100,10 @@ model Branch {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  employees Employee[]
-  centers   Center[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  employees   Employee[]
+  centers     Center[]
+  eodClosings EodClosing[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -525,4 +527,29 @@ model AuditLog {
 
   @@index([tenantId, entity, entityId])
   @@map("audit_log")
+}
+
+// ---- End of Day cash reconciliation ----------------------------------------
+// One row = one branch's closed working day. Closing a day snapshots the cash
+// position (opening + receipts − payments = closing) and advances the
+// branch's working_date to the next day — the single place that date moves
+// forward (invariant #4: everything else reads working_date, never now()).
+model EodClosing {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  branchId       String   @map("branch_id") @db.Uuid
+  eodDate        DateTime @map("eod_date") @db.Date // the working_date that was closed
+  openingBalance Decimal  @map("opening_balance") @db.Decimal(14, 2)
+  totalReceipts  Decimal  @map("total_receipts") @db.Decimal(14, 2)
+  totalPayments  Decimal  @map("total_payments") @db.Decimal(14, 2)
+  closingBalance Decimal  @map("closing_balance") @db.Decimal(14, 2)
+  doneBy         String   @map("done_by") @db.Uuid
+  doneAt         DateTime @default(now()) @map("done_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([branchId, eodDate])
+  @@index([tenantId, branchId])
+  @@map("eod_closing")
 }

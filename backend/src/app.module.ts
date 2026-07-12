@@ -14,6 +14,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CollectionsModule } from './collections/collections.module';
 import { SettingsModule } from './settings/settings.module';
+import { EodModule } from './eod/eod.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -30,6 +31,7 @@ import { HealthController } from './health.controller';
     EmployeesModule,
     CollectionsModule,
     SettingsModule,
+    EodModule,
   ],
   controllers: [HealthController],
   providers: [
