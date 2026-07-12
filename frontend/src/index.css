@@ -251,8 +251,31 @@ table.data tbody tr:hover { background: #f8faf9; }
 }
 .doc-card-title .req { color: var(--danger); font-size: 18px; line-height: 0; }
 .doc-card-image { height: 150px; background: var(--canvas); display: grid; place-items: center; overflow: hidden; }
-.doc-card-image a { display: block; width: 100%; height: 100%; }
+.doc-card-imgbtn { display: block; width: 100%; height: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
 .doc-card-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ---- Image preview modal (rotate / zoom / pan) ---- */
+.preview-card {
+  background: #1b1f1e; border-radius: var(--radius); box-shadow: var(--shadow-md);
+  width: 100%; max-width: 900px; overflow: hidden;
+}
+.preview-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; background: #232927; border-bottom: 1px solid #33403c;
+}
+.preview-title { color: #fff; font-size: 14px; font-weight: 600; }
+.preview-tools { display: flex; gap: 6px; }
+.preview-tools .icon-btn {
+  width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid #3a4642; background: #2b322f;
+  color: #e7f2ee; cursor: pointer; display: grid; place-items: center; font-size: 15px; text-decoration: none;
+}
+.preview-tools .icon-btn:hover { background: #364039; }
+.preview-stage {
+  height: 65vh; max-height: 600px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  cursor: grab; position: relative; background: #14201d;
+}
+.preview-stage.dragging { cursor: grabbing; }
+.preview-stage img { max-width: none; max-height: none; user-select: none; -webkit-user-drag: none; transition: transform .05s linear; }
 .doc-card-empty { color: var(--ink-500); font-size: 13px; }
 .doc-card-actions { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
 

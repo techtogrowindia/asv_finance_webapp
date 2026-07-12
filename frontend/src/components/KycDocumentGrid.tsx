@@ -7,6 +7,7 @@ import {
   uploadDocument,
 } from '../api/documents';
 import { useConfirm } from './ConfirmProvider';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 /**
  * Inline KYC document images for a member: one card per required document type,
@@ -19,6 +20,7 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busyType, setBusyType] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState<{ url: string; title: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const pendingType = useRef<string | null>(null);
 
@@ -115,9 +117,14 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
               </div>
               <div className="doc-card-image">
                 {url ? (
-                  <a href={url} target="_blank" rel="noreferrer" title="Open full image">
+                  <button
+                    type="button"
+                    className="doc-card-imgbtn"
+                    title="Preview (rotate, zoom)"
+                    onClick={() => setPreview({ url, title: item.name })}
+                  >
                     <img src={url} alt={item.name} />
-                  </a>
+                  </button>
                 ) : (
                   <div className="doc-card-empty">Not uploaded</div>
                 )}
@@ -149,6 +156,9 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
         style={{ display: 'none' }}
         onChange={(e) => onFile(e.target.files?.[0])}
       />
+      {preview && (
+        <ImagePreviewModal url={preview.url} title={preview.title} onClose={() => setPreview(null)} />
+      )}
     </>
   );
 }
