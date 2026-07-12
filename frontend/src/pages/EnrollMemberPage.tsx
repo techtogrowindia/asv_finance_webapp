@@ -9,6 +9,8 @@ import {
   listGroups,
 } from '../api/members';
 import { DocumentTypeRow, listDocumentTypes } from '../api/masters';
+import { LoanProductLite, listLoanProducts } from '../api/loans';
+import { getSettings } from '../api/settings';
 
 const GENDERS = ['Female', 'Male', 'Other'];
 const RELATIONS = ['Husband', 'Father', 'Son', 'Brother', 'Mother', 'Other'];
@@ -18,6 +20,8 @@ export function EnrollMemberPage() {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [groups, setGroups] = useState<GroupLite[]>([]);
   const [docTypes, setDocTypes] = useState<DocumentTypeRow[]>([]);
+  const [products, setProducts] = useState<LoanProductLite[]>([]);
+  const [productRequired, setProductRequired] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -35,6 +39,7 @@ export function EnrollMemberPage() {
     monthlyIncome: '',
     monthlyExpense: '',
     fatherName: '',
+    productId: '',
     coName: '',
     coGender: '',
     coDob: '',
@@ -51,6 +56,8 @@ export function EnrollMemberPage() {
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
     listDocumentTypes().then(setDocTypes).catch((e) => setError(e.message));
+    listLoanProducts().then(setProducts).catch((e) => setError(e.message));
+    getSettings().then((s) => setProductRequired(s.requireLoanProductAtEnrollment)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -89,6 +96,7 @@ export function EnrollMemberPage() {
         monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
         monthlyExpense: form.monthlyExpense ? Number(form.monthlyExpense) : undefined,
         fatherName: form.fatherName || undefined,
+        productId: form.productId || undefined,
         kycNumbers: Object.entries(clientNumbers)
           .filter(([, v]) => v.trim())
           .map(([documentTypeId, value]) => ({ documentTypeId, value: value.trim() })),
@@ -161,7 +169,23 @@ export function EnrollMemberPage() {
               ))}
             </select>
           </Field>
+          <Field label={`Loan product${productRequired ? ' *' : ' (optional)'}`}>
+            <select
+              className="input"
+              required={productRequired}
+              value={form.productId}
+              onChange={(e) => set('productId', e.target.value)}
+            >
+              <option value="">{productRequired ? 'Select loan product' : 'None yet'}</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
         </div>
+        <div className="hint">The formal loan application (with purpose and eligibility checks) is still a separate step later.</div>
 
         <div className="form-section-title" style={{ marginTop: 20 }}>
           Member details

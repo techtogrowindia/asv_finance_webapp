@@ -62,8 +62,11 @@ model Tenant {
   name      String
   code      String   @unique
   isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  // Admin-configurable (Masters > Settings): whether the FDO must pick a loan
+  // product while enrolling a member, or it stays optional.
+  requireLoanProductAtEnrollment Boolean  @default(false) @map("require_loan_product_at_enrollment")
+  createdAt                      DateTime @default(now()) @map("created_at")
+  updatedAt                      DateTime @updatedAt @map("updated_at")
 
   branches         Branch[]
   employees        Employee[]
@@ -216,20 +219,24 @@ model Client {
   fatherName     String?      @map("father_name")
   latitude       Decimal?     @db.Decimal(10, 7)
   longitude      Decimal?     @db.Decimal(10, 7)
-  dateOfJoining  DateTime?    @map("date_of_joining") @db.Date
-  status         ClientStatus @default(PENDING)
-  isActive       Boolean      @default(true) @map("is_active")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  dateOfJoining     DateTime?    @map("date_of_joining") @db.Date
+  status            ClientStatus @default(PENDING)
+  isActive          Boolean      @default(true) @map("is_active")
+  // Optional loan-product preference captured at enrollment (informational —
+  // NOT a LoanApplication; the formal application/purpose step happens later).
+  requestedProductId String?     @map("requested_product_id") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  tenant       Tenant            @relation(fields: [tenantId], references: [id])
-  center       Center            @relation(fields: [centerId], references: [id])
-  group        GroupUnit         @relation(fields: [groupId], references: [id])
-  coApplicant  CoApplicant?
-  documents    KycDocument[]
-  kycNumbers   KycNumber[]
-  applications LoanApplication[]
-  loans        Loan[]
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  center           Center            @relation(fields: [centerId], references: [id])
+  group            GroupUnit         @relation(fields: [groupId], references: [id])
+  requestedProduct LoanProduct?      @relation(fields: [requestedProductId], references: [id])
+  coApplicant      CoApplicant?
+  documents        KycDocument[]
+  kycNumbers       KycNumber[]
+  applications     LoanApplication[]
+  loans            Loan[]
 
   @@index([tenantId, centerId])
   @@map("client")
@@ -309,10 +316,11 @@ model LoanProduct {
   isActive       Boolean  @default(true) @map("is_active")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id])
-  frequency        Frequency         @relation(fields: [frequencyId], references: [id])
-  loanApplications LoanApplication[]
-  loans            Loan[]
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  frequency          Frequency         @relation(fields: [frequencyId], references: [id])
+  loanApplications   LoanApplication[]
+  loans              Loan[]
+  requestedByClients Client[]
 
   @@unique([tenantId, name])
   @@index([tenantId])

@@ -275,7 +275,7 @@ table.data tbody tr:hover { background: #f8faf9; }
   cursor: grab; position: relative; background: #14201d;
 }
 .preview-stage.dragging { cursor: grabbing; }
-.preview-stage img { max-width: none; max-height: none; user-select: none; -webkit-user-drag: none; transition: transform .05s linear; }
+.preview-stage img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; transition: transform .05s linear; }
 .doc-card-empty { color: var(--ink-500); font-size: 13px; }
 .doc-card-actions { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
 

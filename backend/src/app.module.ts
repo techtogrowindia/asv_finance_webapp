@@ -13,6 +13,7 @@ import { LoansModule } from './loans/loans.module';
 import { DocumentsModule } from './documents/documents.module';
 import { EmployeesModule } from './employees/employees.module';
 import { CollectionsModule } from './collections/collections.module';
+import { SettingsModule } from './settings/settings.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -28,6 +29,7 @@ import { HealthController } from './health.controller';
     DocumentsModule,
     EmployeesModule,
     CollectionsModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [

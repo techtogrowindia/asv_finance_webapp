@@ -19,6 +19,7 @@ const FULL_INCLUDE = {
   center: { select: { code: true, name: true, branch: { select: { code: true } } } },
   group: { select: { groupNo: true } },
   coApplicant: true,
+  requestedProduct: { select: { id: true, name: true } },
   kycNumbers: {
     include: { documentType: { select: { id: true, name: true, appliesTo: true, maskValue: true } } },
   },
@@ -80,6 +81,15 @@ export class ClientsService {
         throw new BadRequestException(`Group ${dto.groupNo} is full (max ${GROUP_CAPACITY} members)`);
       }
 
+      const tenant = await tx.tenant.findFirst({ where: { id: user.tenantId } });
+      if (tenant?.requireLoanProductAtEnrollment && !dto.productId) {
+        throw new BadRequestException('A loan product is required to enroll this member');
+      }
+      if (dto.productId) {
+        const product = await tx.loanProduct.findFirst({ where: { id: dto.productId, isActive: true } });
+        if (!product) throw new BadRequestException('Loan product not found');
+      }
+
       const clientCode = await this.nextClientCode(tx);
 
       const created = await tx.client.create({
@@ -101,6 +111,7 @@ export class ClientsService {
           monthlyExpense: dto.monthlyExpense,
           fatherName: dto.fatherName,
           dateOfJoining: dto.dateOfJoining ? new Date(dto.dateOfJoining) : new Date(),
+          requestedProductId: dto.productId,
           status: 'ACTIVE',
           ...(dto.coApplicant
             ? {
@@ -267,6 +278,8 @@ export class ClientsService {
       fatherName: c.fatherName,
       latitude: c.latitude,
       longitude: c.longitude,
+      requestedProductId: c.requestedProductId ?? null,
+      requestedProductName: c.requestedProduct?.name ?? null,
       kycNumbers: ((c.kycNumbers ?? []) as any[]).map((k) => ({
         documentTypeId: k.documentTypeId,
         name: k.documentType.name,

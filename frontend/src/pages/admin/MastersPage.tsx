@@ -19,13 +19,15 @@ import {
   updateLoanProduct,
   updatePurpose,
 } from '../../api/masters';
+import { getSettings, updateSettings } from '../../api/settings';
 
-type Tab = 'products' | 'frequencies' | 'purposes' | 'documentTypes';
+type Tab = 'products' | 'frequencies' | 'purposes' | 'documentTypes' | 'settings';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'products', label: 'Loan Products' },
   { id: 'frequencies', label: 'Frequencies' },
   { id: 'purposes', label: 'Purposes' },
   { id: 'documentTypes', label: 'Document Types' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 export function MastersPage() {
@@ -62,7 +64,54 @@ export function MastersPage() {
       {tab === 'frequencies' && <FrequenciesTab onChanged={() => listFrequenciesAll().then(setFrequencies)} />}
       {tab === 'purposes' && <PurposesTab />}
       {tab === 'documentTypes' && <DocumentTypesTab />}
+      {tab === 'settings' && <SettingsTab />}
     </AdminLayout>
+  );
+}
+
+function SettingsTab() {
+  const [requireLoanProductAtEnrollment, setRequireLoanProductAtEnrollment] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getSettings().then((s) => setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment)).catch((e) => setError(e.message));
+  }, []);
+
+  async function toggle() {
+    if (requireLoanProductAtEnrollment === null) return;
+    const next = !requireLoanProductAtEnrollment;
+    setError('');
+    try {
+      await updateSettings({ requireLoanProductAtEnrollment: next });
+      setRequireLoanProductAtEnrollment(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Enrollment Settings</div>
+      <div className="panel-body">
+        {error && <div className="alert-error">{error}</div>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <button
+            className={`toggle ${requireLoanProductAtEnrollment ? 'on' : ''}`}
+            title="Click to toggle whether a loan product must be picked at enrollment"
+            disabled={requireLoanProductAtEnrollment === null}
+            onClick={toggle}
+          >
+            <span className="knob" />
+            <span className="toggle-label">{requireLoanProductAtEnrollment ? 'Mandatory' : 'Optional'}</span>
+          </button>
+          <span style={{ color: 'var(--ink-700)' }}>Loan product required while enrolling a member</span>
+        </div>
+        <div className="hint" style={{ marginTop: 12 }}>
+          When Mandatory, field officers must pick a loan product on the Enroll Member form.
+          When Optional, they may leave it blank and apply for a loan later.
+        </div>
+      </div>
+    </div>
   );
 }
 
