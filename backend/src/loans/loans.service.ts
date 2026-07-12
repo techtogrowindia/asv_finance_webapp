@@ -71,7 +71,7 @@ export class LoansService {
     return this.prisma.withTenant(user, async (tx) => {
       const client = await tx.client.findFirst({
         where: { id: clientId, ...clientCenterScope(user) },
-        include: { kyc: true, coApplicant: true },
+        include: { coApplicant: true },
       });
       if (!client) throw new NotFoundException('Member not found');
 
@@ -87,7 +87,7 @@ export class LoansService {
     return this.prisma.withTenant(user, async (tx) => {
       const client = await tx.client.findFirst({
         where: { id: dto.clientId, ...clientCenterScope(user) },
-        include: { kyc: true, coApplicant: true },
+        include: { coApplicant: true },
       });
       if (!client) throw new ForbiddenException('Member not in your assigned centers');
 
@@ -318,20 +318,42 @@ export class LoansService {
       if (hasArrear) warnings.push('Arrear Exists For This Client');
     }
 
-    // Document names already encode the party (e.g. "CLIENT PHOTO", "NOMINEE PHOTO"),
-    // matching the reference exactly — so no label-building needed, just a lookup.
+    // DocumentType is the single admin-managed source of truth for both the
+    // photo requirement (KycDocument) and the number requirement (KycNumber).
     const requiredTypes = await tx.documentType.findMany({ where: { tenantId, isMandatory: true, isActive: true } });
-    const uploaded = await tx.kycDocument.findMany({ where: { clientId: client.id } });
-    const uploadedTypeIds = new Set(uploaded.map((d) => d.documentTypeId));
+    const uploadedDocs = await tx.kycDocument.findMany({ where: { clientId: client.id } });
+    const enteredNumbers = await tx.kycNumber.findMany({ where: { clientId: client.id } });
+    const docKey = new Set(uploadedDocs.map((d) => `${d.documentTypeId}:${d.party}`));
+    const numberKey = new Set(enteredNumbers.map((n) => `${n.documentTypeId}:${n.party}`));
     const hasNominee = !!client.coApplicant;
 
-    const missing = requiredTypes
-      .filter((dt) => !(dt.appliesTo === 'NOMINEE' && !hasNominee))
-      .filter((dt) => !uploadedTypeIds.has(dt.id));
+    const missingPhotos: string[] = [];
+    const missingNumbers: string[] = [];
 
-    if (missing.length > 0) {
+    for (const dt of requiredTypes) {
+      if (dt.appliesTo === 'NOMINEE' && !hasNominee) continue;
+      const parties: Array<'CLIENT' | 'NOMINEE'> =
+        dt.appliesTo === 'BOTH' ? (hasNominee ? ['CLIENT', 'NOMINEE'] : ['CLIENT']) : [dt.appliesTo];
+
+      for (const party of parties) {
+        // Only disambiguate the label when one type serves both parties.
+        const label = dt.appliesTo === 'BOTH' ? `${party === 'NOMINEE' ? 'Nominee' : 'Client'} ${dt.name}` : dt.name;
+        if (dt.requiresPhoto && !docKey.has(`${dt.id}:${party}`)) {
+          missingPhotos.push(`\`${label}\` Image Not Uploaded.`);
+        }
+        if (dt.requiresNumber && !numberKey.has(`${dt.id}:${party}`)) {
+          missingNumbers.push(`\`${label}\` Number Not Entered.`);
+        }
+      }
+    }
+
+    if (missingPhotos.length > 0) {
       warnings.push('KYC Documents Not Uploaded');
-      warnings.push(...missing.map((dt) => `\`${dt.name}\` Image Not Uploaded.`));
+      warnings.push(...missingPhotos);
+    }
+    if (missingNumbers.length > 0) {
+      warnings.push('KYC Numbers Not Entered');
+      warnings.push(...missingNumbers);
     }
 
     return warnings;

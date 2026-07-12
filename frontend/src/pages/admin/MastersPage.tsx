@@ -400,12 +400,37 @@ function DocumentTypesTab() {
         )}
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
-            <thead><tr><th>Name</th><th>Applies To</th><th>Mandatory</th><th>Status</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>Name</th><th>Applies To</th><th>Number</th><th>Photo</th>
+                <th>Mandatory</th><th>Status</th><th></th>
+              </tr>
+            </thead>
             <tbody>
               {rows?.map((d) => (
                 <tr key={d.id}>
                   <td>{d.name}</td>
                   <td>{d.appliesTo}</td>
+                  <td>
+                    <button
+                      className={`toggle ${d.requiresNumber ? 'on' : ''}`}
+                      title="Click to toggle whether this ID needs a typed number"
+                      onClick={() => updateDocumentType(d.id, { requiresNumber: !d.requiresNumber }).then(refresh)}
+                    >
+                      <span className="knob" />
+                      <span className="toggle-label">{d.requiresNumber ? 'Required' : 'Off'}</span>
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className={`toggle ${d.requiresPhoto ? 'on' : ''}`}
+                      title="Click to toggle whether this ID needs an uploaded photo"
+                      onClick={() => updateDocumentType(d.id, { requiresPhoto: !d.requiresPhoto }).then(refresh)}
+                    >
+                      <span className="knob" />
+                      <span className="toggle-label">{d.requiresPhoto ? 'Required' : 'Off'}</span>
+                    </button>
+                  </td>
                   <td>
                     <button
                       className={`toggle ${d.isMandatory ? 'on' : ''}`}
@@ -437,15 +462,22 @@ function DocumentTypesTab() {
 function DocumentTypeForm({ initial, onCancel, onSaved }: { initial: DocumentTypeRow | null; onCancel: () => void; onSaved: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [appliesTo, setAppliesTo] = useState<DocumentParty>(initial?.appliesTo ?? 'CLIENT');
+  const [requiresNumber, setRequiresNumber] = useState(initial?.requiresNumber ?? true);
+  const [requiresPhoto, setRequiresPhoto] = useState(initial?.requiresPhoto ?? true);
+  const [maskValue, setMaskValue] = useState(initial?.maskValue ?? false);
   const [isMandatory, setIsMandatory] = useState(initial?.isMandatory ?? true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setError('');
+    if (!requiresNumber && !requiresPhoto) {
+      setError('Enable at least one of Requires Number or Requires Photo');
+      return;
+    }
     setBusy(true);
     try {
-      const body = { name: name.trim(), appliesTo, isMandatory };
+      const body = { name: name.trim(), appliesTo, requiresNumber, requiresPhoto, maskValue, isMandatory };
       if (initial) await updateDocumentType(initial.id, body);
       else await createDocumentType(body);
       onSaved();
@@ -465,7 +497,25 @@ function DocumentTypeForm({ initial, onCancel, onSaved }: { initial: DocumentTyp
           <select className="input" value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as DocumentParty)}>
             <option value="CLIENT">Client</option>
             <option value="NOMINEE">Nominee</option>
-            <option value="BOTH">Both</option>
+            <option value="BOTH">Both (client + nominee)</option>
+          </select>
+        </Field>
+        <Field label="Requires a number">
+          <select className="input" value={requiresNumber ? '1' : '0'} onChange={(e) => setRequiresNumber(e.target.value === '1')}>
+            <option value="1">Yes — show a text field</option>
+            <option value="0">No</option>
+          </select>
+        </Field>
+        <Field label="Requires a photo">
+          <select className="input" value={requiresPhoto ? '1' : '0'} onChange={(e) => setRequiresPhoto(e.target.value === '1')}>
+            <option value="1">Yes — show an upload card</option>
+            <option value="0">No</option>
+          </select>
+        </Field>
+        <Field label="Mask the number (e.g. Aadhaar)">
+          <select className="input" value={maskValue ? '1' : '0'} onChange={(e) => setMaskValue(e.target.value === '1')}>
+            <option value="0">No</option>
+            <option value="1">Yes — show only last 4 chars</option>
           </select>
         </Field>
         <Field label="Mandatory">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getMember, KycInfo, MemberDetail } from '../api/members';
+import { getMember, KycNumberInfo, MemberDetail } from '../api/members';
 import { ExistingLoan, listExistingLoans } from '../api/loans';
 import { KycNumbersSection } from '../components/KycNumbersSection';
 import { KycDocumentGrid } from '../components/KycDocumentGrid';
@@ -67,8 +67,12 @@ export function MemberDetailPage() {
 
       <KycNumbersSection
         clientId={m.id}
-        kyc={m.kyc}
-        onSaved={(k: KycInfo) => setM((prev) => (prev ? { ...prev, kyc: k } : prev))}
+        party="CLIENT"
+        title="Government ID proofs (KYC)"
+        numbers={m.kycNumbers.filter((n) => n.party === 'CLIENT')}
+        onSaved={(nums: KycNumberInfo[]) =>
+          setM((prev) => (prev ? { ...prev, kycNumbers: [...prev.kycNumbers.filter((n) => n.party !== 'CLIENT'), ...nums] } : prev))
+        }
       />
 
       <div className="panel" style={{ marginTop: 18 }}>
@@ -88,15 +92,24 @@ export function MemberDetailPage() {
               <Item k="Gender" v={m.coApplicant.gender ?? '—'} />
               <Item k="Date of birth" v={date(m.coApplicant.dob)} />
               <Item k="Mobile" v={m.coApplicant.mobile ?? '—'} />
-              <Item k="Voter ID" v={m.coApplicant.voterId ?? '—'} />
-              <Item k="PAN" v={m.coApplicant.pan ?? '—'} />
-              <Item k="Other ID" v={m.coApplicant.otherId ?? '—'} />
             </div>
           ) : (
             <div className="empty">No co-applicant / nominee recorded yet.</div>
           )}
         </div>
       </div>
+
+      {m.coApplicant && (
+        <KycNumbersSection
+          clientId={m.id}
+          party="NOMINEE"
+          title="Nominee ID proofs (KYC)"
+          numbers={m.kycNumbers.filter((n) => n.party === 'NOMINEE')}
+          onSaved={(nums: KycNumberInfo[]) =>
+            setM((prev) => (prev ? { ...prev, kycNumbers: [...prev.kycNumbers.filter((n) => n.party !== 'NOMINEE'), ...nums] } : prev))
+          }
+        />
+      )}
 
       <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-head">Loans</div>

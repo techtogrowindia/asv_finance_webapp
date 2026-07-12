@@ -70,13 +70,13 @@ model Tenant {
   centers          Center[]
   groups           GroupUnit[]
   clients          Client[]
-  kycs             Kyc[]
   coApplicants     CoApplicant[]
   frequencies      Frequency[]
   purposes         Purpose[]
   loanProducts     LoanProduct[]
   documentTypes    DocumentType[]
   kycDocuments     KycDocument[]
+  kycNumbers       KycNumber[]
   loanApplications LoanApplication[]
   loans            Loan[]
   collections      Collection[]
@@ -225,9 +225,9 @@ model Client {
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
   center       Center            @relation(fields: [centerId], references: [id])
   group        GroupUnit         @relation(fields: [groupId], references: [id])
-  kyc          Kyc?
   coApplicant  CoApplicant?
   documents    KycDocument[]
+  kycNumbers   KycNumber[]
   applications LoanApplication[]
   loans        Loan[]
 
@@ -235,29 +235,9 @@ model Client {
   @@map("client")
 }
 
-// ---- KYC (government ID proofs) — 1:1 with Client --------------------------
-// Sensitive fields (uid = Aadhaar) are masked on API read (see clients.service).
-model Kyc {
-  id         String   @id @default(uuid()) @db.Uuid
-  tenantId   String   @map("tenant_id") @db.Uuid
-  clientId   String   @unique @map("client_id") @db.Uuid
-  voterId    String?  @map("voter_id")
-  otherId    String?  @map("other_id")
-  pan        String?
-  smartCard  String?  @map("smart_card")
-  rationCard String?  @map("ration_card")
-  uid        String? // Aadhaar number
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
-  client Client @relation(fields: [clientId], references: [id])
-
-  @@index([tenantId])
-  @@map("kyc")
-}
-
 // ---- Co-Applicant / Nominee — 1:1 with Client ------------------------------
+// ID-number fields (voter/PAN/etc.) live in KycNumber (party=NOMINEE), driven
+// by the same admin-managed DocumentType master as the client's own numbers.
 model CoApplicant {
   id        String    @id @default(uuid()) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid
@@ -267,9 +247,6 @@ model CoApplicant {
   dob       DateTime? @db.Date
   relation  String?   @map("relation_with_client")
   mobile    String?
-  voterId   String?   @map("voter_id")
-  otherId   String?   @map("other_id")
-  pan       String?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
@@ -343,27 +320,34 @@ model LoanProduct {
 }
 
 // Required KYC document types, tagged to CLIENT / NOMINEE / BOTH — drives the
-// eligibility-gate "X Image Not Uploaded" warnings on the loan application.
+// eligibility-gate "X Image Not Uploaded" / "X Number Not Entered" warnings.
+//
+// Single admin-managed source of truth for an ID proof, per party (CLIENT/
+// NOMINEE/BOTH): whether it needs a typed number (KycNumber), a photo upload
+// (KycDocument), and whether that requirement is mandatory. E.g. "PAN Card"
+// might be requiresNumber=true, requiresPhoto=false; "Passbook" the reverse.
 model DocumentType {
-  id          String        @id @default(uuid()) @db.Uuid
-  tenantId    String        @map("tenant_id") @db.Uuid
-  name        String // e.g. "CLIENT PHOTO", "SMART CARD", "PASSBOOK"
-  appliesTo   DocumentParty @default(BOTH) @map("applies_to")
-  isMandatory Boolean       @default(true) @map("is_mandatory")
-  isActive    Boolean       @default(true) @map("is_active")
-  createdAt   DateTime      @default(now()) @map("created_at")
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  name           String // e.g. "Aadhaar Card", "PAN Card", "Passbook"
+  appliesTo      DocumentParty @default(BOTH) @map("applies_to")
+  requiresNumber Boolean       @default(true) @map("requires_number")
+  requiresPhoto  Boolean       @default(true) @map("requires_photo")
+  maskValue      Boolean       @default(false) @map("mask_value") // e.g. Aadhaar
+  isMandatory    Boolean       @default(true) @map("is_mandatory")
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at")
 
   tenant    Tenant        @relation(fields: [tenantId], references: [id])
   documents KycDocument[]
+  numbers   KycNumber[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("document_type")
 }
 
-// An uploaded KYC document image for a client (or their nominee). Upload UI is a
-// later "KYC Documents" screen; this table exists now so the loan eligibility
-// gate can correctly report missing documents (empty = all required, missing).
+// An uploaded KYC document image for a client (or their nominee).
 model KycDocument {
   id             String        @id @default(uuid()) @db.Uuid
   tenantId       String        @map("tenant_id") @db.Uuid
@@ -382,6 +366,27 @@ model KycDocument {
   @@unique([clientId, documentTypeId, party])
   @@index([tenantId, clientId])
   @@map("kyc_document")
+}
+
+// A typed ID-proof number for a client (or their nominee), e.g. Aadhaar/Voter/
+// PAN. Dynamic and admin-driven via DocumentType, mirroring KycDocument —
+// replaces the old fixed Kyc/CoApplicant number columns.
+model KycNumber {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  clientId       String        @map("client_id") @db.Uuid
+  documentTypeId String        @map("document_type_id") @db.Uuid
+  party          DocumentParty @default(CLIENT)
+  value          String
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  client       Client       @relation(fields: [clientId], references: [id])
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
+
+  @@unique([clientId, documentTypeId, party])
+  @@index([tenantId, clientId])
+  @@map("kyc_number")
 }
 
 // ---- Loan application (employee submits; BM approves+disburses later) -----

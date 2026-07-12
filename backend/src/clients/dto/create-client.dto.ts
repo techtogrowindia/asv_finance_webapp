@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsInt,
   IsNumber,
   IsOptional,
@@ -11,7 +12,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { KycDto } from './kyc.dto';
+import { KycNumberEntryDto } from './kyc-number.dto';
 import { CoApplicantDto } from './co-applicant.dto';
 
 export class CreateClientDto {
@@ -50,10 +51,12 @@ export class CreateClientDto {
 
   @IsOptional() @IsString() dateOfJoining?: string; // ISO date
 
+  /** Client-party ID numbers, keyed by admin-managed DocumentType id. */
   @IsOptional()
-  @ValidateNested()
-  @Type(() => KycDto)
-  kyc?: KycDto;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => KycNumberEntryDto)
+  kycNumbers?: KycNumberEntryDto[];
 
   @IsOptional()
   @ValidateNested()

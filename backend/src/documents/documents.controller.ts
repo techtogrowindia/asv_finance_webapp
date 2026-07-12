@@ -60,10 +60,11 @@ export class DocumentsController {
     @Param('clientId', ParseUUIDPipe) clientId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('documentTypeId') documentTypeId: string,
+    @Body('party') party: 'CLIENT' | 'NOMINEE' = 'CLIENT',
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     if (!documentTypeId) throw new BadRequestException('documentTypeId is required');
-    return this.documents.upload(user, clientId, documentTypeId, file);
+    return this.documents.upload(user, clientId, documentTypeId, party, file);
   }
 }
 

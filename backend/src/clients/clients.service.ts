@@ -11,10 +11,18 @@ import { centerScope, clientCenterScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
-import { KycDto } from './dto/kyc.dto';
+import { KycNumberEntryDto, UpdateKycNumbersDto } from './dto/kyc-number.dto';
 
 const GROUP_CAPACITY = 5;
-const KYC_FIELDS = ['voterId', 'otherId', 'pan', 'smartCard', 'rationCard', 'uid'] as const;
+
+const FULL_INCLUDE = {
+  center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+  group: { select: { groupNo: true } },
+  coApplicant: true,
+  kycNumbers: {
+    include: { documentType: { select: { id: true, name: true, appliesTo: true, maskValue: true } } },
+  },
+} satisfies Prisma.ClientInclude;
 
 @Injectable()
 export class ClientsService {
@@ -50,19 +58,7 @@ export class ClientsService {
   }
 
   async get(user: AuthUser, id: string) {
-    return this.prisma.withTenant(user, async (tx) => {
-      const c = await tx.client.findFirst({
-        where: { id, ...clientCenterScope(user) },
-        include: {
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
-          group: { select: { groupNo: true } },
-          kyc: true,
-          coApplicant: true,
-        },
-      });
-      if (!c) throw new NotFoundException('Member not found');
-      return this.serialize(c, true);
-    });
+    return this.prisma.withTenant(user, (tx) => this.fetchFull(tx, user, id));
   }
 
   async create(user: AuthUser, dto: CreateClientDto) {
@@ -106,21 +102,6 @@ export class ClientsService {
           fatherName: dto.fatherName,
           dateOfJoining: dto.dateOfJoining ? new Date(dto.dateOfJoining) : new Date(),
           status: 'ACTIVE',
-          ...(dto.kyc
-            ? {
-                kyc: {
-                  create: {
-                    tenantId: user.tenantId,
-                    voterId: dto.kyc.voterId,
-                    otherId: dto.kyc.otherId,
-                    pan: dto.kyc.pan,
-                    smartCard: dto.kyc.smartCard,
-                    rationCard: dto.kyc.rationCard,
-                    uid: dto.kyc.uid,
-                  },
-                },
-              }
-            : {}),
           ...(dto.coApplicant
             ? {
                 coApplicant: {
@@ -131,22 +112,21 @@ export class ClientsService {
                     dob: dto.coApplicant.dob ? new Date(dto.coApplicant.dob) : null,
                     relation: dto.coApplicant.relation,
                     mobile: dto.coApplicant.mobile,
-                    voterId: dto.coApplicant.voterId,
-                    otherId: dto.coApplicant.otherId,
-                    pan: dto.coApplicant.pan,
                   },
                 },
               }
             : {}),
         },
-        include: {
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
-          group: { select: { groupNo: true } },
-          kyc: true,
-          coApplicant: true,
-        },
       });
-      return this.serialize(created, true);
+
+      if (dto.kycNumbers?.length) {
+        await this.upsertKycNumbers(tx, user, created.id, 'CLIENT', dto.kycNumbers);
+      }
+      if (dto.coApplicant?.kycNumbers?.length) {
+        await this.upsertKycNumbers(tx, user, created.id, 'NOMINEE', dto.coApplicant.kycNumbers);
+      }
+
+      return this.fetchFull(tx, user, created.id);
     });
   }
 
@@ -158,7 +138,7 @@ export class ClientsService {
       });
       if (!existing) throw new NotFoundException('Member not found');
 
-      const updated = await tx.client.update({
+      await tx.client.update({
         where: { id },
         data: {
           ...('name' in dto ? { name: dto.name } : {}),
@@ -178,17 +158,13 @@ export class ClientsService {
           ...('latitude' in dto ? { latitude: dto.latitude } : {}),
           ...('longitude' in dto ? { longitude: dto.longitude } : {}),
         },
-        include: {
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
-          group: { select: { groupNo: true } },
-        },
       });
-      return this.serialize(updated, true);
+      return this.fetchFull(tx, user, id);
     });
   }
 
-  /** Add or edit a member's government ID numbers (upsert their KYC row). */
-  async updateKyc(user: AuthUser, clientId: string, dto: KycDto) {
+  /** Add/edit/clear a party's (CLIENT or NOMINEE) admin-defined ID numbers. */
+  async updateKycNumbers(user: AuthUser, clientId: string, dto: UpdateKycNumbersDto) {
     return this.prisma.withTenant(user, async (tx) => {
       const client = await tx.client.findFirst({
         where: { id: clientId, ...clientCenterScope(user) },
@@ -196,27 +172,54 @@ export class ClientsService {
       });
       if (!client) throw new NotFoundException('Member not found');
 
-      // Only touch fields the caller actually sent (empty string clears a value).
-      const data: Record<string, string | null> = {};
-      for (const f of KYC_FIELDS) {
-        if (dto[f] !== undefined) data[f] = dto[f] === '' ? null : (dto[f] as string);
-      }
-
-      const kyc = await tx.kyc.upsert({
-        where: { clientId },
-        update: data,
-        create: { tenantId: user.tenantId, clientId, ...data },
-      });
-
-      return {
-        voterId: kyc.voterId,
-        otherId: kyc.otherId,
-        pan: kyc.pan,
-        smartCard: kyc.smartCard,
-        rationCard: kyc.rationCard,
-        uid: maskUid(kyc.uid),
-      };
+      await this.upsertKycNumbers(tx, user, clientId, dto.party, dto.entries);
+      return this.fetchFull(tx, user, clientId);
     });
+  }
+
+  /**
+   * Upserts (or clears, on blank value) KycNumber rows for a party. Silently
+   * skips any documentTypeId that doesn't belong to this tenant or doesn't
+   * apply to the given party — defends against a cross-tenant id being sent.
+   */
+  private async upsertKycNumbers(
+    tx: Prisma.TransactionClient,
+    user: AuthUser,
+    clientId: string,
+    party: 'CLIENT' | 'NOMINEE',
+    entries: KycNumberEntryDto[],
+  ) {
+    const ids = entries.map((e) => e.documentTypeId);
+    const validTypes = await tx.documentType.findMany({
+      where: { id: { in: ids }, tenantId: user.tenantId, appliesTo: { in: [party, 'BOTH'] } },
+      select: { id: true },
+    });
+    const validIds = new Set(validTypes.map((t) => t.id));
+
+    for (const entry of entries) {
+      if (!validIds.has(entry.documentTypeId)) continue;
+      const value = entry.value.trim();
+      if (value === '') {
+        await tx.kycNumber.deleteMany({
+          where: { clientId, documentTypeId: entry.documentTypeId, party },
+        });
+      } else {
+        await tx.kycNumber.upsert({
+          where: { clientId_documentTypeId_party: { clientId, documentTypeId: entry.documentTypeId, party } },
+          update: { value },
+          create: { tenantId: user.tenantId, clientId, documentTypeId: entry.documentTypeId, party, value },
+        });
+      }
+    }
+  }
+
+  private async fetchFull(tx: Prisma.TransactionClient, user: AuthUser, clientId: string) {
+    const c = await tx.client.findFirst({
+      where: { id: clientId, ...clientCenterScope(user) },
+      include: FULL_INCLUDE,
+    });
+    if (!c) throw new NotFoundException('Member not found');
+    return this.serialize(c, true);
   }
 
   /** Next PMF code = highest existing + 1, starting at PMF005500. */
@@ -264,16 +267,13 @@ export class ClientsService {
       fatherName: c.fatherName,
       latitude: c.latitude,
       longitude: c.longitude,
-      kyc: c.kyc
-        ? {
-            voterId: c.kyc.voterId,
-            otherId: c.kyc.otherId,
-            pan: c.kyc.pan,
-            smartCard: c.kyc.smartCard,
-            rationCard: c.kyc.rationCard,
-            uid: maskUid(c.kyc.uid),
-          }
-        : null,
+      kycNumbers: ((c.kycNumbers ?? []) as any[]).map((k) => ({
+        documentTypeId: k.documentTypeId,
+        name: k.documentType.name,
+        appliesTo: k.documentType.appliesTo,
+        party: k.party,
+        value: k.documentType.maskValue ? maskLast4(k.value) : k.value,
+      })),
       coApplicant: c.coApplicant
         ? {
             name: c.coApplicant.name,
@@ -281,19 +281,15 @@ export class ClientsService {
             dob: c.coApplicant.dob,
             relation: c.coApplicant.relation,
             mobile: c.coApplicant.mobile,
-            voterId: c.coApplicant.voterId,
-            otherId: c.coApplicant.otherId,
-            pan: c.coApplicant.pan,
           }
         : null,
     };
   }
 }
 
-/** Aadhaar-style masking: keep only the last 4 characters visible, e.g. "XXXX XXXX 3250". */
-function maskUid(uid: string | null | undefined): string | null {
-  if (!uid) return null;
-  const digits = uid.replace(/\s+/g, '');
+/** Keep only the last 4 characters visible, e.g. "XXXX XXXX 3250" (Aadhaar-style). */
+function maskLast4(value: string): string {
+  const digits = value.replace(/\s+/g, '');
   const last4 = digits.slice(-4);
   return `XXXX XXXX ${last4}`;
 }

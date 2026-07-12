@@ -32,13 +32,13 @@ export interface MemberListItem {
   dateOfJoining: string | null;
 }
 
-export interface KycInfo {
-  voterId: string | null;
-  otherId: string | null;
-  pan: string | null;
-  smartCard: string | null;
-  rationCard: string | null;
-  uid: string | null; // masked by the API, e.g. "XXXX XXXX 3250"
+/** One admin-configured ID-proof number, already resolved for a client + party. */
+export interface KycNumberInfo {
+  documentTypeId: string;
+  name: string;
+  appliesTo: 'CLIENT' | 'NOMINEE' | 'BOTH';
+  party: 'CLIENT' | 'NOMINEE';
+  value: string; // masked by the API when the DocumentType has maskValue=true
 }
 
 export interface CoApplicantInfo {
@@ -47,9 +47,6 @@ export interface CoApplicantInfo {
   dob: string | null;
   relation: string | null;
   mobile: string | null;
-  voterId: string | null;
-  otherId: string | null;
-  pan: string | null;
 }
 
 export interface MemberDetail extends MemberListItem {
@@ -64,8 +61,13 @@ export interface MemberDetail extends MemberListItem {
   fatherName: string | null;
   latitude: string | null;
   longitude: string | null;
-  kyc: KycInfo | null;
+  kycNumbers: KycNumberInfo[];
   coApplicant: CoApplicantInfo | null;
+}
+
+export interface KycNumberEntry {
+  documentTypeId: string;
+  value: string;
 }
 
 export interface CreateMemberBody {
@@ -83,23 +85,14 @@ export interface CreateMemberBody {
   monthlyExpense?: number;
   fatherName?: string;
   dateOfJoining?: string;
-  kyc?: {
-    voterId?: string;
-    otherId?: string;
-    pan?: string;
-    smartCard?: string;
-    rationCard?: string;
-    uid?: string;
-  };
+  kycNumbers?: KycNumberEntry[];
   coApplicant?: {
     name: string;
     gender?: string;
     dob?: string;
     relation?: string;
     mobile?: string;
-    voterId?: string;
-    otherId?: string;
-    pan?: string;
+    kycNumbers?: KycNumberEntry[];
   };
 }
 
@@ -119,14 +112,9 @@ export const getMember = (id: string) => api<MemberDetail>(`/clients/${id}`);
 export const createMember = (body: CreateMemberBody) =>
   api<MemberDetail>('/clients', { method: 'POST', body: JSON.stringify(body) });
 
-export interface KycInput {
-  voterId?: string;
-  otherId?: string;
-  pan?: string;
-  smartCard?: string;
-  rationCard?: string;
-  uid?: string;
-}
-
-export const updateMemberKyc = (id: string, body: KycInput) =>
-  api<KycInfo>(`/clients/${id}/kyc`, { method: 'PATCH', body: JSON.stringify(body) });
+/** Upsert (or clear, on blank value) a party's admin-defined ID numbers. */
+export const updateMemberKycNumbers = (id: string, party: 'CLIENT' | 'NOMINEE', entries: KycNumberEntry[]) =>
+  api<MemberDetail>(`/clients/${id}/kyc-numbers`, {
+    method: 'PATCH',
+    body: JSON.stringify({ party, entries }),
+  });

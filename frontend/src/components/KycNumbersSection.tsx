@@ -1,33 +1,48 @@
-import { useState } from 'react';
-import { KycInfo, KycInput, updateMemberKyc } from '../api/members';
+import { useEffect, useState } from 'react';
+import { DocumentTypeRow, listDocumentTypes } from '../api/masters';
+import { KycNumberInfo, updateMemberKycNumbers } from '../api/members';
 
-const FIELDS: { key: keyof KycInput; label: string; sensitive?: boolean }[] = [
-  { key: 'uid', label: 'Aadhaar / UID', sensitive: true },
-  { key: 'voterId', label: 'Voter ID' },
-  { key: 'pan', label: 'PAN' },
-  { key: 'rationCard', label: 'Ration card' },
-  { key: 'smartCard', label: 'Smart card' },
-  { key: 'otherId', label: 'Other ID' },
-];
-
-/** KYC ID numbers with an inline Edit form. Aadhaar stays masked on display and
- *  is only overwritten if the officer types a new value. */
-export function KycNumbersSection({ clientId, kyc, onSaved }: { clientId: string; kyc: KycInfo | null; onSaved: (k: KycInfo) => void }) {
+/**
+ * Admin-configured ID-number fields (Aadhaar, PAN, ...) for one party (CLIENT
+ * or NOMINEE) of a member, with an inline Edit form. DocumentType (requiresNumber
+ * + appliesTo) is the single source of truth for which fields appear here —
+ * matches whatever admin has configured in Masters > Document Types.
+ */
+export function KycNumbersSection({
+  clientId,
+  party,
+  title,
+  numbers,
+  onSaved,
+}: {
+  clientId: string;
+  party: 'CLIENT' | 'NOMINEE';
+  title: string;
+  numbers: KycNumberInfo[];
+  onSaved: (numbers: KycNumberInfo[]) => void;
+}) {
+  const [types, setTypes] = useState<DocumentTypeRow[] | null>(null);
   const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    listDocumentTypes()
+      .then((all) => setTypes(all.filter((t) => t.requiresNumber && (t.appliesTo === party || t.appliesTo === 'BOTH'))))
+      .catch((e) => setError(e.message));
+  }, [party]);
+
+  const byType = new Map(numbers.map((n) => [n.documentTypeId, n]));
 
   function startEdit() {
-    // Pre-fill non-sensitive fields; leave UID blank (it's masked, can't round-trip).
-    setForm({
-      voterId: kyc?.voterId ?? '',
-      pan: kyc?.pan ?? '',
-      rationCard: kyc?.rationCard ?? '',
-      smartCard: kyc?.smartCard ?? '',
-      otherId: kyc?.otherId ?? '',
-      uid: '',
-    });
+    const next: Record<string, string> = {};
+    for (const t of types ?? []) {
+      const existing = byType.get(t.id);
+      // Masked values can't round-trip — leave blank with a hint instead.
+      next[t.id] = existing && !t.maskValue ? existing.value : '';
+    }
+    setForm(next);
     setError('');
     setEditing(true);
   }
@@ -36,17 +51,9 @@ export function KycNumbersSection({ clientId, kyc, onSaved }: { clientId: string
     setError('');
     setBusy(true);
     try {
-      const body: KycInput = {
-        voterId: form.voterId,
-        pan: form.pan,
-        rationCard: form.rationCard,
-        smartCard: form.smartCard,
-        otherId: form.otherId,
-      };
-      // Only send UID if the officer entered a new one (blank = keep existing).
-      if (form.uid.trim()) body.uid = form.uid.trim();
-      const saved = await updateMemberKyc(clientId, body);
-      onSaved(saved);
+      const entries = (types ?? []).map((t) => ({ documentTypeId: t.id, value: form[t.id] ?? '' }));
+      const updated = await updateMemberKycNumbers(clientId, party, entries);
+      onSaved(updated.kycNumbers.filter((n) => n.party === party));
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
@@ -55,35 +62,42 @@ export function KycNumbersSection({ clientId, kyc, onSaved }: { clientId: string
     }
   }
 
+  if (types && types.length === 0) return null;
+
   return (
     <div className="panel" style={{ marginTop: 18 }}>
       <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>Government ID proofs (KYC)</span>
-        {!editing && (
+        <span>{title}</span>
+        {!editing && types && (
           <button className="btn btn-ghost btn-sm" onClick={startEdit}>
-            {kyc ? 'Edit' : 'Add numbers'}
+            {numbers.length ? 'Edit' : 'Add numbers'}
           </button>
         )}
       </div>
       <div className="panel-body">
         {error && <div className="alert-error">{error}</div>}
 
-        {editing ? (
+        {!types ? (
+          <div className="empty">Loading…</div>
+        ) : editing ? (
           <>
             <div className="form-grid">
-              {FIELDS.map((f) => (
-                <div className="field" key={f.key}>
-                  <label>{f.label}</label>
-                  <input
-                    className="input"
-                    value={form[f.key] ?? ''}
-                    placeholder={f.sensitive && kyc?.uid ? `Current: ${kyc.uid} — type to change` : ''}
-                    onChange={(e) => setForm((s) => ({ ...s, [f.key]: e.target.value }))}
-                  />
-                </div>
-              ))}
+              {types.map((t) => {
+                const existing = byType.get(t.id);
+                return (
+                  <div className="field" key={t.id}>
+                    <label>{t.name}</label>
+                    <input
+                      className="input"
+                      value={form[t.id] ?? ''}
+                      placeholder={t.maskValue && existing ? `Current: ${existing.value} — type to change` : ''}
+                      onChange={(e) => setForm((s) => ({ ...s, [t.id]: e.target.value }))}
+                    />
+                  </div>
+                );
+              })}
             </div>
-            <div className="hint">Aadhaar is masked after saving; leave it blank to keep the existing one.</div>
+            <div className="hint">Masked numbers (like Aadhaar) stay hidden after saving; leave blank to keep the existing one.</div>
             <div className="form-actions">
               <button className="btn btn-primary" disabled={busy} onClick={save}>
                 {busy ? <span className="spinner" /> : 'Save'}
@@ -91,17 +105,15 @@ export function KycNumbersSection({ clientId, kyc, onSaved }: { clientId: string
               <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
             </div>
           </>
-        ) : kyc ? (
+        ) : numbers.length > 0 ? (
           <div className="detail-grid">
-            <Item k="Aadhaar / UID" v={kyc.uid ?? '—'} />
-            <Item k="Voter ID" v={kyc.voterId ?? '—'} />
-            <Item k="PAN" v={kyc.pan ?? '—'} />
-            <Item k="Ration card" v={kyc.rationCard ?? '—'} />
-            <Item k="Smart card" v={kyc.smartCard ?? '—'} />
-            <Item k="Other ID" v={kyc.otherId ?? '—'} />
+            {types.map((t) => {
+              const n = byType.get(t.id);
+              return <Item key={t.id} k={t.name} v={n?.value ?? '—'} />;
+            })}
           </div>
         ) : (
-          <div className="empty">No ID numbers recorded yet. Click “Add numbers”.</div>
+          <div className="empty">No ID numbers recorded yet. Click "Add numbers".</div>
         )}
       </div>
     </div>

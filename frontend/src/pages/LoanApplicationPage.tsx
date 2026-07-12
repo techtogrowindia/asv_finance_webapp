@@ -170,32 +170,23 @@ export function LoanApplicationPage() {
       {client && (
         <div className="panel" style={{ marginTop: 18 }}>
           <div className="panel-head">KYC Details</div>
-          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Type</th><th>Phone</th><th>Voter ID</th><th>Pancard</th><th>Other ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>CLIENT</td>
-                  <td>{client.mobile ?? '—'}</td>
-                  <td>{client.kyc?.voterId ?? '—'}</td>
-                  <td>{client.kyc?.pan ?? '—'}</td>
-                  <td>{client.kyc?.otherId ?? '—'}</td>
-                </tr>
-                {client.coApplicant && (
-                  <tr>
-                    <td>NOMINEE</td>
-                    <td>{client.coApplicant.mobile ?? '—'}</td>
-                    <td>{client.coApplicant.voterId ?? '—'}</td>
-                    <td>{client.coApplicant.pan ?? '—'}</td>
-                    <td>{client.coApplicant.otherId ?? '—'}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="panel-body detail-grid">
+            <Item k="Client Phone" v={client.mobile ?? '—'} />
+            {client.kycNumbers
+              .filter((n) => n.party === 'CLIENT')
+              .map((n) => (
+                <Item key={n.documentTypeId} k={`Client ${n.name}`} v={n.value} />
+              ))}
+            {client.coApplicant && (
+              <>
+                <Item k="Nominee Phone" v={client.coApplicant.mobile ?? '—'} />
+                {client.kycNumbers
+                  .filter((n) => n.party === 'NOMINEE')
+                  .map((n) => (
+                    <Item key={n.documentTypeId} k={`Nominee ${n.name}`} v={n.value} />
+                  ))}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -290,6 +281,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="field">
       <label>{label}</label>
       {children}
+    </div>
+  );
+}
+
+function Item({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="detail-item">
+      <div className="k">{k}</div>
+      <div className="v">{v}</div>
     </div>
   );
 }

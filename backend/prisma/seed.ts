@@ -137,22 +137,49 @@ async function main() {
     });
   }
 
-  // Required KYC document types (matches the reference's exact warning labels).
-  const documentTypes: { name: string; appliesTo: 'CLIENT' | 'NOMINEE' }[] = [
-    { name: 'CLIENT PHOTO', appliesTo: 'CLIENT' },
-    { name: 'NOMINEE PHOTO', appliesTo: 'NOMINEE' },
-    { name: 'CLIENT UID FRONT', appliesTo: 'CLIENT' },
-    { name: 'CLIENT VID FRONT', appliesTo: 'CLIENT' },
-    { name: 'NOMINEE UID FRONT', appliesTo: 'NOMINEE' },
-    { name: 'NOMINEE VID FRONT', appliesTo: 'NOMINEE' },
-    { name: 'SMART CARD', appliesTo: 'CLIENT' },
-    { name: 'PASSBOOK', appliesTo: 'CLIENT' },
+  // Admin-managed ID proof types: single source of truth for both the number
+  // field (Enroll form / KYC editor) and the photo requirement (KYC image grid).
+  const documentTypes: {
+    name: string;
+    appliesTo: 'CLIENT' | 'NOMINEE' | 'BOTH';
+    requiresNumber?: boolean;
+    requiresPhoto?: boolean;
+    maskValue?: boolean;
+    isMandatory?: boolean;
+  }[] = [
+    { name: 'CLIENT PHOTO', appliesTo: 'CLIENT', requiresNumber: false, requiresPhoto: true },
+    { name: 'NOMINEE PHOTO', appliesTo: 'NOMINEE', requiresNumber: false, requiresPhoto: true },
+    { name: 'CLIENT UID FRONT', appliesTo: 'CLIENT', requiresNumber: true, requiresPhoto: true, maskValue: true },
+    { name: 'CLIENT VID FRONT', appliesTo: 'CLIENT', requiresNumber: true, requiresPhoto: true },
+    { name: 'NOMINEE UID FRONT', appliesTo: 'NOMINEE', requiresNumber: true, requiresPhoto: true, maskValue: true },
+    { name: 'NOMINEE VID FRONT', appliesTo: 'NOMINEE', requiresNumber: true, requiresPhoto: true },
+    { name: 'SMART CARD', appliesTo: 'CLIENT', requiresNumber: true, requiresPhoto: true },
+    { name: 'PASSBOOK', appliesTo: 'CLIENT', requiresNumber: false, requiresPhoto: true },
+    // Number-only proofs (no photo requirement) — admin can flip requiresPhoto
+    // on later if they want an image too. appliesTo BOTH: shown for client and,
+    // when present, the nominee too (one master row, two KycNumber entries).
+    { name: 'PAN CARD', appliesTo: 'BOTH', requiresNumber: true, requiresPhoto: false, isMandatory: false },
+    { name: 'RATION CARD', appliesTo: 'BOTH', requiresNumber: true, requiresPhoto: false, isMandatory: false },
+    { name: 'OTHER ID', appliesTo: 'BOTH', requiresNumber: true, requiresPhoto: false, isMandatory: false },
   ];
   for (const dt of documentTypes) {
     await prisma.documentType.upsert({
       where: { tenantId_name: { tenantId: tenant.id, name: dt.name } },
-      update: {},
-      create: { tenantId: tenant.id, name: dt.name, appliesTo: dt.appliesTo },
+      update: {
+        requiresNumber: dt.requiresNumber ?? true,
+        requiresPhoto: dt.requiresPhoto ?? true,
+        maskValue: dt.maskValue ?? false,
+        ...(dt.isMandatory !== undefined ? { isMandatory: dt.isMandatory } : {}),
+      },
+      create: {
+        tenantId: tenant.id,
+        name: dt.name,
+        appliesTo: dt.appliesTo,
+        requiresNumber: dt.requiresNumber ?? true,
+        requiresPhoto: dt.requiresPhoto ?? true,
+        maskValue: dt.maskValue ?? false,
+        isMandatory: dt.isMandatory ?? true,
+      },
     });
   }
 

@@ -5,10 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types/auth-user';
 import { clientCenterScope } from '../common/scope';
 
+type Party = 'CLIENT' | 'NOMINEE';
+
 export interface DocumentChecklistItem {
   documentTypeId: string;
   name: string;
   appliesTo: string;
+  party: Party;
   isMandatory: boolean;
   documentId: string | null;
   uploadedAt: string | null;
@@ -18,7 +21,7 @@ export interface DocumentChecklistItem {
 export class DocumentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Required document types for this client (skipping NOMINEE ones if no co-applicant), each with upload status. */
+  /** Photo-requiring document types for this client, expanded per party (CLIENT/NOMINEE), each with upload status. */
   async checklist(user: AuthUser, clientId: string): Promise<DocumentChecklistItem[]> {
     return this.prisma.withTenant(user, async (tx) => {
       const client = await tx.client.findFirst({
@@ -27,28 +30,36 @@ export class DocumentsService {
       });
       if (!client) throw new NotFoundException('Member not found');
 
-      const types = await tx.documentType.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+      const types = await tx.documentType.findMany({
+        where: { isActive: true, requiresPhoto: true },
+        orderBy: { name: 'asc' },
+      });
       const uploaded = await tx.kycDocument.findMany({ where: { clientId } });
-      const byType = new Map(uploaded.map((d) => [d.documentTypeId, d]));
+      const byKey = new Map(uploaded.map((d) => [`${d.documentTypeId}:${d.party}`, d]));
       const hasNominee = !!client.coApplicant;
 
-      return types
-        .filter((t) => !(t.appliesTo === 'NOMINEE' && !hasNominee))
-        .map((t) => {
-          const doc = byType.get(t.id);
-          return {
+      const items: DocumentChecklistItem[] = [];
+      for (const t of types) {
+        if (t.appliesTo === 'NOMINEE' && !hasNominee) continue;
+        const parties: Party[] = t.appliesTo === 'BOTH' ? (hasNominee ? ['CLIENT', 'NOMINEE'] : ['CLIENT']) : [t.appliesTo];
+        for (const party of parties) {
+          const doc = byKey.get(`${t.id}:${party}`);
+          items.push({
             documentTypeId: t.id,
-            name: t.name,
+            name: t.appliesTo === 'BOTH' ? `${party === 'NOMINEE' ? 'Nominee' : 'Client'} ${t.name}` : t.name,
             appliesTo: t.appliesTo,
+            party,
             isMandatory: t.isMandatory,
             documentId: doc?.id ?? null,
             uploadedAt: doc?.uploadedAt.toISOString() ?? null,
-          };
-        });
+          });
+        }
+      }
+      return items;
     });
   }
 
-  async upload(user: AuthUser, clientId: string, documentTypeId: string, file: Express.Multer.File) {
+  async upload(user: AuthUser, clientId: string, documentTypeId: string, party: Party, file: Express.Multer.File) {
     return this.prisma.withTenant(user, async (tx) => {
       const client = await tx.client.findFirst({ where: { id: clientId, ...clientCenterScope(user) } });
       if (!client) {
@@ -61,8 +72,10 @@ export class DocumentsService {
         fs.unlink(file.path, () => {});
         throw new BadRequestException('Document type not found');
       }
-
-      const party = docType.appliesTo === 'NOMINEE' ? 'NOMINEE' : 'CLIENT';
+      if (docType.appliesTo !== 'BOTH' && docType.appliesTo !== party) {
+        fs.unlink(file.path, () => {});
+        throw new BadRequestException(`This document does not apply to ${party.toLowerCase()}`);
+      }
 
       // Replace any previous file for this document type (best-effort cleanup).
       const previous = await tx.kycDocument.findUnique({

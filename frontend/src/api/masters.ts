@@ -31,6 +31,9 @@ export interface DocumentTypeRow {
   id: string;
   name: string;
   appliesTo: DocumentParty;
+  requiresNumber: boolean;
+  requiresPhoto: boolean;
+  maskValue: boolean;
   isMandatory: boolean;
   isActive: boolean;
 }
@@ -63,11 +66,28 @@ export const updateLoanProduct = (
   body: Partial<{ name: string; loanAmount: number; totalDues: number; interestAmount: number; frequencyId: string; isActive: boolean }>,
 ) => api<LoanProductRow>(`/loan-products/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
-// ---- Document Types ----
+// ---- Document Types (single source of truth for KYC numbers + photo uploads) ----
+/** Active document types only — any employee role (used by the Enroll form / KYC editors). */
+export const listDocumentTypes = () => api<DocumentTypeRow[]>('/document-types');
+/** All document types incl. inactive — admin (BM/HO) management screen. */
 export const listDocumentTypesAll = () => api<DocumentTypeRow[]>('/document-types?all=true');
-export const createDocumentType = (body: { name: string; appliesTo: DocumentParty; isMandatory?: boolean }) =>
-  api<DocumentTypeRow>('/document-types', { method: 'POST', body: JSON.stringify(body) });
+export const createDocumentType = (body: {
+  name: string;
+  appliesTo: DocumentParty;
+  requiresNumber?: boolean;
+  requiresPhoto?: boolean;
+  maskValue?: boolean;
+  isMandatory?: boolean;
+}) => api<DocumentTypeRow>('/document-types', { method: 'POST', body: JSON.stringify(body) });
 export const updateDocumentType = (
   id: string,
-  body: Partial<{ name: string; appliesTo: DocumentParty; isMandatory: boolean; isActive: boolean }>,
+  body: Partial<{
+    name: string;
+    appliesTo: DocumentParty;
+    requiresNumber: boolean;
+    requiresPhoto: boolean;
+    maskValue: boolean;
+    isMandatory: boolean;
+    isActive: boolean;
+  }>,
 ) => api<DocumentTypeRow>(`/document-types/${id}`, { method: 'PATCH', body: JSON.stringify(body) });

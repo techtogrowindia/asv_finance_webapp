@@ -14,8 +14,8 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'branch','employee','center','employee_center','group_unit','client',
-    'kyc','co_applicant','frequency','purpose','loan_product','document_type',
-    'kyc_document','loan_application','loan','repayment_schedule',
+    'co_applicant','frequency','purpose','loan_product','document_type',
+    'kyc_document','kyc_number','loan_application','loan','repayment_schedule',
     'collection','audit_log'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);

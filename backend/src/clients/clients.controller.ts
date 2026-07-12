@@ -14,7 +14,7 @@ import { AuthUser } from '../common/types/auth-user';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
-import { KycDto } from './dto/kyc.dto';
+import { UpdateKycNumbersDto } from './dto/kyc-number.dto';
 
 @Controller('clients')
 export class ClientsController {
@@ -51,12 +51,12 @@ export class ClientsController {
   }
 
   @Roles('FDO', 'BM')
-  @Patch(':id/kyc')
-  updateKyc(
+  @Patch(':id/kyc-numbers')
+  updateKycNumbers(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: KycDto,
+    @Body() dto: UpdateKycNumbersDto,
   ) {
-    return this.clients.updateKyc(user, id, dto);
+    return this.clients.updateKycNumbers(user, id, dto);
   }
 }

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CenterLite,
@@ -8,6 +8,7 @@ import {
   listCenters,
   listGroups,
 } from '../api/members';
+import { DocumentTypeRow, listDocumentTypes } from '../api/masters';
 
 const GENDERS = ['Female', 'Male', 'Other'];
 const RELATIONS = ['Husband', 'Father', 'Son', 'Brother', 'Mother', 'Other'];
@@ -16,6 +17,7 @@ export function EnrollMemberPage() {
   const navigate = useNavigate();
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [groups, setGroups] = useState<GroupLite[]>([]);
+  const [docTypes, setDocTypes] = useState<DocumentTypeRow[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -33,28 +35,22 @@ export function EnrollMemberPage() {
     monthlyIncome: '',
     monthlyExpense: '',
     fatherName: '',
-    // Government ID proofs (KYC)
-    uid: '',
-    voterId: '',
-    pan: '',
-    rationCard: '',
-    smartCard: '',
-    otherId: '',
-    // Co-applicant / nominee
     coName: '',
     coGender: '',
     coDob: '',
     coRelation: '',
     coMobile: '',
-    coVoterId: '',
-    coPan: '',
-    coOtherId: '',
   });
+
+  // Dynamic ID-number values, keyed by DocumentType id (admin-managed).
+  const [clientNumbers, setClientNumbers] = useState<Record<string, string>>({});
+  const [nomineeNumbers, setNomineeNumbers] = useState<Record<string, string>>({});
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
+    listDocumentTypes().then(setDocTypes).catch((e) => setError(e.message));
   }, []);
 
   useEffect(() => {
@@ -64,6 +60,15 @@ export function EnrollMemberPage() {
     }
     listGroups(form.centerId).then(setGroups).catch((e) => setError(e.message));
   }, [form.centerId]);
+
+  const clientTypes = useMemo(
+    () => docTypes.filter((t) => t.requiresNumber && (t.appliesTo === 'CLIENT' || t.appliesTo === 'BOTH')),
+    [docTypes],
+  );
+  const nomineeTypes = useMemo(
+    () => docTypes.filter((t) => t.requiresNumber && (t.appliesTo === 'NOMINEE' || t.appliesTo === 'BOTH')),
+    [docTypes],
+  );
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -84,17 +89,9 @@ export function EnrollMemberPage() {
         monthlyIncome: form.monthlyIncome ? Number(form.monthlyIncome) : undefined,
         monthlyExpense: form.monthlyExpense ? Number(form.monthlyExpense) : undefined,
         fatherName: form.fatherName || undefined,
-        kyc:
-          form.uid || form.voterId || form.pan || form.rationCard || form.smartCard || form.otherId
-            ? {
-                uid: form.uid || undefined,
-                voterId: form.voterId || undefined,
-                pan: form.pan || undefined,
-                rationCard: form.rationCard || undefined,
-                smartCard: form.smartCard || undefined,
-                otherId: form.otherId || undefined,
-              }
-            : undefined,
+        kycNumbers: Object.entries(clientNumbers)
+          .filter(([, v]) => v.trim())
+          .map(([documentTypeId, value]) => ({ documentTypeId, value: value.trim() })),
         coApplicant: form.coName
           ? {
               name: form.coName.trim(),
@@ -102,9 +99,9 @@ export function EnrollMemberPage() {
               dob: form.coDob || undefined,
               relation: form.coRelation || undefined,
               mobile: form.coMobile || undefined,
-              voterId: form.coVoterId || undefined,
-              pan: form.coPan || undefined,
-              otherId: form.coOtherId || undefined,
+              kycNumbers: Object.entries(nomineeNumbers)
+                .filter(([, v]) => v.trim())
+                .map(([documentTypeId, value]) => ({ documentTypeId, value: value.trim() })),
             }
           : undefined,
       };
@@ -221,26 +218,20 @@ export function EnrollMemberPage() {
         <div className="form-section-title" style={{ marginTop: 20 }}>
           Government ID proofs (KYC)
         </div>
-        <div className="hint">Aadhaar is masked everywhere it's shown after saving, for privacy.</div>
+        <div className="hint">
+          These fields are managed by the admin under Masters → Document Types. Masked numbers (like Aadhaar) are hidden everywhere they're shown after saving.
+        </div>
         <div className="form-grid">
-          <Field label="Aadhaar / UID number">
-            <input className="input" value={form.uid} onChange={(e) => set('uid', e.target.value)} />
-          </Field>
-          <Field label="Voter ID">
-            <input className="input" value={form.voterId} onChange={(e) => set('voterId', e.target.value)} />
-          </Field>
-          <Field label="PAN">
-            <input className="input" value={form.pan} onChange={(e) => set('pan', e.target.value)} />
-          </Field>
-          <Field label="Ration card">
-            <input className="input" value={form.rationCard} onChange={(e) => set('rationCard', e.target.value)} />
-          </Field>
-          <Field label="Smart card">
-            <input className="input" value={form.smartCard} onChange={(e) => set('smartCard', e.target.value)} />
-          </Field>
-          <Field label="Other ID">
-            <input className="input" value={form.otherId} onChange={(e) => set('otherId', e.target.value)} />
-          </Field>
+          {clientTypes.map((t) => (
+            <Field label={t.name} key={t.id}>
+              <input
+                className="input"
+                value={clientNumbers[t.id] ?? ''}
+                onChange={(e) => setClientNumbers((s) => ({ ...s, [t.id]: e.target.value }))}
+              />
+            </Field>
+          ))}
+          {clientTypes.length === 0 && <div className="empty">No ID-number fields configured yet.</div>}
         </div>
 
         <div className="form-section-title" style={{ marginTop: 20 }}>
@@ -277,16 +268,19 @@ export function EnrollMemberPage() {
           <Field label="Mobile">
             <input className="input" value={form.coMobile} onChange={(e) => set('coMobile', e.target.value)} />
           </Field>
-          <Field label="Voter ID">
-            <input className="input" value={form.coVoterId} onChange={(e) => set('coVoterId', e.target.value)} />
-          </Field>
-          <Field label="PAN">
-            <input className="input" value={form.coPan} onChange={(e) => set('coPan', e.target.value)} />
-          </Field>
-          <Field label="Other ID">
-            <input className="input" value={form.coOtherId} onChange={(e) => set('coOtherId', e.target.value)} />
-          </Field>
+          {nomineeTypes.map((t) => (
+            <Field label={t.name} key={t.id}>
+              <input
+                className="input"
+                value={nomineeNumbers[t.id] ?? ''}
+                onChange={(e) => setNomineeNumbers((s) => ({ ...s, [t.id]: e.target.value }))}
+              />
+            </Field>
+          ))}
         </div>
+        {!form.coName && (
+          <div className="hint">Nominee ID numbers are only saved once a nominee name is entered above.</div>
+        )}
 
         <div className="form-actions">
           <button className="btn btn-primary" type="submit" disabled={busy}>

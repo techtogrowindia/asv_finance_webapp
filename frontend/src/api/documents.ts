@@ -5,6 +5,7 @@ export interface DocumentChecklistItem {
   documentTypeId: string;
   name: string;
   appliesTo: 'CLIENT' | 'NOMINEE' | 'BOTH';
+  party: 'CLIENT' | 'NOMINEE';
   isMandatory: boolean;
   documentId: string | null;
   uploadedAt: string | null;
@@ -16,10 +17,16 @@ export const getChecklist = (clientId: string) =>
 export const deleteDocument = (documentId: string) =>
   api<{ deleted: boolean }>(`/documents/${documentId}`, { method: 'DELETE' });
 
-export async function uploadDocument(clientId: string, documentTypeId: string, file: File) {
+export async function uploadDocument(
+  clientId: string,
+  documentTypeId: string,
+  party: 'CLIENT' | 'NOMINEE',
+  file: File,
+) {
   const token = tokenStore.get();
   const form = new FormData();
   form.append('documentTypeId', documentTypeId);
+  form.append('party', party);
   form.append('file', file);
   const res = await fetch(`/api/v1/clients/${clientId}/documents`, {
     method: 'POST',

@@ -9,29 +9,30 @@ import {
 import { useConfirm } from './ConfirmProvider';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
+const key = (i: Pick<DocumentChecklistItem, 'documentTypeId' | 'party'>) => `${i.documentTypeId}:${i.party}`;
+
 /**
- * Inline KYC document images for a member: one card per required document type,
- * showing the uploaded image thumbnail (or an upload placeholder) with
- * Upload / Change / Delete actions. Replaces the old separate documents page.
+ * Inline KYC document images for a member: one card per required document type
+ * (expanded per party for CLIENT+NOMINEE-applicable types), showing the
+ * uploaded image thumbnail (or an upload placeholder) with Upload / Change /
+ * Delete actions.
  */
 export function KycDocumentGrid({ clientId }: { clientId: string }) {
   const confirm = useConfirm();
   const [items, setItems] = useState<DocumentChecklistItem[] | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [busyType, setBusyType] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState<{ url: string; title: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
-  const pendingType = useRef<string | null>(null);
+  const pending = useRef<{ documentTypeId: string; party: 'CLIENT' | 'NOMINEE' } | null>(null);
 
   useEffect(() => {
     load();
-    // revoke object URLs on unmount
     return () => Object.values(urlsRef.current).forEach((u) => URL.revokeObjectURL(u));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
-  // Keep a ref to current urls for cleanup without re-running the effect.
   const urlsRef = useRef<Record<string, string>>({});
   urlsRef.current = urls;
 
@@ -45,7 +46,7 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
           .filter((i) => i.documentId)
           .map(async (i) => {
             try {
-              next[i.documentTypeId] = await fetchDocumentBlobUrl(i.documentId!);
+              next[key(i)] = await fetchDocumentBlobUrl(i.documentId!);
             } catch {
               /* skip broken image */
             }
@@ -57,24 +58,24 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
     }
   }
 
-  function pick(documentTypeId: string) {
-    pendingType.current = documentTypeId;
+  function pick(item: DocumentChecklistItem) {
+    pending.current = { documentTypeId: item.documentTypeId, party: item.party };
     fileInput.current?.click();
   }
 
   async function onFile(file: File | undefined) {
-    const documentTypeId = pendingType.current;
-    if (!file || !documentTypeId) return;
+    const target = pending.current;
+    if (!file || !target) return;
     setError('');
-    setBusyType(documentTypeId);
+    setBusyKey(`${target.documentTypeId}:${target.party}`);
     try {
-      await uploadDocument(clientId, documentTypeId, file);
+      await uploadDocument(clientId, target.documentTypeId, target.party, file);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
-      setBusyType(null);
-      pendingType.current = null;
+      setBusyKey(null);
+      pending.current = null;
       if (fileInput.current) fileInput.current.value = '';
     }
   }
@@ -88,29 +89,30 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
       danger: true,
     });
     if (!ok) return;
-    setBusyType(item.documentTypeId);
+    setBusyKey(key(item));
     try {
       await deleteDocument(item.documentId);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Delete failed');
     } finally {
-      setBusyType(null);
+      setBusyKey(null);
     }
   }
 
   if (error) return <div className="alert-error">{error}</div>;
   if (!items) return <div className="empty">Loading…</div>;
-  if (items.length === 0) return <div className="empty">No document types configured.</div>;
+  if (items.length === 0) return <div className="empty">No document types require a photo.</div>;
 
   return (
     <>
       <div className="doc-grid">
         {items.map((item) => {
-          const url = urls[item.documentTypeId];
-          const busy = busyType === item.documentTypeId;
+          const k = key(item);
+          const url = urls[k];
+          const busy = busyKey === k;
           return (
-            <div className="doc-card" key={item.documentTypeId}>
+            <div className="doc-card" key={k}>
               <div className="doc-card-title">
                 {item.name}
                 {item.isMandatory && <span className="req">•</span>}
@@ -132,7 +134,7 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
               <div className="doc-card-actions">
                 {item.documentId ? (
                   <>
-                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => pick(item.documentTypeId)}>
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => pick(item)}>
                       {busy ? <span className="spinner" /> : 'Change'}
                     </button>
                     <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => onDelete(item)}>
@@ -140,7 +142,7 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
                     </button>
                   </>
                 ) : (
-                  <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => pick(item.documentTypeId)}>
+                  <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => pick(item)}>
                     {busy ? <span className="spinner" /> : 'Upload'}
                   </button>
                 )}
