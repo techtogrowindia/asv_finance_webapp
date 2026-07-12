@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { AuthUser } from '../common/types/auth-user';
 import { clientCenterScope } from '../common/scope';
+import { stripLeadingZeros } from '../common/format.util';
 import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
@@ -273,7 +274,7 @@ export class LoansService {
 
       return {
         loanAccount: loan.loanAccount,
-        clientDisplayId: `${loan.client.center.branch.code}.${loan.client.center.code}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
+        clientDisplayId: `${stripLeadingZeros(loan.client.center.branch.code)}.${stripLeadingZeros(loan.client.center.code)}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
         clientName: loan.client.name,
         disbursalDate: loan.disbursalDate,
         loanAmount: loan.loanAmount,

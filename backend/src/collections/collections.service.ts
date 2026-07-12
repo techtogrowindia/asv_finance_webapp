@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { AuthUser } from '../common/types/auth-user';
 import { centerScope, clientCenterScope } from '../common/scope';
+import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
 import { PostCollectionDto } from './dto/post-collection.dto';
 
@@ -17,7 +18,10 @@ export class CollectionsService {
   /** Per-member collectable amount for one center, as of a date (defaults to working date). */
   async due(user: AuthUser, centerId: string, date?: string) {
     return this.prisma.withTenant(user, async (tx) => {
-      const center = await tx.center.findFirst({ where: { id: centerId, ...centerScope(user) } });
+      const center = await tx.center.findFirst({
+        where: { id: centerId, ...centerScope(user) },
+        include: { branch: { select: { code: true } } },
+      });
       if (!center) throw new ForbiddenException('Center not assigned to you');
 
       const asOf = date ? new Date(date) : await this.resolveWorkingDate(tx, center.branchId);
@@ -43,7 +47,7 @@ export class CollectionsService {
             return {
               clientId: c.id,
               clientName: c.name,
-              displayId: `${center.code}.${c.group.groupNo}.${c.memberNo}`,
+              displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${c.group.groupNo}.${c.memberNo}`,
               loanId: loan.id,
               loanAccount: loan.loanAccount,
               dueCount: unpaid.length,

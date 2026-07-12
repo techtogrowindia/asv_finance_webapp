@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types/auth-user';
 import { centerScope, clientCenterScope } from '../common/scope';
+import { stripLeadingZeros } from '../common/format.util';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { KycDto } from './dto/kyc.dto';
@@ -236,7 +237,9 @@ export class ClientsService {
     const base = {
       id: c.id,
       clientCode: c.clientCode,
-      displayId: `${c.center.branch.code}.${c.center.code}.${c.group.groupNo}.${c.memberNo}`,
+      // Client ID = branch.center.group.member, as plain numbers (no zero-padding)
+      // even though branch/center codes are stored padded (e.g. "005", "029").
+      displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
       name: c.name,
       centerId: c.centerId,
       centerCode: c.center.code,
