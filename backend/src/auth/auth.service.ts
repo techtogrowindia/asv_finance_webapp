@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
-import { Role } from '../common/types/auth-user';
+import { AuthUser, Role } from '../common/types/auth-user';
 import { JwtPayload } from '../common/auth/jwt.strategy';
 import { LoginDto } from './dto/login.dto';
 
@@ -80,5 +80,15 @@ export class AuthService {
         branchId: emp.branch_id,
       },
     };
+  }
+
+  /** The operative business date (never real-world `now()` — invariant #4). */
+  async workingDate(user: AuthUser): Promise<Date> {
+    return this.prisma.withTenant(user, async (tx) => {
+      const branch = user.branchId
+        ? await tx.branch.findUnique({ where: { id: user.branchId } })
+        : await tx.branch.findFirst({ orderBy: { code: 'asc' } }); // HO: no single branch
+      return branch?.workingDate ?? new Date();
+    });
   }
 }

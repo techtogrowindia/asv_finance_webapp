@@ -12,6 +12,7 @@ import { MastersModule } from './masters/masters.module';
 import { LoansModule } from './loans/loans.module';
 import { DocumentsModule } from './documents/documents.module';
 import { EmployeesModule } from './employees/employees.module';
+import { CollectionsModule } from './collections/collections.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -26,6 +27,7 @@ import { HealthController } from './health.controller';
     LoansModule,
     DocumentsModule,
     EmployeesModule,
+    CollectionsModule,
   ],
   controllers: [HealthController],
   providers: [

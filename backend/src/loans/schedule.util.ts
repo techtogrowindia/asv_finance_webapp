@@ -4,7 +4,6 @@ export interface ScheduleRow {
   duePri: number;
   dueInt: number;
   dueAmt: number;
-  dueBalance: number;
 }
 
 /**
@@ -12,6 +11,10 @@ export interface ScheduleRow {
  * installment carries the same principal share (loanAmount/totalDues) and the
  * same interest share (interestAmount/totalDues). The last installment absorbs
  * any rounding remainder so the schedule sums exactly to the total.
+ *
+ * Note: this returns only the PLANNED (due) side. The per-row `due_balance`
+ * stored on RepaymentSchedule ("how much of this installment is still owed")
+ * is collection-dependent and maintained by the collections service, not here.
  */
 export function generateSchedule(params: {
   loanAmount: number;
@@ -25,23 +28,20 @@ export function generateSchedule(params: {
   const int = round2(interestAmount / totalDues);
 
   const rows: ScheduleRow[] = [];
-  let balance = round2(loanAmount + interestAmount);
-
   for (let dueNo = 1; dueNo <= totalDues; dueNo++) {
     const isLast = dueNo === totalDues;
     const duePri = isLast ? round2(loanAmount - pri * (totalDues - 1)) : pri;
     const dueInt = isLast ? round2(interestAmount - int * (totalDues - 1)) : int;
     const dueAmt = round2(duePri + dueInt);
-    balance = round2(balance - dueAmt);
 
     const dueDate = new Date(dueStartDate);
     dueDate.setDate(dueDate.getDate() + daysBetween * (dueNo - 1));
 
-    rows.push({ dueNo, dueDate, duePri, dueInt, dueAmt, dueBalance: Math.max(0, balance) });
+    rows.push({ dueNo, dueDate, duePri, dueInt, dueAmt });
   }
   return rows;
 }
 
-function round2(n: number): number {
+export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

@@ -10,12 +10,13 @@ export interface User {
   code: string;
   role: Role;
   branchId: string | null;
+  workingDate: string;
 }
 
 interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: User;
+  user: Omit<User, 'workingDate'>;
 }
 
 interface AuthContextValue {
@@ -56,8 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({ login, password, portal }),
         });
         tokenStore.set(res.accessToken, res.refreshToken);
-        setUser(res.user);
-        return res.user;
+        // /auth/login doesn't include workingDate; fetch the full profile once.
+        const full = await api<User>('/auth/me');
+        setUser(full);
+        return full;
       },
       logout() {
         tokenStore.clear();

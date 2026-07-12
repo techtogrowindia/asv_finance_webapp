@@ -1,13 +1,19 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { AuthUser } from '../common/types/auth-user';
 import { clientCenterScope } from '../common/scope';
+import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
+import { RejectApplicationDto } from './dto/reject-application.dto';
 
 @Injectable()
 export class LoansService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** Existing loans for a client, with balances/arrears derived from the schedule. */
   async existingLoans(user: AuthUser, clientId: string) {
@@ -106,6 +112,189 @@ export class LoansService {
       });
 
       return { id: application.id, status: application.status, warnings, requestedAmount: product.loanAmount };
+    });
+  }
+
+  // ---- Verification & Disbursement (BM/HO) ---------------------------------
+
+  /** Applications awaiting a decision, scoped to the caller's branch/tenant. */
+  async listApplications(user: AuthUser, status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
+    return this.prisma.withTenant(user, async (tx) => {
+      const applications = await tx.loanApplication.findMany({
+        where: { client: clientCenterScope(user), ...(status ? { status } : {}) },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          client: { select: { id: true, clientCode: true, name: true } },
+          product: { select: { name: true, loanAmount: true, totalDues: true } },
+          purpose: { select: { name: true } },
+        },
+      });
+      return applications.map((a) => ({
+        id: a.id,
+        clientId: a.client.id,
+        clientCode: a.client.clientCode,
+        clientName: a.client.name,
+        productName: a.product.name,
+        loanAmount: a.product.loanAmount,
+        totalDues: a.product.totalDues,
+        purposeName: a.purpose.name,
+        requestedAmount: a.requestedAmount,
+        status: a.status,
+        warnings: (a.warnings as string[] | null) ?? [],
+        createdAt: a.createdAt,
+      }));
+    });
+  }
+
+  /** Approve a pending application: creates the Loan + full RepaymentSchedule. */
+  async disburse(user: AuthUser, applicationId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const application = await tx.loanApplication.findFirst({
+        where: { id: applicationId, client: clientCenterScope(user) },
+        include: {
+          client: { select: { id: true, clientCode: true, center: { select: { branchId: true } } } },
+          product: { include: { frequency: true } },
+        },
+      });
+      if (!application) throw new NotFoundException('Loan application not found');
+      if (application.status !== 'PENDING') {
+        throw new BadRequestException(`Application is already ${application.status}`);
+      }
+
+      const branch = await tx.branch.findUnique({ where: { id: application.client.center.branchId } });
+      const workingDate = branch?.workingDate ?? new Date();
+
+      const cycleNo = (await tx.loan.count({ where: { clientId: application.client.id } })) + 1;
+      const loanAccount = `${application.client.clientCode}/${cycleNo}`;
+
+      const loanAmount = Number(application.product.loanAmount);
+      const interestAmount = Number(application.product.interestAmount);
+      const totalDues = application.product.totalDues;
+      const rows = generateSchedule({
+        loanAmount,
+        interestAmount,
+        totalDues,
+        daysBetween: application.product.frequency.daysBetween,
+        dueStartDate: workingDate,
+      });
+      const maturityDate = rows[rows.length - 1].dueDate;
+
+      const loan = await tx.loan.create({
+        data: {
+          tenantId: user.tenantId,
+          clientId: application.client.id,
+          applicationId: application.id,
+          productId: application.productId,
+          loanAccount,
+          cycleNo,
+          loanAmount,
+          interestAmount,
+          totalAmount: round2(loanAmount + interestAmount),
+          totalDues,
+          disbursalDate: workingDate,
+          dueStartDate: workingDate,
+          maturityDate,
+          loanType: 'OPEN',
+          schedule: {
+            create: rows.map((r) => ({
+              tenantId: user.tenantId,
+              dueNo: r.dueNo,
+              dueDate: r.dueDate,
+              duePri: r.duePri,
+              dueInt: r.dueInt,
+              dueAmt: r.dueAmt,
+              dueBalance: r.dueAmt, // nothing collected yet
+            })),
+          },
+        },
+      });
+
+      await tx.loanApplication.update({
+        where: { id: application.id },
+        data: { status: 'APPROVED', sanctionedAmount: loanAmount },
+      });
+
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'Loan',
+        entityId: loan.id,
+        action: 'DISBURSE',
+        employeeId: user.employeeId,
+        after: { loanAccount, loanAmount, interestAmount, totalDues, disbursalDate: workingDate },
+      });
+
+      return { id: loan.id, loanAccount, disbursalDate: workingDate, maturityDate };
+    });
+  }
+
+  async reject(user: AuthUser, applicationId: string, dto: RejectApplicationDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const application = await tx.loanApplication.findFirst({
+        where: { id: applicationId, client: clientCenterScope(user) },
+      });
+      if (!application) throw new NotFoundException('Loan application not found');
+      if (application.status !== 'PENDING') {
+        throw new BadRequestException(`Application is already ${application.status}`);
+      }
+
+      await tx.loanApplication.update({ where: { id: application.id }, data: { status: 'REJECTED' } });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'LoanApplication',
+        entityId: application.id,
+        action: 'REJECT',
+        employeeId: user.employeeId,
+        after: { reason: dto.reason ?? null },
+      });
+
+      return { id: application.id, status: 'REJECTED' };
+    });
+  }
+
+  /** Full printable ledger for one loan: header + every due/collected row. */
+  async ledger(user: AuthUser, loanId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, client: clientCenterScope(user) },
+        include: {
+          client: {
+            select: {
+              name: true,
+              clientCode: true,
+              memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, branch: { select: { code: true } } } },
+            },
+          },
+          schedule: { orderBy: { dueNo: 'asc' } },
+        },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+
+      return {
+        loanAccount: loan.loanAccount,
+        clientDisplayId: `${loan.client.center.branch.code}.${loan.client.center.code}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
+        clientName: loan.client.name,
+        disbursalDate: loan.disbursalDate,
+        loanAmount: loan.loanAmount,
+        interestAmount: loan.interestAmount,
+        totalAmount: loan.totalAmount,
+        totalDues: loan.totalDues,
+        loanType: loan.loanType,
+        closedDate: loan.closedDate,
+        schedule: loan.schedule.map((s) => ({
+          dueNo: s.dueNo,
+          dueDate: s.dueDate,
+          collDate: s.collDate,
+          duePri: s.duePri,
+          dueInt: s.dueInt,
+          dueAmt: s.dueAmt,
+          collPri: s.collPri,
+          collInt: s.collInt,
+          collAmt: s.collAmt,
+          dueBalance: s.dueBalance,
+        })),
+      };
     });
   }
 

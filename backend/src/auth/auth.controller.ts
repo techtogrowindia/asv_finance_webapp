@@ -18,13 +18,15 @@ export class AuthController {
 
   /** Current identity — used by the web app after login / on refresh. */
   @Get('me')
-  me(@CurrentUser() user: AuthUser) {
+  async me(@CurrentUser() user: AuthUser) {
+    const workingDate = await this.auth.workingDate(user);
     return {
       id: user.employeeId,
       name: user.name,
       code: user.code,
       role: user.role,
       branchId: user.branchId,
+      workingDate,
     };
   }
 }

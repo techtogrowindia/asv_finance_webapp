@@ -79,6 +79,8 @@ model Tenant {
   kycDocuments     KycDocument[]
   loanApplications LoanApplication[]
   loans            Loan[]
+  collections      Collection[]
+  auditLogs        AuditLog[]
 
   @@map("tenant")
 }
@@ -128,24 +130,24 @@ model Employee {
 
 // ---- Center ----------------------------------------------------------------
 model Center {
-  id             String       @id @default(uuid()) @db.Uuid
-  tenantId       String       @map("tenant_id") @db.Uuid
-  branchId       String       @map("branch_id") @db.Uuid
-  fdoId          String?      @map("fdo_id") @db.Uuid
-  code           String // e.g. "029"
-  name           String
-  address        String?
-  meetingDay     String?      @map("meeting_day") // MON..SUN
-  meetingTime    String?      @map("meeting_time")
-  meetingPlace   String?      @map("meeting_place")
-  formationDate  DateTime?    @map("formation_date") @db.Date
-  nextMeeting    DateTime?    @map("next_meeting_date") @db.Date
-  mobile         String?
-  latitude       Decimal?     @db.Decimal(10, 7)
-  longitude      Decimal?     @db.Decimal(10, 7)
-  status         CenterStatus @default(ACTIVE)
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  id            String       @id @default(uuid()) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  branchId      String       @map("branch_id") @db.Uuid
+  fdoId         String?      @map("fdo_id") @db.Uuid
+  code          String // e.g. "029"
+  name          String
+  address       String?
+  meetingDay    String?      @map("meeting_day") // MON..SUN
+  meetingTime   String?      @map("meeting_time")
+  meetingPlace  String?      @map("meeting_place")
+  formationDate DateTime?    @map("formation_date") @db.Date
+  nextMeeting   DateTime?    @map("next_meeting_date") @db.Date
+  mobile        String?
+  latitude      Decimal?     @db.Decimal(10, 7)
+  longitude     Decimal?     @db.Decimal(10, 7)
+  status        CenterStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
   tenant    Tenant           @relation(fields: [tenantId], references: [id])
   branch    Branch           @relation(fields: [branchId], references: [id])
@@ -195,30 +197,30 @@ model GroupUnit {
 
 // ---- Client (member) -------------------------------------------------------
 model Client {
-  id            String       @id @default(uuid()) @db.Uuid
-  tenantId      String       @map("tenant_id") @db.Uuid
-  centerId      String       @map("center_id") @db.Uuid
-  groupId       String       @map("group_id") @db.Uuid
-  memberNo      Int          @map("member_no") // 1..5
-  clientCode    String       @unique @map("client_code") // e.g. PMF005179
-  name          String
-  dob           DateTime?    @db.Date
-  gender        String?
-  mobile        String?
-  presentAddress String?     @map("present_address")
-  pincode       String?
-  district      String?
-  state         String?
-  monthlyIncome  Decimal?    @map("monthly_income") @db.Decimal(14, 2)
-  monthlyExpense Decimal?    @map("monthly_expense") @db.Decimal(14, 2)
-  fatherName    String?      @map("father_name")
-  latitude      Decimal?     @db.Decimal(10, 7)
-  longitude     Decimal?     @db.Decimal(10, 7)
-  dateOfJoining DateTime?    @map("date_of_joining") @db.Date
-  status        ClientStatus @default(PENDING)
-  isActive      Boolean      @default(true) @map("is_active")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  centerId       String       @map("center_id") @db.Uuid
+  groupId        String       @map("group_id") @db.Uuid
+  memberNo       Int          @map("member_no") // 1..5
+  clientCode     String       @unique @map("client_code") // e.g. PMF005179
+  name           String
+  dob            DateTime?    @db.Date
+  gender         String?
+  mobile         String?
+  presentAddress String?      @map("present_address")
+  pincode        String?
+  district       String?
+  state          String?
+  monthlyIncome  Decimal?     @map("monthly_income") @db.Decimal(14, 2)
+  monthlyExpense Decimal?     @map("monthly_expense") @db.Decimal(14, 2)
+  fatherName     String?      @map("father_name")
+  latitude       Decimal?     @db.Decimal(10, 7)
+  longitude      Decimal?     @db.Decimal(10, 7)
+  dateOfJoining  DateTime?    @map("date_of_joining") @db.Date
+  status         ClientStatus @default(PENDING)
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
   tenant       Tenant            @relation(fields: [tenantId], references: [id])
   center       Center            @relation(fields: [centerId], references: [id])
@@ -257,19 +259,19 @@ model Kyc {
 
 // ---- Co-Applicant / Nominee — 1:1 with Client ------------------------------
 model CoApplicant {
-  id       String    @id @default(uuid()) @db.Uuid
-  tenantId String    @map("tenant_id") @db.Uuid
-  clientId String    @unique @map("client_id") @db.Uuid
-  name     String
-  gender   String?
-  dob      DateTime? @db.Date
-  relation String?   @map("relation_with_client")
-  mobile   String?
-  voterId  String?   @map("voter_id")
-  otherId  String?   @map("other_id")
-  pan      String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  clientId  String    @unique @map("client_id") @db.Uuid
+  name      String
+  gender    String?
+  dob       DateTime? @db.Date
+  relation  String?   @map("relation_with_client")
+  mobile    String?
+  voterId   String?   @map("voter_id")
+  otherId   String?   @map("other_id")
+  pan       String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   client Client @relation(fields: [clientId], references: [id])
@@ -384,18 +386,18 @@ model KycDocument {
 
 // ---- Loan application (employee submits; BM approves+disburses later) -----
 model LoanApplication {
-  id                String                 @id @default(uuid()) @db.Uuid
-  tenantId          String                 @map("tenant_id") @db.Uuid
-  clientId          String                 @map("client_id") @db.Uuid
-  productId         String                 @map("product_id") @db.Uuid
-  purposeId         String                 @map("purpose_id") @db.Uuid
-  requestedAmount   Decimal                @map("requested_amount") @db.Decimal(14, 2)
-  sanctionedAmount  Decimal?               @map("sanctioned_amount") @db.Decimal(14, 2)
-  status            LoanApplicationStatus  @default(PENDING)
-  warnings          Json? // eligibility warnings captured at submission time
-  createdBy         String?                @map("created_by") @db.Uuid
-  createdAt         DateTime               @default(now()) @map("created_at")
-  updatedAt         DateTime               @updatedAt @map("updated_at")
+  id               String                @id @default(uuid()) @db.Uuid
+  tenantId         String                @map("tenant_id") @db.Uuid
+  clientId         String                @map("client_id") @db.Uuid
+  productId        String                @map("product_id") @db.Uuid
+  purposeId        String                @map("purpose_id") @db.Uuid
+  requestedAmount  Decimal               @map("requested_amount") @db.Decimal(14, 2)
+  sanctionedAmount Decimal?              @map("sanctioned_amount") @db.Decimal(14, 2)
+  status           LoanApplicationStatus @default(PENDING)
+  warnings         Json? // eligibility warnings captured at submission time
+  createdBy        String?               @map("created_by") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
 
   tenant  Tenant      @relation(fields: [tenantId], references: [id])
   client  Client      @relation(fields: [clientId], references: [id])
@@ -410,53 +412,100 @@ model LoanApplication {
 // A disbursed loan. Created later by the BM disbursement action (maker-checker);
 // the employee portal only ever reads these (existing-loan panel, ledger).
 model Loan {
-  id              String     @id @default(uuid()) @db.Uuid
-  tenantId        String     @map("tenant_id") @db.Uuid
-  clientId        String     @map("client_id") @db.Uuid
-  applicationId   String?    @unique @map("application_id") @db.Uuid
-  productId       String     @map("product_id") @db.Uuid
-  loanAccount     String     @unique @map("loan_account") // e.g. PMF005179/2
-  cycleNo         Int        @map("cycle_no")
-  loanAmount      Decimal    @map("loan_amount") @db.Decimal(14, 2)
-  interestAmount  Decimal    @map("interest_amount") @db.Decimal(14, 2)
-  totalAmount     Decimal    @map("total_amount") @db.Decimal(14, 2)
-  totalDues       Int        @map("total_dues")
-  disbursalDate   DateTime   @map("disbursal_date") @db.Date
-  dueStartDate    DateTime   @map("due_start_date") @db.Date
-  maturityDate    DateTime   @map("maturity_date") @db.Date
-  closedDate      DateTime?  @map("closed_date") @db.Date
-  loanType        LoanStatus @default(OPEN) @map("loan_type")
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  id             String     @id @default(uuid()) @db.Uuid
+  tenantId       String     @map("tenant_id") @db.Uuid
+  clientId       String     @map("client_id") @db.Uuid
+  applicationId  String?    @unique @map("application_id") @db.Uuid
+  productId      String     @map("product_id") @db.Uuid
+  loanAccount    String     @unique @map("loan_account") // e.g. PMF005179/2
+  cycleNo        Int        @map("cycle_no")
+  loanAmount     Decimal    @map("loan_amount") @db.Decimal(14, 2)
+  interestAmount Decimal    @map("interest_amount") @db.Decimal(14, 2)
+  totalAmount    Decimal    @map("total_amount") @db.Decimal(14, 2)
+  totalDues      Int        @map("total_dues")
+  disbursalDate  DateTime   @map("disbursal_date") @db.Date
+  dueStartDate   DateTime   @map("due_start_date") @db.Date
+  maturityDate   DateTime   @map("maturity_date") @db.Date
+  closedDate     DateTime?  @map("closed_date") @db.Date
+  loanType       LoanStatus @default(OPEN) @map("loan_type")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
   tenant      Tenant              @relation(fields: [tenantId], references: [id])
   client      Client              @relation(fields: [clientId], references: [id])
   product     LoanProduct         @relation(fields: [productId], references: [id])
   application LoanApplication?    @relation(fields: [applicationId], references: [id])
   schedule    RepaymentSchedule[]
+  collections Collection[]
 
   @@index([tenantId, clientId])
   @@map("loan")
 }
 
-// One row per installment: planned (due) vs actual (collected).
+// One row per installment: planned (due) vs actual (collected). The coll*
+// columns are a CACHE — the sum of this row's Collection entries — kept for
+// fast reads; Collection is the append-only source of truth / audit trail.
 model RepaymentSchedule {
-  id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @map("tenant_id") @db.Uuid
-  loanId      String    @map("loan_id") @db.Uuid
-  loan        Loan      @relation(fields: [loanId], references: [id])
-  dueNo       Int       @map("due_no")
-  dueDate     DateTime  @map("due_date") @db.Date
-  duePri      Decimal   @map("due_pri") @db.Decimal(14, 2)
-  dueInt      Decimal   @map("due_int") @db.Decimal(14, 2)
-  dueAmt      Decimal   @map("due_amt") @db.Decimal(14, 2)
-  collDate    DateTime? @map("coll_date") @db.Date
-  collPri     Decimal   @default(0) @map("coll_pri") @db.Decimal(14, 2)
-  collInt     Decimal   @default(0) @map("coll_int") @db.Decimal(14, 2)
-  collAmt     Decimal   @default(0) @map("coll_amt") @db.Decimal(14, 2)
-  dueBalance  Decimal   @map("due_balance") @db.Decimal(14, 2)
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  loanId      String       @map("loan_id") @db.Uuid
+  loan        Loan         @relation(fields: [loanId], references: [id])
+  dueNo       Int          @map("due_no")
+  dueDate     DateTime     @map("due_date") @db.Date
+  duePri      Decimal      @map("due_pri") @db.Decimal(14, 2)
+  dueInt      Decimal      @map("due_int") @db.Decimal(14, 2)
+  dueAmt      Decimal      @map("due_amt") @db.Decimal(14, 2)
+  collDate    DateTime?    @map("coll_date") @db.Date
+  collPri     Decimal      @default(0) @map("coll_pri") @db.Decimal(14, 2)
+  collInt     Decimal      @default(0) @map("coll_int") @db.Decimal(14, 2)
+  collAmt     Decimal      @default(0) @map("coll_amt") @db.Decimal(14, 2)
+  dueBalance  Decimal      @map("due_balance") @db.Decimal(14, 2)
+  collections Collection[]
 
   @@unique([loanId, dueNo])
   @@index([tenantId, loanId])
   @@map("repayment_schedule")
+}
+
+// ---- Collection (append-only transaction log) ------------------------------
+// Every collection event posted by an FDO. Never edited or deleted; the
+// RepaymentSchedule cache columns are recomputed from the sum of these rows.
+// This IS the audit trail for money collected (invariant #5).
+model Collection {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  loanId      String   @map("loan_id") @db.Uuid
+  scheduleId  String   @map("schedule_id") @db.Uuid
+  collectedOn DateTime @map("collected_on") @db.Date // branch working_date at time of entry
+  amount      Decimal  @db.Decimal(14, 2)
+  pri         Decimal  @db.Decimal(14, 2)
+  int         Decimal  @db.Decimal(14, 2)
+  enteredBy   String   @map("entered_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  loan     Loan              @relation(fields: [loanId], references: [id])
+  schedule RepaymentSchedule @relation(fields: [scheduleId], references: [id])
+
+  @@index([tenantId, loanId])
+  @@index([tenantId, scheduleId])
+  @@map("collection")
+}
+
+// ---- Audit log (generic, money-affecting actions) --------------------------
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  entity     String // e.g. "Loan", "Collection", "LoanApplication"
+  entityId   String   @map("entity_id") @db.Uuid
+  action     String // e.g. "DISBURSE", "COLLECT", "REJECT"
+  employeeId String   @map("employee_id") @db.Uuid
+  before     Json?
+  after      Json?
+  at         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, entity, entityId])
+  @@map("audit_log")
 }

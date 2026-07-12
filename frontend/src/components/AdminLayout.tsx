@@ -6,6 +6,7 @@ import { Logo } from './Logo';
 const ADMIN_NAV = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: '▤' },
   { to: '/admin/centers', label: 'Centers', icon: '⌂' },
+  { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓' },
   { to: '/admin/masters', label: 'Masters', icon: '⚙' },
 ];
 

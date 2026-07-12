@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getMember, MemberDetail } from '../api/members';
+import { ExistingLoan, listExistingLoans } from '../api/loans';
 
 const inr = (v: string | null) =>
   v == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -10,11 +11,13 @@ export function MemberDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [m, setM] = useState<MemberDetail | null>(null);
+  const [loans, setLoans] = useState<ExistingLoan[] | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!id) return;
     getMember(id).then(setM).catch((e) => setError(e.message));
+    listExistingLoans(id).then(setLoans).catch((e) => setError(e.message));
   }, [id]);
 
   if (error) return <div className="alert-error">{error}</div>;
@@ -104,7 +107,37 @@ export function MemberDetailPage() {
       <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-head">Loans</div>
         <div className="panel-body">
-          <div className="empty">Loan history appears here once the Loan module is live.</div>
+          {loans && loans.length > 0 ? (
+            <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th>Status</th>
+                    <th>Pri. Balance</th><th>Int. Balance</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loans.map((l) => (
+                    <tr key={l.id}>
+                      <td className="mono">{l.loanAccount}</td>
+                      <td>{date(l.disbursalDate)}</td>
+                      <td>{inr(l.loanAmount)}</td>
+                      <td><span className={`badge ${l.loanType === 'OPEN' ? 'active' : 'closed'}`}>{l.loanType}</span></td>
+                      <td>{inr(String(l.priBalance))}</td>
+                      <td>{inr(String(l.intBalance))}</td>
+                      <td>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/app/loans/${l.id}/ledger`)}>
+                          View Ledger
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty">No loans yet for this member.</div>
+          )}
         </div>
       </div>
     </>

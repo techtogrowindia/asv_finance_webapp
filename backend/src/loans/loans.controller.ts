@@ -3,6 +3,7 @@ import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
+import { RejectApplicationDto } from './dto/reject-application.dto';
 import { LoansService } from './loans.service';
 
 @Controller()
@@ -27,5 +28,33 @@ export class LoansController {
   @Post('loan-applications')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateLoanApplicationDto) {
     return this.loans.createApplication(user, dto);
+  }
+
+  // ---- Verification & Disbursement (BM/HO) ----
+  @Roles('BM', 'HO')
+  @Get('loan-applications')
+  list(@CurrentUser() user: AuthUser, @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
+    return this.loans.listApplications(user, status);
+  }
+
+  @Roles('BM', 'HO')
+  @Post('loan-applications/:id/disburse')
+  disburse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.loans.disburse(user, id);
+  }
+
+  @Roles('BM', 'HO')
+  @Post('loan-applications/:id/reject')
+  reject(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectApplicationDto,
+  ) {
+    return this.loans.reject(user, id, dto);
+  }
+
+  @Get('loans/:id/ledger')
+  ledger(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.loans.ledger(user, id);
   }
 }

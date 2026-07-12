@@ -280,3 +280,12 @@ table.data tbody tr:hover { background: #f8faf9; }
   .shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
 }
+
+/* ---- Print (reports) ---- */
+@media print {
+  .sidebar, .topbar, .no-print, .toolbar-actions { display: none !important; }
+  .shell { display: block; }
+  .content { padding: 0; }
+  .panel, .ledger-print { box-shadow: none; border: none; }
+  body { background: #fff; }
+}

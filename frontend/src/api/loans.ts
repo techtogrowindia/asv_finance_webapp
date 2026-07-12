@@ -58,3 +58,66 @@ export const createLoanApplication = (body: { clientId: string; productId: strin
     method: 'POST',
     body: JSON.stringify(body),
   });
+
+// ---- Verification & Disbursement (BM/HO) -----------------------------------
+
+export interface LoanApplicationSummary {
+  id: string;
+  clientId: string;
+  clientCode: string;
+  clientName: string;
+  productName: string;
+  loanAmount: string;
+  totalDues: number;
+  purposeName: string;
+  requestedAmount: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  warnings: string[];
+  createdAt: string;
+}
+
+export const listLoanApplications = (status?: 'PENDING' | 'APPROVED' | 'REJECTED') =>
+  api<LoanApplicationSummary[]>(`/loan-applications${status ? `?status=${status}` : ''}`);
+
+export const disburseApplication = (id: string) =>
+  api<{ id: string; loanAccount: string; disbursalDate: string; maturityDate: string }>(
+    `/loan-applications/${id}/disburse`,
+    { method: 'POST' },
+  );
+
+export const rejectApplication = (id: string, reason?: string) =>
+  api<{ id: string; status: string }>(`/loan-applications/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+
+// ---- Loan Ledger (report) ---------------------------------------------------
+
+export interface LedgerRow {
+  dueNo: number;
+  dueDate: string;
+  collDate: string | null;
+  duePri: string;
+  dueInt: string;
+  dueAmt: string;
+  collPri: string;
+  collInt: string;
+  collAmt: string;
+  dueBalance: string;
+}
+
+export interface LoanLedger {
+  loanAccount: string;
+  clientDisplayId: string;
+  clientName: string;
+  disbursalDate: string;
+  loanAmount: string;
+  interestAmount: string;
+  totalAmount: string;
+  totalDues: number;
+  loanType: 'OPEN' | 'CLOSED';
+  closedDate: string | null;
+  schedule: LedgerRow[];
+}
+
+export const getLedger = (loanId: string) => api<LoanLedger>(`/loans/${loanId}/ledger`);
