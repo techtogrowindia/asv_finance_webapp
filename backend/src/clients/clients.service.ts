@@ -10,8 +10,10 @@ import { AuthUser } from '../common/types/auth-user';
 import { centerScope, clientCenterScope } from '../common/scope';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
+import { KycDto } from './dto/kyc.dto';
 
 const GROUP_CAPACITY = 5;
+const KYC_FIELDS = ['voterId', 'otherId', 'pan', 'smartCard', 'rationCard', 'uid'] as const;
 
 @Injectable()
 export class ClientsService {
@@ -181,6 +183,38 @@ export class ClientsService {
         },
       });
       return this.serialize(updated, true);
+    });
+  }
+
+  /** Add or edit a member's government ID numbers (upsert their KYC row). */
+  async updateKyc(user: AuthUser, clientId: string, dto: KycDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: clientId, ...clientCenterScope(user) },
+        select: { id: true },
+      });
+      if (!client) throw new NotFoundException('Member not found');
+
+      // Only touch fields the caller actually sent (empty string clears a value).
+      const data: Record<string, string | null> = {};
+      for (const f of KYC_FIELDS) {
+        if (dto[f] !== undefined) data[f] = dto[f] === '' ? null : (dto[f] as string);
+      }
+
+      const kyc = await tx.kyc.upsert({
+        where: { clientId },
+        update: data,
+        create: { tenantId: user.tenantId, clientId, ...data },
+      });
+
+      return {
+        voterId: kyc.voterId,
+        otherId: kyc.otherId,
+        pan: kyc.pan,
+        smartCard: kyc.smartCard,
+        rationCard: kyc.rationCard,
+        uid: maskUid(kyc.uid),
+      };
     });
   }
 

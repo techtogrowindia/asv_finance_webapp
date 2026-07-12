@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getMember, MemberDetail } from '../api/members';
+import { getMember, KycInfo, MemberDetail } from '../api/members';
 import { ExistingLoan, listExistingLoans } from '../api/loans';
+import { KycNumbersSection } from '../components/KycNumbersSection';
+import { KycDocumentGrid } from '../components/KycDocumentGrid';
 
 const inr = (v: string | null) =>
   v == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -36,9 +38,6 @@ export function MemberDetailPage() {
             · <span className={`badge ${m.status.toLowerCase()}`}>{m.status}</span>
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate(`/app/clients/${m.id}/documents`)}>
-          KYC Documents
-        </button>
       </div>
 
       <div className="panel">
@@ -66,21 +65,16 @@ export function MemberDetailPage() {
         </div>
       </div>
 
+      <KycNumbersSection
+        clientId={m.id}
+        kyc={m.kyc}
+        onSaved={(k: KycInfo) => setM((prev) => (prev ? { ...prev, kyc: k } : prev))}
+      />
+
       <div className="panel" style={{ marginTop: 18 }}>
-        <div className="panel-head">Government ID proofs (KYC)</div>
+        <div className="panel-head">KYC document images</div>
         <div className="panel-body">
-          {m.kyc ? (
-            <div className="detail-grid">
-              <Item k="Aadhaar / UID" v={m.kyc.uid ?? '—'} />
-              <Item k="Voter ID" v={m.kyc.voterId ?? '—'} />
-              <Item k="PAN" v={m.kyc.pan ?? '—'} />
-              <Item k="Ration card" v={m.kyc.rationCard ?? '—'} />
-              <Item k="Smart card" v={m.kyc.smartCard ?? '—'} />
-              <Item k="Other ID" v={m.kyc.otherId ?? '—'} />
-            </div>
-          ) : (
-            <div className="empty">No KYC documents recorded yet.</div>
-          )}
+          <KycDocumentGrid clientId={m.id} />
         </div>
       </div>
 

@@ -118,3 +118,15 @@ export const getMember = (id: string) => api<MemberDetail>(`/clients/${id}`);
 
 export const createMember = (body: CreateMemberBody) =>
   api<MemberDetail>('/clients', { method: 'POST', body: JSON.stringify(body) });
+
+export interface KycInput {
+  voterId?: string;
+  otherId?: string;
+  pan?: string;
+  smartCard?: string;
+  rationCard?: string;
+  uid?: string;
+}
+
+export const updateMemberKyc = (id: string, body: KycInput) =>
+  api<KycInfo>(`/clients/${id}/kyc`, { method: 'PATCH', body: JSON.stringify(body) });

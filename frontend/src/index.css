@@ -239,37 +239,22 @@ table.data tbody tr:hover { background: #f8faf9; }
 .warning-box .title { font-weight: 700; color: var(--accent-600); font-size: 13px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .4px; }
 .warning-box ul { margin: 0; padding-left: 18px; color: #7a5b12; font-size: 14px; line-height: 1.7; }
 
-/* ---- KYC document chips + viewer ---- */
-.doc-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
-.doc-chip {
-  display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px;
-  border: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; color: var(--ink-700);
-  cursor: pointer; transition: border-color .15s, background .15s;
+/* ---- KYC document image grid ---- */
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.doc-card {
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff;
+  display: flex; flex-direction: column;
 }
-.doc-chip:hover { border-color: var(--brand-500); }
-.doc-chip.uploaded { background: var(--brand-050); border-color: var(--brand-500); color: var(--brand-700); }
-.doc-chip.active { outline: 2px solid var(--brand-600); outline-offset: 1px; }
-.doc-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); flex: none; }
-.doc-chip.uploaded .dot { background: var(--brand-600); }
-.doc-chip input[type="file"] { display: none; }
-
-.viewer { background: var(--canvas); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.viewer-toolbar {
-  display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 10px 14px;
-  border-bottom: 1px solid var(--line); background: #fff; font-size: 13px; color: var(--ink-500);
+.doc-card-title {
+  padding: 10px 12px; font-size: 13px; font-weight: 700; color: var(--ink-700);
+  border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 6px;
 }
-.viewer-toolbar .icon-btn {
-  width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: #fff;
-  cursor: pointer; display: grid; place-items: center; font-size: 15px; color: var(--ink-700);
-}
-.viewer-toolbar .icon-btn:hover { background: #f1f6f4; }
-.viewer-stage {
-  height: 420px; overflow: hidden; display: flex; align-items: center; justify-content: center;
-  cursor: grab; position: relative;
-}
-.viewer-stage.dragging { cursor: grabbing; }
-.viewer-stage img { max-width: none; max-height: none; user-select: none; -webkit-user-drag: none; }
-.viewer-empty { color: var(--ink-500); font-size: 14px; }
+.doc-card-title .req { color: var(--danger); font-size: 18px; line-height: 0; }
+.doc-card-image { height: 150px; background: var(--canvas); display: grid; place-items: center; overflow: hidden; }
+.doc-card-image a { display: block; width: 100%; height: 100%; }
+.doc-card-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.doc-card-empty { color: var(--ink-500); font-size: 13px; }
+.doc-card-actions { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
 
 /* ---- Detail view ---- */
 .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px 24px; }

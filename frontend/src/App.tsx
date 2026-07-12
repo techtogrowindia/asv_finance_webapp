@@ -12,7 +12,6 @@ import { LoanApplicationPage } from './pages/LoanApplicationPage';
 import { CollectionsPage } from './pages/CollectionsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { LoanLedgerPage } from './pages/LoanLedgerPage';
-import { KycDocumentsPage } from './pages/KycDocumentsPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
@@ -41,7 +40,6 @@ export default function App() {
         <Route path="/app" element={<EmployeeRoute><DashboardPage /></EmployeeRoute>} />
         <Route path="/app/clients" element={<EmployeeRoute><MembersPage /></EmployeeRoute>} />
         <Route path="/app/clients/:id" element={<EmployeeRoute><MemberDetailPage /></EmployeeRoute>} />
-        <Route path="/app/clients/:id/documents" element={<EmployeeRoute><KycDocumentsPage /></EmployeeRoute>} />
         <Route path="/app/enroll" element={<EmployeeRoute><EnrollMemberPage /></EmployeeRoute>} />
         <Route path="/app/loans" element={<EmployeeRoute><LoanApplicationPage /></EmployeeRoute>} />
         <Route path="/app/collections" element={<EmployeeRoute><CollectionsPage /></EmployeeRoute>} />
