@@ -1,8 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { EmployeesService } from './employees.service';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('employees')
 export class EmployeesController {
@@ -12,5 +15,48 @@ export class EmployeesController {
   @Get('field-officers')
   fieldOfficers(@CurrentUser() user: AuthUser) {
     return this.employees.fieldOfficers(user);
+  }
+
+  @Roles('BM', 'HO')
+  @Get('branches')
+  branches(@CurrentUser() user: AuthUser) {
+    return this.employees.branches(user);
+  }
+
+  @Roles('BM', 'HO')
+  @Get()
+  list(
+    @CurrentUser() user: AuthUser,
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.employees.list(user, { role, status, q });
+  }
+
+  @Roles('BM', 'HO')
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateEmployeeDto) {
+    return this.employees.create(user, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEmployeeDto,
+  ) {
+    return this.employees.update(user, id, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @Post(':id/reset-password')
+  resetPassword(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResetPasswordDto,
+  ) {
+    return this.employees.resetPassword(user, id, dto);
   }
 }

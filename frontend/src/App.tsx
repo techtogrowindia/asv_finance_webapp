@@ -15,6 +15,7 @@ import { LoanLedgerPage } from './pages/LoanLedgerPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
+import { EmployeesPage } from './pages/admin/EmployeesPage';
 import { LoanVerificationPage } from './pages/admin/LoanVerificationPage';
 
 /** Wraps a page in the employee shell + auth guard (FDO only). */
@@ -52,6 +53,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/employees"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <EmployeesPage />
             </RequireAuth>
           }
         />
