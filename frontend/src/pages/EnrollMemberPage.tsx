@@ -9,7 +9,7 @@ import {
   listGroups,
 } from '../api/members';
 import { DocumentTypeRow, listDocumentTypes } from '../api/masters';
-import { LoanProductLite, listLoanProducts } from '../api/loans';
+import { LoanProductLite, listLoanProducts, listPurposes, Purpose } from '../api/loans';
 import { getSettings } from '../api/settings';
 
 const GENDERS = ['Female', 'Male', 'Other'];
@@ -21,6 +21,7 @@ export function EnrollMemberPage() {
   const [groups, setGroups] = useState<GroupLite[]>([]);
   const [docTypes, setDocTypes] = useState<DocumentTypeRow[]>([]);
   const [products, setProducts] = useState<LoanProductLite[]>([]);
+  const [purposes, setPurposes] = useState<Purpose[]>([]);
   const [productRequired, setProductRequired] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,7 @@ export function EnrollMemberPage() {
     monthlyExpense: '',
     fatherName: '',
     productId: '',
+    purposeQuery: '',
     coName: '',
     coGender: '',
     coDob: '',
@@ -57,6 +59,7 @@ export function EnrollMemberPage() {
     listCenters().then(setCenters).catch((e) => setError(e.message));
     listDocumentTypes().then(setDocTypes).catch((e) => setError(e.message));
     listLoanProducts().then(setProducts).catch((e) => setError(e.message));
+    listPurposes().then(setPurposes).catch((e) => setError(e.message));
     getSettings().then((s) => setProductRequired(s.requireLoanProductAtEnrollment)).catch(() => {});
   }, []);
 
@@ -80,6 +83,21 @@ export function EnrollMemberPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+
+    let purposeId: string | undefined;
+    if (form.purposeQuery.trim()) {
+      const match = purposes.find((p) => p.name.toLowerCase() === form.purposeQuery.trim().toLowerCase());
+      if (!match) {
+        setError('Select a valid purpose from the list, or clear the field');
+        return;
+      }
+      purposeId = match.id;
+    }
+    if (productRequired && (!form.productId || !purposeId)) {
+      setError('Loan product and purpose are both required to enroll this member');
+      return;
+    }
+
     setBusy(true);
     try {
       const body: CreateMemberBody = {
@@ -97,6 +115,7 @@ export function EnrollMemberPage() {
         monthlyExpense: form.monthlyExpense ? Number(form.monthlyExpense) : undefined,
         fatherName: form.fatherName || undefined,
         productId: form.productId || undefined,
+        purposeId,
         kycNumbers: Object.entries(clientNumbers)
           .filter(([, v]) => v.trim())
           .map(([documentTypeId, value]) => ({ documentTypeId, value: value.trim() })),
@@ -184,8 +203,23 @@ export function EnrollMemberPage() {
               ))}
             </select>
           </Field>
+          <Field label={`Purpose${productRequired ? ' *' : ' (optional)'}`}>
+            <input
+              className="input"
+              list="enroll-purpose-options"
+              required={productRequired}
+              value={form.purposeQuery}
+              onChange={(e) => set('purposeQuery', e.target.value)}
+              placeholder="Type to search…"
+            />
+            <datalist id="enroll-purpose-options">
+              {purposes.map((p) => (
+                <option key={p.id} value={p.name} />
+              ))}
+            </datalist>
+          </Field>
         </div>
-        <div className="hint">The formal loan application (with purpose and eligibility checks) is still a separate step later.</div>
+        <div className="hint">The formal loan application (with full eligibility checks) is still a separate step later.</div>
 
         <div className="form-section-title" style={{ marginTop: 20 }}>
           Member details

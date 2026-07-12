@@ -20,6 +20,7 @@ const FULL_INCLUDE = {
   group: { select: { groupNo: true } },
   coApplicant: true,
   requestedProduct: { select: { id: true, name: true } },
+  requestedPurpose: { select: { id: true, name: true } },
   kycNumbers: {
     include: { documentType: { select: { id: true, name: true, appliesTo: true, maskValue: true } } },
   },
@@ -82,12 +83,16 @@ export class ClientsService {
       }
 
       const tenant = await tx.tenant.findFirst({ where: { id: user.tenantId } });
-      if (tenant?.requireLoanProductAtEnrollment && !dto.productId) {
-        throw new BadRequestException('A loan product is required to enroll this member');
+      if (tenant?.requireLoanProductAtEnrollment && (!dto.productId || !dto.purposeId)) {
+        throw new BadRequestException('A loan product and purpose are required to enroll this member');
       }
       if (dto.productId) {
         const product = await tx.loanProduct.findFirst({ where: { id: dto.productId, isActive: true } });
         if (!product) throw new BadRequestException('Loan product not found');
+      }
+      if (dto.purposeId) {
+        const purpose = await tx.purpose.findFirst({ where: { id: dto.purposeId, isActive: true } });
+        if (!purpose) throw new BadRequestException('Purpose not found');
       }
 
       const clientCode = await this.nextClientCode(tx);
@@ -112,6 +117,7 @@ export class ClientsService {
           fatherName: dto.fatherName,
           dateOfJoining: dto.dateOfJoining ? new Date(dto.dateOfJoining) : new Date(),
           requestedProductId: dto.productId,
+          requestedPurposeId: dto.purposeId,
           status: 'ACTIVE',
           ...(dto.coApplicant
             ? {
@@ -280,6 +286,8 @@ export class ClientsService {
       longitude: c.longitude,
       requestedProductId: c.requestedProductId ?? null,
       requestedProductName: c.requestedProduct?.name ?? null,
+      requestedPurposeId: c.requestedPurposeId ?? null,
+      requestedPurposeName: c.requestedPurpose?.name ?? null,
       kycNumbers: ((c.kycNumbers ?? []) as any[]).map((k) => ({
         documentTypeId: k.documentTypeId,
         name: k.documentType.name,

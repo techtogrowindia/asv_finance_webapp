@@ -222,9 +222,11 @@ model Client {
   dateOfJoining     DateTime?    @map("date_of_joining") @db.Date
   status            ClientStatus @default(PENDING)
   isActive          Boolean      @default(true) @map("is_active")
-  // Optional loan-product preference captured at enrollment (informational —
-  // NOT a LoanApplication; the formal application/purpose step happens later).
+  // Optional loan-product + purpose preference captured at enrollment
+  // (informational — NOT a LoanApplication; the formal application step,
+  // with its own eligibility gate, happens later).
   requestedProductId String?     @map("requested_product_id") @db.Uuid
+  requestedPurposeId String?     @map("requested_purpose_id") @db.Uuid
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
@@ -232,6 +234,7 @@ model Client {
   center           Center            @relation(fields: [centerId], references: [id])
   group            GroupUnit         @relation(fields: [groupId], references: [id])
   requestedProduct LoanProduct?      @relation(fields: [requestedProductId], references: [id])
+  requestedPurpose Purpose?          @relation(fields: [requestedPurposeId], references: [id])
   coApplicant      CoApplicant?
   documents        KycDocument[]
   kycNumbers       KycNumber[]
@@ -292,8 +295,9 @@ model Purpose {
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id])
-  loanApplications LoanApplication[]
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  loanApplications   LoanApplication[]
+  requestedByClients Client[]
 
   @@unique([tenantId, name])
   @@index([tenantId])

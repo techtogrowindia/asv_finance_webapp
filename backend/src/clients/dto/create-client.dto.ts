@@ -51,9 +51,11 @@ export class CreateClientDto {
 
   @IsOptional() @IsString() dateOfJoining?: string; // ISO date
 
-  /** Loan product preference at enrollment (informational; mandatory/optional
-   *  is an admin-configured tenant setting, enforced server-side). */
+  /** Loan product + purpose preference at enrollment (informational; paired —
+   *  mandatory/optional is an admin-configured tenant setting, enforced
+   *  server-side; when required, both must be present together). */
   @IsOptional() @IsUUID() productId?: string;
+  @IsOptional() @IsUUID() purposeId?: string;
 
   /** Client-party ID numbers, keyed by admin-managed DocumentType id. */
   @IsOptional()

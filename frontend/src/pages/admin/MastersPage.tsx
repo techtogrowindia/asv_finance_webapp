@@ -97,18 +97,18 @@ function SettingsTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
             className={`toggle ${requireLoanProductAtEnrollment ? 'on' : ''}`}
-            title="Click to toggle whether a loan product must be picked at enrollment"
+            title="Click to toggle whether a loan product and purpose must be picked at enrollment"
             disabled={requireLoanProductAtEnrollment === null}
             onClick={toggle}
           >
             <span className="knob" />
             <span className="toggle-label">{requireLoanProductAtEnrollment ? 'Mandatory' : 'Optional'}</span>
           </button>
-          <span style={{ color: 'var(--ink-700)' }}>Loan product required while enrolling a member</span>
+          <span style={{ color: 'var(--ink-700)' }}>Loan product &amp; purpose required while enrolling a member</span>
         </div>
         <div className="hint" style={{ marginTop: 12 }}>
-          When Mandatory, field officers must pick a loan product on the Enroll Member form.
-          When Optional, they may leave it blank and apply for a loan later.
+          When Mandatory, field officers must pick both a loan product and a purpose on the Enroll
+          Member form. When Optional, they may leave both blank and apply for a loan later.
         </div>
       </div>
     </div>

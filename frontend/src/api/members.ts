@@ -63,6 +63,8 @@ export interface MemberDetail extends MemberListItem {
   longitude: string | null;
   requestedProductId: string | null;
   requestedProductName: string | null;
+  requestedPurposeId: string | null;
+  requestedPurposeName: string | null;
   kycNumbers: KycNumberInfo[];
   coApplicant: CoApplicantInfo | null;
 }
@@ -88,6 +90,7 @@ export interface CreateMemberBody {
   fatherName?: string;
   dateOfJoining?: string;
   productId?: string;
+  purposeId?: string;
   kycNumbers?: KycNumberEntry[];
   coApplicant?: {
     name: string;

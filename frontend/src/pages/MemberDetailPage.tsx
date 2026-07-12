@@ -47,6 +47,7 @@ export function MemberDetailPage() {
           <Item k="Group / Member" v={`Group ${m.groupNo}, Member ${m.memberNo}`} />
           <Item k="Date of joining" v={date(m.dateOfJoining)} />
           <Item k="Requested loan product" v={m.requestedProductName ?? '—'} />
+          <Item k="Requested purpose" v={m.requestedPurposeName ?? '—'} />
         </div>
       </div>
 
