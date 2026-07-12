@@ -109,13 +109,17 @@ export function EmployeesPage() {
                 <td>{e.role === 'FDO' ? e.centerCount : '—'}</td>
                 <td><span className={`badge ${e.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{e.status}</span></td>
                 <td>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(e); setAdding(false); }}>Edit</button>
-                    <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setResetting(e)}>Reset Password</button>
-                    <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => onToggleStatus(e)}>
-                      {e.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </div>
+                  {e.id === user?.id ? (
+                    <span style={{ color: 'var(--ink-500)', fontSize: 13 }}>This is you</span>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(e); setAdding(false); }}>Edit</button>
+                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setResetting(e)}>Reset Password</button>
+                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => onToggleStatus(e)}>
+                        {e.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
