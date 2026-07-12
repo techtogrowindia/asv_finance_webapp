@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
+import { ConfirmProvider } from './components/ConfirmProvider';
 import { RequireAuth } from './auth/RequireAuth';
 import { AppLayout } from './components/AppLayout';
 import { LoginPage } from './pages/LoginPage';
@@ -26,6 +27,7 @@ function EmployeeRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <AuthProvider>
+      <ConfirmProvider>
       <Routes>
         {/* Public entry points */}
         <Route path="/" element={<Navigate to="/login" replace />} />
@@ -70,6 +72,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </ConfirmProvider>
     </AuthProvider>
   );
 }

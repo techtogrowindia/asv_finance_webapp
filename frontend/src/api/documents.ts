@@ -13,6 +13,9 @@ export interface DocumentChecklistItem {
 export const getChecklist = (clientId: string) =>
   api<DocumentChecklistItem[]>(`/clients/${clientId}/documents`);
 
+export const deleteDocument = (documentId: string) =>
+  api<{ deleted: boolean }>(`/documents/${documentId}`, { method: 'DELETE' });
+
 export async function uploadDocument(clientId: string, documentTypeId: string, file: File) {
   const token = tokenStore.get();
   const form = new FormData();

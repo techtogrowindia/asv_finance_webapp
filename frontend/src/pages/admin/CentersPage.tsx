@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
+import { useConfirm } from '../../components/ConfirmProvider';
 import {
   AdminCenter,
   CenterBody,
@@ -14,6 +15,7 @@ import {
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 export function CentersPage() {
+  const confirm = useConfirm();
   const [rows, setRows] = useState<AdminCenter[] | null>(null);
   const [fdos, setFdos] = useState<FieldOfficer[]>([]);
   const [editing, setEditing] = useState<AdminCenter | null>(null);
@@ -29,7 +31,13 @@ export function CentersPage() {
   }, []);
 
   async function onDelete(c: AdminCenter) {
-    if (!confirm(`Delete center ${c.code} — ${c.name}? This cannot be undone.`)) return;
+    const ok = await confirm({
+      title: 'Delete center?',
+      message: `Delete center ${c.code} — ${c.name}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     setError('');
     try {
       await deleteCenter(c.id);

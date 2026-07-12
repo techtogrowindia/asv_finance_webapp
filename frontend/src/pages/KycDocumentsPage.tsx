@@ -1,56 +1,105 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getMember, MemberDetail } from '../api/members';
-import { DocumentChecklistItem, fetchDocumentBlobUrl, getChecklist, uploadDocument } from '../api/documents';
+import {
+  deleteDocument,
+  DocumentChecklistItem,
+  fetchDocumentBlobUrl,
+  getChecklist,
+  uploadDocument,
+} from '../api/documents';
+import { useConfirm } from '../components/ConfirmProvider';
 
 export function KycDocumentsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
+
   const [client, setClient] = useState<MemberDetail | null>(null);
   const [items, setItems] = useState<DocumentChecklistItem[] | null>(null);
   const [activeTypeId, setActiveTypeId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadingTypeId, setUploadingTypeId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const fileInput = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!id) return;
     getMember(id).then(setClient).catch((e) => setError(e.message));
-    refreshChecklist(id);
+    load(id);
   }, [id]);
 
-  function refreshChecklist(clientId: string) {
-    getChecklist(clientId).then(setItems).catch((e) => setError(e.message));
+  function load(clientId: string, keepActive?: string | null) {
+    return getChecklist(clientId)
+      .then((list) => {
+        setItems(list);
+        const nextActive = keepActive ?? activeTypeId ?? list[0]?.documentTypeId ?? null;
+        setActiveTypeId(nextActive);
+        const activeItem = list.find((i) => i.documentTypeId === nextActive);
+        loadPreview(activeItem ?? null);
+      })
+      .catch((e) => setError(e.message));
   }
 
-  const uploadedCount = useMemo(() => items?.filter((i) => i.documentId).length ?? 0, [items]);
-
-  async function selectForPreview(item: DocumentChecklistItem) {
-    if (!item.documentId) return;
-    setActiveTypeId(item.documentTypeId);
+  async function loadPreview(item: DocumentChecklistItem | null) {
     setPreviewUrl(null);
+    if (!item?.documentId) return;
     try {
-      const url = await fetchDocumentBlobUrl(item.documentId);
-      setPreviewUrl(url);
+      setPreviewUrl(await fetchDocumentBlobUrl(item.documentId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load preview');
     }
   }
 
-  async function onFilePicked(item: DocumentChecklistItem, file: File | undefined) {
-    if (!file || !id) return;
+  const active = useMemo(
+    () => items?.find((i) => i.documentTypeId === activeTypeId) ?? null,
+    [items, activeTypeId],
+  );
+  const uploadedCount = useMemo(() => items?.filter((i) => i.documentId).length ?? 0, [items]);
+
+  function selectChip(item: DocumentChecklistItem) {
+    setActiveTypeId(item.documentTypeId);
+    loadPreview(item);
+  }
+
+  function openPicker() {
+    fileInput.current?.click();
+  }
+
+  async function onFilePicked(file: File | undefined) {
+    if (!file || !id || !activeTypeId) return;
     setError('');
-    setUploadingTypeId(item.documentTypeId);
+    setBusy(true);
     try {
-      await uploadDocument(id, item.documentTypeId, file);
-      refreshChecklist(id);
-      setActiveTypeId(item.documentTypeId);
+      await uploadDocument(id, activeTypeId, file);
+      await load(id, activeTypeId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
-      setUploadingTypeId(null);
+      setBusy(false);
+      if (fileInput.current) fileInput.current.value = '';
+    }
+  }
+
+  async function onDelete() {
+    if (!active?.documentId || !id) return;
+    const ok = await confirm({
+      title: 'Delete document?',
+      message: `Delete the uploaded "${active.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    setError('');
+    try {
+      await deleteDocument(active.documentId);
+      await load(id, activeTypeId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -60,51 +109,71 @@ export function KycDocumentsPage() {
         ← Back to member
       </button>
       <h1 className="page-title">KYC Documents</h1>
-      <p className="page-sub">
-        {client ? `${client.name} · ${client.displayId}` : 'Loading…'}
-      </p>
+      <p className="page-sub">{client ? `${client.name} · ${client.displayId}` : 'Loading…'}</p>
 
       {error && <div className="alert-error">{error}</div>}
 
       <div className="panel">
         <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Uploaded Documents</span>
-          {items && <span style={{ fontWeight: 500, color: 'var(--ink-500)' }}>{uploadedCount} of {items.length} uploaded</span>}
+          {items && (
+            <span style={{ fontWeight: 500, color: 'var(--ink-500)' }}>
+              {uploadedCount} of {items.length} uploaded
+            </span>
+          )}
         </div>
         <div className="panel-body">
+          {/* Chips are selectors only — they never trigger an upload. */}
           <div className="doc-chips">
-            {items?.map((item) => {
-              const busy = uploadingTypeId === item.documentTypeId;
-              const active = activeTypeId === item.documentTypeId;
-              if (item.documentId) {
-                return (
-                  <button
-                    key={item.documentTypeId}
-                    type="button"
-                    className={`doc-chip uploaded ${active ? 'active' : ''}`}
-                    onClick={() => selectForPreview(item)}
-                  >
-                    <span className="dot" />
-                    {item.name}
-                  </button>
-                );
-              }
-              return (
-                <label key={item.documentTypeId} className={`doc-chip ${active ? 'active' : ''}`}>
-                  <span className="dot" />
-                  {busy ? <span className="spinner" style={{ borderColor: '#cbd5d1', borderTopColor: 'var(--brand-600)' }} /> : item.name}
-                  <input
-                    ref={(el) => { fileInputs.current[item.documentTypeId] = el; }}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={busy}
-                    onChange={(e) => onFilePicked(item, e.target.files?.[0])}
-                  />
-                </label>
-              );
-            })}
+            {items?.map((item) => (
+              <button
+                key={item.documentTypeId}
+                type="button"
+                className={`doc-chip ${item.documentId ? 'uploaded' : ''} ${activeTypeId === item.documentTypeId ? 'active' : ''}`}
+                onClick={() => selectChip(item)}
+              >
+                <span className="dot" />
+                {item.name}
+              </button>
+            ))}
             {items && items.length === 0 && <div className="empty">No document types configured.</div>}
           </div>
+
+          {/* Explicit actions for the selected document. */}
+          {active && (
+            <div className="doc-actionbar">
+              <div className="doc-actionbar-label">
+                <strong>{active.name}</strong>
+                <span className={`badge ${active.documentId ? 'active' : 'pending'}`} style={{ marginLeft: 10 }}>
+                  {active.documentId ? 'Uploaded' : 'Not uploaded'}
+                </span>
+              </div>
+              <div className="doc-actionbar-buttons">
+                {active.documentId ? (
+                  <>
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={openPicker}>
+                      Change
+                    </button>
+                    <button className="btn btn-danger btn-sm" disabled={busy} onClick={onDelete}>
+                      Delete
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-primary btn-sm" disabled={busy} onClick={openPicker}>
+                    {busy ? <span className="spinner" /> : 'Upload'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => onFilePicked(e.target.files?.[0])}
+          />
 
           <Viewer url={previewUrl} />
         </div>
@@ -124,21 +193,6 @@ function Viewer({ url }: { url: string | null }) {
     setPos({ x: 0, y: 0 });
   }, [url]);
 
-  function onMouseDown(e: React.MouseEvent) {
-    dragging.current = true;
-    last.current = { x: e.clientX, y: e.clientY };
-  }
-  function onMouseMove(e: React.MouseEvent) {
-    if (!dragging.current) return;
-    const dx = e.clientX - last.current.x;
-    const dy = e.clientY - last.current.y;
-    last.current = { x: e.clientX, y: e.clientY };
-    setPos((p) => ({ x: p.x + dx, y: p.y + dy }));
-  }
-  function stopDrag() {
-    dragging.current = false;
-  }
-
   return (
     <div className="viewer">
       <div className="viewer-toolbar">
@@ -157,11 +211,15 @@ function Viewer({ url }: { url: string | null }) {
         </a>
       </div>
       <div
-        className={`viewer-stage ${dragging.current ? 'dragging' : ''}`}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={stopDrag}
-        onMouseLeave={stopDrag}
+        className="viewer-stage"
+        onMouseDown={(e) => { dragging.current = true; last.current = { x: e.clientX, y: e.clientY }; }}
+        onMouseMove={(e) => {
+          if (!dragging.current) return;
+          setPos((p) => ({ x: p.x + (e.clientX - last.current.x), y: p.y + (e.clientY - last.current.y) }));
+          last.current = { x: e.clientX, y: e.clientY };
+        }}
+        onMouseUp={() => { dragging.current = false; }}
+        onMouseLeave={() => { dragging.current = false; }}
       >
         {url ? (
           <img
@@ -171,7 +229,9 @@ function Viewer({ url }: { url: string | null }) {
             draggable={false}
           />
         ) : (
-          <span className="viewer-empty">Select an uploaded document to preview it here.</span>
+          <span className="viewer-empty">
+            Select a document above. Uploaded documents preview here; empty ones show an Upload button.
+          </span>
         )}
       </div>
     </div>

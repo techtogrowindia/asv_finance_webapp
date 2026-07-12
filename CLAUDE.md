@@ -66,6 +66,13 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
    never clone their layout, colours, or wording (see §6.4).
 8. **Build order:** Employee (Field Officer) portal first; BM and HO later, but the
    schema/security must support all three from the start.
+9. **Confirm before destructive actions.** Any hard delete (center, uploaded KYC
+   document, etc.) must show a confirmation dialog before calling the API — use
+   the shared `useConfirm()` / `<ConfirmProvider>` in `frontend/src/components/
+   ConfirmProvider.tsx`, never a bare `window.confirm`. Master-data "delete"
+   buttons that are actually a soft `isActive=false` toggle (reversible) are
+   exempt, but any endpoint that truly removes a row needs this on the frontend
+   and should double-check ownership/scope on the backend before deleting.
 
 **Conventions:** DB `snake_case`, API `camelCase`; deploy is git push→pull (secrets
 live only in the server's `backend/.env`, never in git).

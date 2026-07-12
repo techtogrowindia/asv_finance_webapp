@@ -95,6 +95,19 @@ export class DocumentsService {
     });
   }
 
+  /** Delete a document (file + row), re-checking tenant/branch/center scope. */
+  async remove(user: AuthUser, documentId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const doc = await tx.kycDocument.findFirst({
+        where: { id: documentId, client: clientCenterScope(user) },
+      });
+      if (!doc) throw new NotFoundException('Document not found');
+      if (doc.filePath) fs.unlink(doc.filePath, () => {});
+      await tx.kycDocument.delete({ where: { id: documentId } });
+      return { deleted: true };
+    });
+  }
+
   /** Resolve a document to its file path + mime type, re-checking tenant/branch/center scope. */
   async resolveFile(user: AuthUser, documentId: string) {
     return this.prisma.withTenant(user, async (tx) => {

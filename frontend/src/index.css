@@ -55,7 +55,24 @@ a { color: var(--brand-700); text-decoration: none; }
 .btn-primary:disabled { background: #9db8b1; cursor: not-allowed; }
 .btn-ghost { background: transparent; color: var(--ink-700); border-color: var(--line); }
 .btn-ghost:hover { background: #eef2f1; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #b23a4a; }
+.btn-sm { padding: 7px 13px; font-size: 13px; }
 .btn-block { width: 100%; }
+
+/* ---- Modal / confirm dialog ---- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(11, 23, 32, .45); display: grid; place-items: center;
+  z-index: 100; padding: 20px; animation: fade .12s ease-out;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.modal-card {
+  background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-md); padding: 24px;
+  width: 100%; max-width: 420px;
+}
+.modal-title { margin: 0 0 8px; font-size: 18px; }
+.modal-message { margin: 0 0 22px; color: var(--ink-700); font-size: 15px; line-height: 1.5; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
 /* ---- Inputs ---- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }

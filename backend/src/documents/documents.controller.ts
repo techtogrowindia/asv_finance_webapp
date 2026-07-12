@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -75,5 +76,10 @@ export class DocumentFileController {
     const { filePath, mimeType } = await this.documents.resolveFile(user, id);
     res.setHeader('Content-Type', mimeType);
     res.sendFile(filePath);
+  }
+
+  @Delete(':id')
+  remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.documents.remove(user, id);
   }
 }
