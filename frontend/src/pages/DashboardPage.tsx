@@ -2,6 +2,17 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 
+interface CenterReportRow {
+  centerId: string;
+  centerCode: string;
+  centerName: string;
+  clientsWithDue: number;
+  demand: number;
+  collected: number;
+  outstanding: number;
+  status: string;
+}
+
 interface DashboardData {
   cards: {
     totalCenters: number;
@@ -9,7 +20,7 @@ interface DashboardData {
     loanDisbursement: number;
     portfolioOutstanding: number;
   };
-  report: unknown[];
+  report: CenterReportRow[];
 }
 
 const inr = (n: number) =>
@@ -41,12 +52,40 @@ export function DashboardPage() {
       </div>
 
       <div className="panel">
-        <div className="panel-head">Center-wise Collection</div>
+        <div className="panel-head">Center-wise Collection (today)</div>
         <div className="panel-body">
-          <div className="empty">
-            Collection figures (opening arrear → demand → collection → closing arrear)
-            appear here once the Loan &amp; Collection modules are live.
-          </div>
+          {data && data.report.length > 0 ? (
+            <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Center</th>
+                    <th># Members due</th>
+                    <th>Demand</th>
+                    <th>Collected</th>
+                    <th>Outstanding</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.report.map((r) => (
+                    <tr key={r.centerId}>
+                      <td>{r.centerCode} — {r.centerName}</td>
+                      <td>{r.clientsWithDue}</td>
+                      <td>{inr(r.demand)}</td>
+                      <td>{inr(r.collected)}</td>
+                      <td>{inr(r.outstanding)}</td>
+                      <td><span className={`badge ${r.status === 'Collected' ? 'active' : r.status === 'No dues today' ? 'inactive' : 'pending'}`}>{r.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty">
+              {data ? 'No centers in scope yet.' : 'Loading…'}
+            </div>
+          )}
         </div>
       </div>
     </>
