@@ -15,11 +15,13 @@ const key = (i: Pick<DocumentChecklistItem, 'documentTypeId' | 'party'>) => `${i
  * Inline KYC document images for a member: one card per required document type
  * (expanded per party for CLIENT+NOMINEE-applicable types), showing the
  * uploaded image thumbnail (or an upload placeholder) with Upload / Change /
- * Delete actions.
+ * Delete actions. Pass `party` to show only that party's documents (e.g. the
+ * nominee's photos grouped with the nominee's ID numbers).
  */
-export function KycDocumentGrid({ clientId }: { clientId: string }) {
+export function KycDocumentGrid({ clientId, party }: { clientId: string; party?: 'CLIENT' | 'NOMINEE' }) {
   const confirm = useConfirm();
-  const [items, setItems] = useState<DocumentChecklistItem[] | null>(null);
+  const [allItems, setAllItems] = useState<DocumentChecklistItem[] | null>(null);
+  const items = allItems ? (party ? allItems.filter((i) => i.party === party) : allItems) : null;
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -39,7 +41,7 @@ export function KycDocumentGrid({ clientId }: { clientId: string }) {
   async function load() {
     try {
       const list = await getChecklist(clientId);
-      setItems(list);
+      setAllItems(list);
       const next: Record<string, string> = {};
       await Promise.all(
         list

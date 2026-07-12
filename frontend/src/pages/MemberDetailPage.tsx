@@ -79,7 +79,7 @@ export function MemberDetailPage() {
       <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-head">KYC document images</div>
         <div className="panel-body">
-          <KycDocumentGrid clientId={m.id} />
+          <KycDocumentGrid clientId={m.id} party="CLIENT" />
         </div>
       </div>
 
@@ -101,15 +101,23 @@ export function MemberDetailPage() {
       </div>
 
       {m.coApplicant && (
-        <KycNumbersSection
-          clientId={m.id}
-          party="NOMINEE"
-          title="Nominee ID proofs (KYC)"
-          numbers={m.kycNumbers.filter((n) => n.party === 'NOMINEE')}
-          onSaved={(nums: KycNumberInfo[]) =>
-            setM((prev) => (prev ? { ...prev, kycNumbers: [...prev.kycNumbers.filter((n) => n.party !== 'NOMINEE'), ...nums] } : prev))
-          }
-        />
+        <>
+          <KycNumbersSection
+            clientId={m.id}
+            party="NOMINEE"
+            title="Nominee ID proofs (KYC)"
+            numbers={m.kycNumbers.filter((n) => n.party === 'NOMINEE')}
+            onSaved={(nums: KycNumberInfo[]) =>
+              setM((prev) => (prev ? { ...prev, kycNumbers: [...prev.kycNumbers.filter((n) => n.party !== 'NOMINEE'), ...nums] } : prev))
+            }
+          />
+          <div className="panel" style={{ marginTop: 18 }}>
+            <div className="panel-head">Nominee KYC document images</div>
+            <div className="panel-body">
+              <KycDocumentGrid clientId={m.id} party="NOMINEE" />
+            </div>
+          </div>
+        </>
       )}
 
       <div className="panel" style={{ marginTop: 18 }}>
