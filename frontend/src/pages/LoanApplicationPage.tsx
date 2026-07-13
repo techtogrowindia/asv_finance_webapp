@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CenterLite, getMember, listCenters, listMembers, MemberDetail, MemberListItem } from '../api/members';
+import { SearchableSelect } from '../components/SearchableSelect';
 import {
   createLoanApplication,
   Eligibility,
@@ -145,18 +146,13 @@ export function LoanApplicationPage() {
             </select>
           </Field>
           <Field label="Purpose *">
-            <input
-              className="input"
-              list="purpose-options"
+            <SearchableSelect
+              options={purposes.map((p) => ({ id: p.id, label: p.name }))}
               value={purposeQuery}
-              onChange={(e) => setPurposeQuery(e.target.value)}
+              onChange={setPurposeQuery}
+              onSelect={() => {}}
               placeholder="Type to search…"
             />
-            <datalist id="purpose-options">
-              {purposes.map((p) => (
-                <option key={p.id} value={p.name} />
-              ))}
-            </datalist>
           </Field>
         </div>
         <div className="hint">

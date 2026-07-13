@@ -11,6 +11,7 @@ import {
 import { DocumentTypeRow, listDocumentTypes } from '../api/masters';
 import { LoanProductLite, listLoanProducts, listPurposes, Purpose } from '../api/loans';
 import { getSettings } from '../api/settings';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 const GENDERS = ['Female', 'Male', 'Other'];
 const RELATIONS = ['Husband', 'Father', 'Son', 'Brother', 'Mother', 'Other'];
@@ -204,19 +205,13 @@ export function EnrollMemberPage() {
             </select>
           </Field>
           <Field label={`Purpose${productRequired ? ' *' : ' (optional)'}`}>
-            <input
-              className="input"
-              list="enroll-purpose-options"
-              required={productRequired}
+            <SearchableSelect
+              options={purposes.map((p) => ({ id: p.id, label: p.name }))}
               value={form.purposeQuery}
-              onChange={(e) => set('purposeQuery', e.target.value)}
+              onChange={(v) => set('purposeQuery', v)}
+              onSelect={() => {}}
               placeholder="Type to search…"
             />
-            <datalist id="enroll-purpose-options">
-              {purposes.map((p) => (
-                <option key={p.id} value={p.name} />
-              ))}
-            </datalist>
           </Field>
         </div>
         <div className="hint">The formal loan application (with full eligibility checks) is still a separate step later.</div>
