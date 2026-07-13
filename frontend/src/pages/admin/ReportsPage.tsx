@@ -52,28 +52,30 @@ export function ReportsPage() {
       <h1 className="page-title">Daily Monitoring Reports</h1>
       <p className="page-sub">Follow up on missed payments, review arrears, and plan ahead for upcoming dues.</p>
 
-      <div className="toolbar" style={{ marginBottom: 6 }}>
-        <div className="toolbar-actions">
+      <div className="report-layout">
+        <nav className="report-menu">
           {TABS.map((t) => (
             <button
               key={t.id}
-              className={`btn ${tab === t.id ? 'btn-primary' : 'btn-ghost'}`}
+              className={`report-menu-item ${tab === t.id ? 'active' : ''}`}
               onClick={() => setTab(t.id)}
             >
               {t.label}
             </button>
           ))}
+        </nav>
+
+        <div className="report-content">
+          {tab === 'zero' && <ZeroCollectionTab />}
+          {tab === 'followup' && <CollectionFollowupTab />}
+          {tab === 'advance' && <AdvanceCollectionTab />}
+          {tab === 'branch' && <BranchWiseTab />}
+          {tab === 'center' && <CenterWiseTab />}
+          {tab === 'group' && <GroupWiseTab />}
+          {tab === 'client' && <ClientWiseTab />}
+          {tab === 'employee' && <EmployeePerformanceTab />}
         </div>
       </div>
-
-      {tab === 'zero' && <ZeroCollectionTab />}
-      {tab === 'followup' && <CollectionFollowupTab />}
-      {tab === 'advance' && <AdvanceCollectionTab />}
-      {tab === 'branch' && <BranchWiseTab />}
-      {tab === 'center' && <CenterWiseTab />}
-      {tab === 'group' && <GroupWiseTab />}
-      {tab === 'client' && <ClientWiseTab />}
-      {tab === 'employee' && <EmployeePerformanceTab />}
     </AdminLayout>
   );
 }
