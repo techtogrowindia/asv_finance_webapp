@@ -1,20 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { downloadCsv } from '../../lib/csv';
 import {
   AdvanceCollectionRow,
+  BranchWiseRow,
+  CenterWiseRow,
+  ClientWiseRow,
   CollectionFollowupRow,
+  EmployeePerformanceRow,
+  GroupWiseRow,
   ZeroCollectionRow,
   getAdvanceCollection,
+  getBranchWise,
+  getCenterWise,
+  getClientWise,
   getCollectionFollowup,
+  getEmployeePerformance,
+  getGroupWise,
   getZeroCollection,
 } from '../../api/reportsAdmin';
 
-type Tab = 'zero' | 'followup' | 'advance';
+type Tab = 'zero' | 'followup' | 'advance' | 'branch' | 'center' | 'group' | 'client' | 'employee';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'zero', label: 'Zero Collection' },
   { id: 'followup', label: 'Collection Followup' },
   { id: 'advance', label: 'Advance Collection' },
+  { id: 'branch', label: 'Branch Wise' },
+  { id: 'center', label: 'Center Wise' },
+  { id: 'group', label: 'Group Wise' },
+  { id: 'client', label: 'Client Wise' },
+  { id: 'employee', label: 'Employee Performance' },
 ];
 
 function todayIso() {
@@ -54,6 +69,11 @@ export function ReportsPage() {
       {tab === 'zero' && <ZeroCollectionTab />}
       {tab === 'followup' && <CollectionFollowupTab />}
       {tab === 'advance' && <AdvanceCollectionTab />}
+      {tab === 'branch' && <BranchWiseTab />}
+      {tab === 'center' && <CenterWiseTab />}
+      {tab === 'group' && <GroupWiseTab />}
+      {tab === 'client' && <ClientWiseTab />}
+      {tab === 'employee' && <EmployeePerformanceTab />}
     </AdminLayout>
   );
 }
@@ -261,6 +281,313 @@ function AdvanceCollectionTab() {
                   </tr>
                 ))}
                 {rows.length === 0 && <tr><td colSpan={11} className="empty">No upcoming dues in this window.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function SnapshotBar({ onShow, onExport, busy, hasRows }: { onShow: () => void; onExport: () => void; busy: boolean; hasRows: boolean }) {
+  return (
+    <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+      <div className="form-actions" style={{ marginTop: 0 }}>
+        <button className="btn btn-primary" disabled={busy} onClick={onShow}>{busy ? <span className="spinner" /> : 'Refresh'}</button>
+        <button className="btn btn-ghost" disabled={!hasRows} onClick={onExport}>Export CSV</button>
+      </div>
+    </div>
+  );
+}
+
+function BranchWiseTab() {
+  const [rows, setRows] = useState<BranchWiseRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getBranchWise()); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+
+  useEffect(() => { show(); }, []);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Portfolio summary per branch (current snapshot)</div>
+      <div className="panel-body">
+        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
+          onExport={() => rows && downloadCsv('branch-wise.csv', rows as unknown as Record<string, unknown>[])}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Branch</th><th>Centers</th><th>Clients</th><th>Open Loans</th>
+                  <th>Disbursement</th><th>Portfolio OS</th><th>Total Collected</th><th>Arrear</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.branchCode} — {r.branchName}</td>
+                    <td>{r.centers}</td>
+                    <td>{r.clients}</td>
+                    <td>{r.openLoans}</td>
+                    <td>{inr(r.loanDisbursement)}</td>
+                    <td>{inr(r.portfolioOutstanding)}</td>
+                    <td>{inr(r.totalCollected)}</td>
+                    <td>{inr(r.arrear)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={8} className="empty">No branches found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CenterWiseTab() {
+  const [rows, setRows] = useState<CenterWiseRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getCenterWise()); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+
+  useEffect(() => { show(); }, []);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Portfolio summary per center (current snapshot)</div>
+      <div className="panel-body">
+        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
+          onExport={() => rows && downloadCsv('center-wise.csv', rows as unknown as Record<string, unknown>[])}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Branch</th><th>Center</th><th>FDO</th><th>Groups</th><th>Clients</th>
+                  <th>Open Loans</th><th>Disbursement</th><th>Portfolio OS</th><th>Total Collected</th><th>Arrear</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.branchCode}</td>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td>{r.fdoName ?? '—'}</td>
+                    <td>{r.groups}</td>
+                    <td>{r.clients}</td>
+                    <td>{r.openLoans}</td>
+                    <td>{inr(r.loanDisbursement)}</td>
+                    <td>{inr(r.portfolioOutstanding)}</td>
+                    <td>{inr(r.totalCollected)}</td>
+                    <td>{inr(r.arrear)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={10} className="empty">No centers found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GroupWiseTab() {
+  const [rows, setRows] = useState<GroupWiseRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getGroupWise()); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+
+  useEffect(() => { show(); }, []);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Portfolio summary per group (current snapshot)</div>
+      <div className="panel-body">
+        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
+          onExport={() => rows && downloadCsv('group-wise.csv', rows as unknown as Record<string, unknown>[])}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Group</th><th>Members</th><th>Open Loans</th>
+                  <th>Disbursement</th><th>Portfolio OS</th><th>Arrear</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td>Group {r.groupNo}</td>
+                    <td>{r.members}</td>
+                    <td>{r.openLoans}</td>
+                    <td>{inr(r.loanDisbursement)}</td>
+                    <td>{inr(r.portfolioOutstanding)}</td>
+                    <td>{inr(r.arrear)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={7} className="empty">No groups found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClientWiseTab() {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState<ClientWiseRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getClientWise(q || undefined)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+
+  useEffect(() => { show(); }, []);
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Loan-wise client portfolio (search by name, client ID, or loan account)</div>
+      <div className="panel-body">
+        <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+          <div className="form-grid">
+            <div className="field">
+              <label>Search</label>
+              <input
+                type="text" className="input" placeholder="Member name, client ID, or loan A/c"
+                value={q} onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && show()}
+              />
+            </div>
+          </div>
+          <div className="form-actions" style={{ marginTop: 4 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={show}>{busy ? <span className="spinner" /> : 'Show'}</button>
+            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadCsv('client-wise.csv', rows as unknown as Record<string, unknown>[])}>Export CSV</button>
+          </div>
+        </div>
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
+                  <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{date(r.disbursalDate)}</td>
+                    <td>{inr(r.loanAmount)}</td>
+                    <td>{r.totalDues}</td>
+                    <td>{inr(r.portfolioOutstanding)}</td>
+                    <td>{inr(r.arrear)}</td>
+                    <td>{inr(r.collected)}</td>
+                    <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmployeePerformanceTab() {
+  const [from, setFrom] = useState(daysAgoIso(30));
+  const [to, setTo] = useState(todayIso());
+  const [rows, setRows] = useState<EmployeePerformanceRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getEmployeePerformance(from, to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Field officer portfolio &amp; collection efficiency</div>
+      <div className="panel-body">
+        <DateRangeBar
+          from={from} to={to} onFrom={setFrom} onTo={setTo} onShow={show} busy={busy}
+          hasRows={!!rows?.length}
+          onExport={() => rows && downloadCsv('employee-performance.csv', rows as unknown as Record<string, unknown>[])}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>FDO</th><th>Branch</th><th>Centers</th><th>Clients</th><th>Open Loans</th>
+                  <th>Disbursement</th><th>Portfolio OS</th><th>Arrear</th>
+                  <th>Period Demand</th><th>Period Collected</th><th>Efficiency %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.fdoCode} — {r.fdoName}</td>
+                    <td>{r.branchCode ?? '—'}</td>
+                    <td>{r.centers}</td>
+                    <td>{r.clients}</td>
+                    <td>{r.openLoans}</td>
+                    <td>{inr(r.loanDisbursement)}</td>
+                    <td>{inr(r.portfolioOutstanding)}</td>
+                    <td>{inr(r.arrear)}</td>
+                    <td>{inr(r.periodDemand)}</td>
+                    <td>{inr(r.periodCollected)}</td>
+                    <td>{r.collectionEfficiency == null ? '—' : `${r.collectionEfficiency}%`}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No field officers found.</td></tr>}
               </tbody>
             </table>
           </div>

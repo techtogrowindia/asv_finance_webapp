@@ -1,9 +1,24 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types/auth-user';
 import { centerScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
+
+/** Per-loan outstanding/arrear/collected, from its full schedule (current snapshot). */
+function loanMetrics(
+  loan: { loanAmount: unknown; schedule: { dueDate: Date; dueAmt: unknown; duePri: unknown; dueInt: unknown; collAmt: unknown }[] },
+  asOf: Date,
+) {
+  const unpaid = loan.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
+  const outstanding = unpaid.reduce((sum, s) => sum + Number(s.duePri) + Number(s.dueInt), 0);
+  const arrear = unpaid
+    .filter((s) => s.dueDate <= asOf)
+    .reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
+  const collected = loan.schedule.reduce((sum, s) => sum + Number(s.collAmt), 0);
+  return { disbursed: Number(loan.loanAmount), outstanding: round2(outstanding), arrear: round2(arrear), collected: round2(collected) };
+}
 
 const LOAN_INCLUDE = {
   client: {
@@ -154,6 +169,275 @@ export class ReportsService {
         }
       }
       return rows;
+    });
+  }
+
+  // ---- Portfolio summary reports (current snapshot, no date window) --------
+
+  private async portfolioLoans(tx: Prisma.TransactionClient, user: AuthUser) {
+    return tx.loan.findMany({
+      where: { client: { center: centerScope(user) } },
+      select: {
+        loanType: true,
+        loanAmount: true,
+        loanAccount: true,
+        disbursalDate: true,
+        totalDues: true,
+        schedule: {
+          select: { dueDate: true, dueAmt: true, duePri: true, dueInt: true, collAmt: true },
+        },
+        client: {
+          select: {
+            id: true,
+            name: true,
+            clientCode: true,
+            memberNo: true,
+            group: { select: { id: true, groupNo: true } },
+            center: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                branchId: true,
+                branch: { select: { id: true, code: true, name: true, workingDate: true } },
+                fdo: { select: { id: true, code: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  /** Branch-wise portfolio (mainly useful for HO; BM sees their one branch). */
+  async branchWise(user: AuthUser) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const branchWhere: Prisma.BranchWhereInput = user.role === 'BM' ? { id: user.branchId ?? undefined } : {};
+      const [branches, centers, clients, loans] = await Promise.all([
+        tx.branch.findMany({ where: branchWhere, orderBy: { code: 'asc' } }),
+        tx.center.findMany({ where: centerScope(user), select: { id: true, branchId: true } }),
+        tx.client.findMany({
+          where: { isActive: true, center: centerScope(user) },
+          select: { id: true, center: { select: { branchId: true } } },
+        }),
+        this.portfolioLoans(tx, user),
+      ]);
+
+      return branches.map((b) => {
+        const branchLoans = loans.filter((l) => l.client.center.branchId === b.id && l.loanType === 'OPEN');
+        const agg = branchLoans.reduce(
+          (acc, l) => {
+            const m = loanMetrics(l, b.workingDate);
+            acc.disbursed += m.disbursed;
+            acc.outstanding += m.outstanding;
+            acc.arrear += m.arrear;
+            acc.collected += m.collected;
+            return acc;
+          },
+          { disbursed: 0, outstanding: 0, arrear: 0, collected: 0 },
+        );
+        return {
+          branchCode: b.code,
+          branchName: b.name,
+          centers: centers.filter((c) => c.branchId === b.id).length,
+          clients: clients.filter((c) => c.center.branchId === b.id).length,
+          openLoans: branchLoans.length,
+          loanDisbursement: round2(agg.disbursed),
+          portfolioOutstanding: round2(agg.outstanding),
+          totalCollected: round2(agg.collected),
+          arrear: round2(agg.arrear),
+        };
+      });
+    });
+  }
+
+  /** Center-wise portfolio, scoped like everything else (FDO/BM/HO). */
+  async centerWise(user: AuthUser) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const [centers, loans] = await Promise.all([
+        tx.center.findMany({
+          where: centerScope(user),
+          orderBy: { code: 'asc' },
+          include: {
+            branch: { select: { code: true, workingDate: true } },
+            fdo: { select: { name: true } },
+            _count: { select: { clients: true, groups: true } },
+          },
+        }),
+        this.portfolioLoans(tx, user),
+      ]);
+
+      return centers.map((center) => {
+        const centerLoans = loans.filter((l) => l.client.center.id === center.id && l.loanType === 'OPEN');
+        const agg = centerLoans.reduce(
+          (acc, l) => {
+            const m = loanMetrics(l, center.branch.workingDate);
+            acc.disbursed += m.disbursed;
+            acc.outstanding += m.outstanding;
+            acc.arrear += m.arrear;
+            acc.collected += m.collected;
+            return acc;
+          },
+          { disbursed: 0, outstanding: 0, arrear: 0, collected: 0 },
+        );
+        return {
+          branchCode: center.branch.code,
+          centerCode: center.code,
+          centerName: center.name,
+          fdoName: center.fdo?.name ?? null,
+          groups: center._count.groups,
+          clients: center._count.clients,
+          openLoans: centerLoans.length,
+          loanDisbursement: round2(agg.disbursed),
+          portfolioOutstanding: round2(agg.outstanding),
+          totalCollected: round2(agg.collected),
+          arrear: round2(agg.arrear),
+        };
+      });
+    });
+  }
+
+  /** Group-wise portfolio (JLG joint-liability unit — 5 members). */
+  async groupWise(user: AuthUser) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const [groups, loans] = await Promise.all([
+        tx.groupUnit.findMany({
+          where: { center: centerScope(user) },
+          orderBy: [{ center: { code: 'asc' } }, { groupNo: 'asc' }],
+          include: {
+            center: { select: { code: true, name: true, branch: { select: { workingDate: true } } } },
+            _count: { select: { clients: true } },
+          },
+        }),
+        this.portfolioLoans(tx, user),
+      ]);
+
+      return groups.map((group) => {
+        const groupLoans = loans.filter((l) => l.client.group.id === group.id && l.loanType === 'OPEN');
+        const agg = groupLoans.reduce(
+          (acc, l) => {
+            const m = loanMetrics(l, group.center.branch.workingDate);
+            acc.disbursed += m.disbursed;
+            acc.outstanding += m.outstanding;
+            acc.arrear += m.arrear;
+            return acc;
+          },
+          { disbursed: 0, outstanding: 0, arrear: 0 },
+        );
+        return {
+          centerCode: group.center.code,
+          centerName: group.center.name,
+          groupNo: group.groupNo,
+          members: group._count.clients,
+          openLoans: groupLoans.length,
+          loanDisbursement: round2(agg.disbursed),
+          portfolioOutstanding: round2(agg.outstanding),
+          arrear: round2(agg.arrear),
+        };
+      });
+    });
+  }
+
+  /** Client-wise loan book: one row per loan (any status), optionally filtered by search text. */
+  async clientWise(user: AuthUser, q?: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await this.portfolioLoans(tx, user);
+      const needle = q?.trim().toLowerCase();
+
+      return loans
+        .filter((l) => {
+          if (!needle) return true;
+          return (
+            l.client.name.toLowerCase().includes(needle) ||
+            l.client.clientCode.toLowerCase().includes(needle) ||
+            l.loanAccount.toLowerCase().includes(needle)
+          );
+        })
+        .map((l) => {
+          const m = loanMetrics(l, l.client.center.branch.workingDate);
+          const c = l.client;
+          return {
+            branchCode: c.center.branch.code,
+            centerCode: c.center.code,
+            centerName: c.center.name,
+            displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+            clientCode: c.clientCode,
+            memberName: c.name,
+            loanAccount: l.loanAccount,
+            disbursalDate: l.disbursalDate,
+            loanAmount: l.loanAmount,
+            totalDues: l.totalDues,
+            portfolioOutstanding: m.outstanding,
+            arrear: m.arrear,
+            collected: m.collected,
+            loanType: l.loanType,
+          };
+        });
+    });
+  }
+
+  /** Field-officer performance: portfolio managed + collection efficiency within [from, to]. */
+  async employeePerformance(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const fdoWhere: Prisma.EmployeeWhereInput = {
+        role: 'FDO',
+        ...(user.role === 'BM' && user.branchId ? { branchId: user.branchId } : {}),
+      };
+      const [fdos, loans] = await Promise.all([
+        tx.employee.findMany({
+          where: fdoWhere,
+          orderBy: { name: 'asc' },
+          include: {
+            branch: { select: { code: true, workingDate: true } },
+            managing: { select: { id: true } },
+          },
+        }),
+        this.portfolioLoans(tx, user),
+      ]);
+
+      return fdos.map((fdo) => {
+        const managedCenterIds = new Set(fdo.managing.map((c) => c.id));
+        const fdoLoans = loans.filter((l) => managedCenterIds.has(l.client.center.id));
+        const openLoans = fdoLoans.filter((l) => l.loanType === 'OPEN');
+        const workingDate = fdo.branch?.workingDate ?? new Date();
+
+        const agg = openLoans.reduce(
+          (acc, l) => {
+            const m = loanMetrics(l, workingDate);
+            acc.disbursed += m.disbursed;
+            acc.outstanding += m.outstanding;
+            acc.arrear += m.arrear;
+            return acc;
+          },
+          { disbursed: 0, outstanding: 0, arrear: 0 },
+        );
+
+        let demand = 0;
+        let collected = 0;
+        for (const l of fdoLoans) {
+          for (const s of l.schedule) {
+            if (s.dueDate < from || s.dueDate > to) continue;
+            demand += Number(s.dueAmt);
+            collected += Number(s.collAmt);
+          }
+        }
+
+        const clientIds = new Set(fdoLoans.map((l) => l.client.id));
+        return {
+          fdoCode: fdo.code,
+          fdoName: fdo.name,
+          branchCode: fdo.branch?.code ?? null,
+          centers: managedCenterIds.size,
+          clients: clientIds.size,
+          openLoans: openLoans.length,
+          loanDisbursement: round2(agg.disbursed),
+          portfolioOutstanding: round2(agg.outstanding),
+          arrear: round2(agg.arrear),
+          periodDemand: round2(demand),
+          periodCollected: round2(collected),
+          collectionEfficiency: demand > 0 ? round2((collected / demand) * 100) : null,
+        };
+      });
     });
   }
 }

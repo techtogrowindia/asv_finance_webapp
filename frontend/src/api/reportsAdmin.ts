@@ -55,6 +55,75 @@ export interface AdvanceCollectionRow {
   meetingDay: string | null;
 }
 
+export interface BranchWiseRow {
+  branchCode: string;
+  branchName: string;
+  centers: number;
+  clients: number;
+  openLoans: number;
+  loanDisbursement: number;
+  portfolioOutstanding: number;
+  totalCollected: number;
+  arrear: number;
+}
+
+export interface CenterWiseRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  fdoName: string | null;
+  groups: number;
+  clients: number;
+  openLoans: number;
+  loanDisbursement: number;
+  portfolioOutstanding: number;
+  totalCollected: number;
+  arrear: number;
+}
+
+export interface GroupWiseRow {
+  centerCode: string;
+  centerName: string;
+  groupNo: number;
+  members: number;
+  openLoans: number;
+  loanDisbursement: number;
+  portfolioOutstanding: number;
+  arrear: number;
+}
+
+export interface ClientWiseRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  clientCode: string;
+  memberName: string;
+  loanAccount: string;
+  disbursalDate: string;
+  loanAmount: string;
+  totalDues: number;
+  portfolioOutstanding: number;
+  arrear: number;
+  collected: number;
+  loanType: 'OPEN' | 'CLOSED';
+}
+
+export interface EmployeePerformanceRow {
+  fdoCode: string;
+  fdoName: string;
+  branchCode: string | null;
+  centers: number;
+  clients: number;
+  openLoans: number;
+  loanDisbursement: number;
+  portfolioOutstanding: number;
+  arrear: number;
+  periodDemand: number;
+  periodCollected: number;
+  collectionEfficiency: number | null;
+}
+
 const qs = (from: string, to: string) => `?from=${from}&to=${to}`;
 
 export const getZeroCollection = (from: string, to: string) =>
@@ -65,3 +134,11 @@ export const getCollectionFollowup = (from: string, to: string) =>
 
 export const getAdvanceCollection = (from: string, to: string) =>
   api<AdvanceCollectionRow[]>(`/reports/advance-collection${qs(from, to)}`);
+
+export const getBranchWise = () => api<BranchWiseRow[]>('/reports/branch-wise');
+export const getCenterWise = () => api<CenterWiseRow[]>('/reports/center-wise');
+export const getGroupWise = () => api<GroupWiseRow[]>('/reports/group-wise');
+export const getClientWise = (q?: string) =>
+  api<ClientWiseRow[]>(`/reports/client-wise${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const getEmployeePerformance = (from: string, to: string) =>
+  api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to)}`);

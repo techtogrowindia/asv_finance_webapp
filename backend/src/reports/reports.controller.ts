@@ -38,4 +38,37 @@ export class ReportsController {
     const [f, t] = parseRange(from, to);
     return this.reports.advanceCollection(user, f, t);
   }
+
+  // ---- Portfolio summary reports (current snapshot) --------------------------
+
+  @Roles('BM', 'HO')
+  @Get('branch-wise')
+  branchWise(@CurrentUser() user: AuthUser) {
+    return this.reports.branchWise(user);
+  }
+
+  @Roles('BM', 'HO')
+  @Get('center-wise')
+  centerWise(@CurrentUser() user: AuthUser) {
+    return this.reports.centerWise(user);
+  }
+
+  @Roles('BM', 'HO')
+  @Get('group-wise')
+  groupWise(@CurrentUser() user: AuthUser) {
+    return this.reports.groupWise(user);
+  }
+
+  @Roles('BM', 'HO')
+  @Get('client-wise')
+  clientWise(@CurrentUser() user: AuthUser, @Query('q') q?: string) {
+    return this.reports.clientWise(user, q);
+  }
+
+  @Roles('BM', 'HO')
+  @Get('employee-performance')
+  employeePerformance(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.employeePerformance(user, f, t);
+  }
 }
