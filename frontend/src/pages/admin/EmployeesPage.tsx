@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { useAuth } from '../../auth/AuthContext';
+import { ActionMenu } from '../../components/ActionMenu';
 import { useConfirm } from '../../components/ConfirmProvider';
 import {
   BranchLite,
@@ -132,16 +133,14 @@ export function EmployeesPage() {
                   {e.id === user?.id ? (
                     <span style={{ color: 'var(--ink-500)', fontSize: 13 }}>This is you</span>
                   ) : (
-                    <div className="row-actions">
-                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(e); setAdding(false); }}>Edit</button>
-                      {e.role === 'FDO' && (
-                        <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setManagingCenters(e)}>Centers</button>
-                      )}
-                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setResetting(e)}>Reset Password</button>
-                      <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => onToggleStatus(e)}>
-                        {e.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
+                    <ActionMenu
+                      items={[
+                        { label: 'Edit', onClick: () => { setEditing(e); setAdding(false); } },
+                        ...(e.role === 'FDO' ? [{ label: 'Centers', onClick: () => setManagingCenters(e) }] : []),
+                        { label: 'Reset Password', onClick: () => setResetting(e) },
+                        { label: e.status === 'ACTIVE' ? 'Deactivate' : 'Activate', onClick: () => onToggleStatus(e) },
+                      ]}
+                    />
                   )}
                 </td>
               </tr>

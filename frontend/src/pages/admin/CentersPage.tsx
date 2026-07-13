@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
+import { ActionMenu } from '../../components/ActionMenu';
 import { useConfirm } from '../../components/ConfirmProvider';
 import {
   AdminCenter,
@@ -90,23 +91,16 @@ export function CentersPage() {
                 <td>{c.clientCount}</td>
                 <td><span className={`badge ${c.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                 <td>
-                  <div className="row-actions">
-                    <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(c); setAdding(false); }}>Edit</button>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ padding: '6px 12px', fontSize: 13 }}
-                      onClick={() => updateCenter(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }).then(refresh)}
-                    >
-                      {c.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button
-                      className="btn btn-ghost"
-                      style={{ padding: '6px 12px', fontSize: 13, color: 'var(--danger)' }}
-                      onClick={() => onDelete(c)}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                  <ActionMenu
+                    items={[
+                      { label: 'Edit', onClick: () => { setEditing(c); setAdding(false); } },
+                      {
+                        label: c.status === 'ACTIVE' ? 'Deactivate' : 'Activate',
+                        onClick: () => updateCenter(c.id, { status: c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }).then(refresh),
+                      },
+                      { label: 'Delete', onClick: () => onDelete(c), danger: true },
+                    ]}
+                  />
                 </td>
               </tr>
             ))}
