@@ -6,18 +6,31 @@ import { centerScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
 
-/** Per-loan outstanding/arrear/collected, from its full schedule (current snapshot). */
-function loanMetrics(
-  loan: { loanAmount: unknown; schedule: { dueDate: Date; dueAmt: unknown; duePri: unknown; dueInt: unknown; collAmt: unknown }[] },
-  asOf: Date,
-) {
+type MetricsLoan = {
+  loanAmount: unknown;
+  disbursalDate: Date;
+  schedule: { dueDate: Date; dueAmt: unknown; duePri: unknown; dueInt: unknown; collAmt: unknown }[];
+};
+
+/**
+ * Window-aware per-loan metrics:
+ *  - disbursed  = loan amount, but only if the loan was disbursed within [from, to]
+ *  - collected  = amount collected against installments falling due within [from, to]
+ *  - outstanding/arrear = position as of the window's end date (`to`)
+ * (installments due after `to` are treated as not-yet-due, matching the dated
+ *  activity reports' convention of scoping by installment due-date.)
+ */
+function loanMetricsWindow(loan: MetricsLoan, from: Date, to: Date) {
+  const disbursed = loan.disbursalDate >= from && loan.disbursalDate <= to ? Number(loan.loanAmount) : 0;
+  const collected = loan.schedule
+    .filter((s) => s.dueDate >= from && s.dueDate <= to)
+    .reduce((sum, s) => sum + Number(s.collAmt), 0);
   const unpaid = loan.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
   const outstanding = unpaid.reduce((sum, s) => sum + Number(s.duePri) + Number(s.dueInt), 0);
   const arrear = unpaid
-    .filter((s) => s.dueDate <= asOf)
+    .filter((s) => s.dueDate <= to)
     .reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
-  const collected = loan.schedule.reduce((sum, s) => sum + Number(s.collAmt), 0);
-  return { disbursed: Number(loan.loanAmount), outstanding: round2(outstanding), arrear: round2(arrear), collected: round2(collected) };
+  return { disbursed, outstanding: round2(outstanding), arrear: round2(arrear), collected: round2(collected) };
 }
 
 const LOAN_INCLUDE = {
@@ -172,7 +185,8 @@ export class ReportsService {
     });
   }
 
-  // ---- Portfolio summary reports (current snapshot, no date window) --------
+  // ---- Portfolio summary reports (disbursement/collection within [from, to],
+  //      outstanding/arrear as of the window's end date) ----------------------
 
   private async portfolioLoans(tx: Prisma.TransactionClient, user: AuthUser) {
     return tx.loan.findMany({
@@ -210,10 +224,10 @@ export class ReportsService {
   }
 
   /** Branch-wise portfolio (mainly useful for HO; BM sees their one branch). */
-  async branchWise(user: AuthUser) {
+  async branchWise(user: AuthUser, from: Date, to: Date) {
     return this.prisma.withTenant(user, async (tx) => {
       const branchWhere: Prisma.BranchWhereInput = user.role === 'BM' ? { id: user.branchId ?? undefined } : {};
-      const [branches, centers, clients, loans] = await Promise.all([
+      const [branches, centers, clients, allLoans] = await Promise.all([
         tx.branch.findMany({ where: branchWhere, orderBy: { code: 'asc' } }),
         tx.center.findMany({ where: centerScope(user), select: { id: true, branchId: true } }),
         tx.client.findMany({
@@ -222,12 +236,13 @@ export class ReportsService {
         }),
         this.portfolioLoans(tx, user),
       ]);
+      const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
       return branches.map((b) => {
         const branchLoans = loans.filter((l) => l.client.center.branchId === b.id && l.loanType === 'OPEN');
         const agg = branchLoans.reduce(
           (acc, l) => {
-            const m = loanMetrics(l, b.workingDate);
+            const m = loanMetricsWindow(l, from, to);
             acc.disbursed += m.disbursed;
             acc.outstanding += m.outstanding;
             acc.arrear += m.arrear;
@@ -252,9 +267,9 @@ export class ReportsService {
   }
 
   /** Center-wise portfolio, scoped like everything else (FDO/BM/HO). */
-  async centerWise(user: AuthUser) {
+  async centerWise(user: AuthUser, from: Date, to: Date) {
     return this.prisma.withTenant(user, async (tx) => {
-      const [centers, loans] = await Promise.all([
+      const [centers, allLoans] = await Promise.all([
         tx.center.findMany({
           where: centerScope(user),
           orderBy: { code: 'asc' },
@@ -266,12 +281,13 @@ export class ReportsService {
         }),
         this.portfolioLoans(tx, user),
       ]);
+      const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
       return centers.map((center) => {
         const centerLoans = loans.filter((l) => l.client.center.id === center.id && l.loanType === 'OPEN');
         const agg = centerLoans.reduce(
           (acc, l) => {
-            const m = loanMetrics(l, center.branch.workingDate);
+            const m = loanMetricsWindow(l, from, to);
             acc.disbursed += m.disbursed;
             acc.outstanding += m.outstanding;
             acc.arrear += m.arrear;
@@ -298,9 +314,9 @@ export class ReportsService {
   }
 
   /** Group-wise portfolio (JLG joint-liability unit — 5 members). */
-  async groupWise(user: AuthUser) {
+  async groupWise(user: AuthUser, from: Date, to: Date) {
     return this.prisma.withTenant(user, async (tx) => {
-      const [groups, loans] = await Promise.all([
+      const [groups, allLoans] = await Promise.all([
         tx.groupUnit.findMany({
           where: { center: centerScope(user) },
           orderBy: [{ center: { code: 'asc' } }, { groupNo: 'asc' }],
@@ -311,12 +327,13 @@ export class ReportsService {
         }),
         this.portfolioLoans(tx, user),
       ]);
+      const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
       return groups.map((group) => {
         const groupLoans = loans.filter((l) => l.client.group.id === group.id && l.loanType === 'OPEN');
         const agg = groupLoans.reduce(
           (acc, l) => {
-            const m = loanMetrics(l, group.center.branch.workingDate);
+            const m = loanMetricsWindow(l, from, to);
             acc.disbursed += m.disbursed;
             acc.outstanding += m.outstanding;
             acc.arrear += m.arrear;
@@ -338,10 +355,11 @@ export class ReportsService {
     });
   }
 
-  /** Client-wise loan book: one row per loan (any status), optionally filtered by search text. */
-  async clientWise(user: AuthUser, q?: string) {
+  /** Client-wise loan book: one row per loan (disbursed on/before `to`), optionally filtered by search text. */
+  async clientWise(user: AuthUser, from: Date, to: Date, q?: string) {
     return this.prisma.withTenant(user, async (tx) => {
-      const loans = await this.portfolioLoans(tx, user);
+      const allLoans = await this.portfolioLoans(tx, user);
+      const loans = allLoans.filter((l) => l.disbursalDate <= to);
       const needle = q?.trim().toLowerCase();
 
       return loans
@@ -354,7 +372,7 @@ export class ReportsService {
           );
         })
         .map((l) => {
-          const m = loanMetrics(l, l.client.center.branch.workingDate);
+          const m = loanMetricsWindow(l, from, to);
           const c = l.client;
           return {
             branchCode: c.center.branch.code,
@@ -383,7 +401,7 @@ export class ReportsService {
         role: 'FDO',
         ...(user.role === 'BM' && user.branchId ? { branchId: user.branchId } : {}),
       };
-      const [fdos, loans] = await Promise.all([
+      const [fdos, allLoans] = await Promise.all([
         tx.employee.findMany({
           where: fdoWhere,
           orderBy: { name: 'asc' },
@@ -394,16 +412,16 @@ export class ReportsService {
         }),
         this.portfolioLoans(tx, user),
       ]);
+      const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
       return fdos.map((fdo) => {
         const managedCenterIds = new Set(fdo.managing.map((c) => c.id));
         const fdoLoans = loans.filter((l) => managedCenterIds.has(l.client.center.id));
         const openLoans = fdoLoans.filter((l) => l.loanType === 'OPEN');
-        const workingDate = fdo.branch?.workingDate ?? new Date();
 
         const agg = openLoans.reduce(
           (acc, l) => {
-            const m = loanMetrics(l, workingDate);
+            const m = loanMetricsWindow(l, from, to);
             acc.disbursed += m.disbursed;
             acc.outstanding += m.outstanding;
             acc.arrear += m.arrear;

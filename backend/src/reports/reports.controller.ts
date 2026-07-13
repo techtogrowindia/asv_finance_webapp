@@ -39,30 +39,40 @@ export class ReportsController {
     return this.reports.advanceCollection(user, f, t);
   }
 
-  // ---- Portfolio summary reports (current snapshot) --------------------------
+  // ---- Portfolio summary reports (disbursement/collection within [from, to],
+  //      outstanding/arrear as of the window's end) ---------------------------
 
   @Roles('BM', 'HO')
   @Get('branch-wise')
-  branchWise(@CurrentUser() user: AuthUser) {
-    return this.reports.branchWise(user);
+  branchWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.branchWise(user, f, t);
   }
 
   @Roles('BM', 'HO')
   @Get('center-wise')
-  centerWise(@CurrentUser() user: AuthUser) {
-    return this.reports.centerWise(user);
+  centerWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.centerWise(user, f, t);
   }
 
   @Roles('BM', 'HO')
   @Get('group-wise')
-  groupWise(@CurrentUser() user: AuthUser) {
-    return this.reports.groupWise(user);
+  groupWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.groupWise(user, f, t);
   }
 
   @Roles('BM', 'HO')
   @Get('client-wise')
-  clientWise(@CurrentUser() user: AuthUser, @Query('q') q?: string) {
-    return this.reports.clientWise(user, q);
+  clientWise(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('q') q?: string,
+  ) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.clientWise(user, f, t, q);
   }
 
   @Roles('BM', 'HO')

@@ -135,10 +135,13 @@ export const getCollectionFollowup = (from: string, to: string) =>
 export const getAdvanceCollection = (from: string, to: string) =>
   api<AdvanceCollectionRow[]>(`/reports/advance-collection${qs(from, to)}`);
 
-export const getBranchWise = () => api<BranchWiseRow[]>('/reports/branch-wise');
-export const getCenterWise = () => api<CenterWiseRow[]>('/reports/center-wise');
-export const getGroupWise = () => api<GroupWiseRow[]>('/reports/group-wise');
-export const getClientWise = (q?: string) =>
-  api<ClientWiseRow[]>(`/reports/client-wise${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const getBranchWise = (from: string, to: string) =>
+  api<BranchWiseRow[]>(`/reports/branch-wise${qs(from, to)}`);
+export const getCenterWise = (from: string, to: string) =>
+  api<CenterWiseRow[]>(`/reports/center-wise${qs(from, to)}`);
+export const getGroupWise = (from: string, to: string) =>
+  api<GroupWiseRow[]>(`/reports/group-wise${qs(from, to)}`);
+export const getClientWise = (from: string, to: string, q?: string) =>
+  api<ClientWiseRow[]>(`/reports/client-wise${qs(from, to)}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
 export const getEmployeePerformance = (from: string, to: string) =>
   api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to)}`);

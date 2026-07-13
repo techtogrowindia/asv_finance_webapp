@@ -164,6 +164,15 @@ a { color: var(--brand-700); text-decoration: none; }
   .report-menu { flex-direction: row; flex-wrap: wrap; position: static; }
 }
 
+/* Quick date presets (Today / This Month / …) on the report filter bar */
+.preset-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink-700); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.chip:hover { background: var(--brand-050); color: var(--brand-700); border-color: var(--brand-050); }
+.chip.active { background: var(--brand-700); color: #fff; border-color: var(--brand-700); }
+
 .main { display: flex; flex-direction: column; min-width: 0; }
 .topbar {
   height: 62px; background: var(--surface); border-bottom: 1px solid var(--line);

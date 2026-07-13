@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { downloadCsv } from '../../lib/csv';
+import { downloadXlsx } from '../../lib/xlsx';
+import { Preset, PRESETS, presetRange } from '../../lib/dateFilter';
 import {
   AdvanceCollectionRow,
   BranchWiseRow,
@@ -32,14 +34,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'employee', label: 'Employee Performance' },
 ];
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-function daysAgoIso(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 const inr = (v: string | number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
@@ -49,8 +43,8 @@ export function ReportsPage() {
 
   return (
     <AdminLayout>
-      <h1 className="page-title">Daily Monitoring Reports</h1>
-      <p className="page-sub">Follow up on missed payments, review arrears, and plan ahead for upcoming dues.</p>
+      <h1 className="page-title">Reports</h1>
+      <p className="page-sub">Portfolio summaries and daily monitoring — filter by any period and export to CSV or Excel.</p>
 
       <div className="report-layout">
         <nav className="report-menu">
@@ -81,55 +75,94 @@ export function ReportsPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Shared date-filter (quick presets + custom range) used by every report.
 
-function DateRangeBar({
-  from, to, onFrom, onTo, onShow, onExport, busy, hasRows,
+function useDateFilter(initial: Preset = 'month') {
+  const first = presetRange(initial);
+  const [preset, setPreset] = useState<Preset>(initial);
+  const [from, setFromState] = useState(first.from);
+  const [to, setToState] = useState(first.to);
+
+  const choose = (p: Preset) => {
+    setPreset(p);
+    if (p !== 'custom') {
+      const r = presetRange(p);
+      setFromState(r.from);
+      setToState(r.to);
+    }
+  };
+  const editFrom = (v: string) => { setPreset('custom'); setFromState(v); };
+  const editTo = (v: string) => { setPreset('custom'); setToState(v); };
+
+  return { preset, from, to, choose, editFrom, editTo };
+}
+type DateFilter = ReturnType<typeof useDateFilter>;
+
+function DateFilterBar({
+  filter, onShow, onCsv, onXlsx, busy, hasRows, children,
 }: {
-  from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void;
-  onShow: () => void; onExport: () => void; busy: boolean; hasRows: boolean;
+  filter: DateFilter;
+  onShow: () => void; onCsv: () => void; onXlsx: () => void;
+  busy: boolean; hasRows: boolean; children?: ReactNode;
 }) {
   return (
     <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
-      <div className="form-grid">
+      <div className="preset-row">
+        {PRESETS.map((p) => (
+          <button
+            key={p.id}
+            className={`chip ${filter.preset === p.id ? 'active' : ''}`}
+            onClick={() => filter.choose(p.id)}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className="form-grid" style={{ marginTop: 12 }}>
         <div className="field">
           <label>From date</label>
-          <input type="date" className="input" value={from} onChange={(e) => onFrom(e.target.value)} />
+          <input type="date" className="input" value={filter.from} onChange={(e) => filter.editFrom(e.target.value)} />
         </div>
         <div className="field">
           <label>Till date</label>
-          <input type="date" className="input" value={to} onChange={(e) => onTo(e.target.value)} />
+          <input type="date" className="input" value={filter.to} onChange={(e) => filter.editTo(e.target.value)} />
         </div>
+        {children}
       </div>
       <div className="form-actions" style={{ marginTop: 4 }}>
         <button className="btn btn-primary" disabled={busy} onClick={onShow}>{busy ? <span className="spinner" /> : 'Show'}</button>
-        <button className="btn btn-ghost" disabled={!hasRows} onClick={onExport}>Export CSV</button>
+        <button className="btn btn-ghost" disabled={!hasRows} onClick={onCsv}>Export CSV</button>
+        <button className="btn btn-ghost" disabled={!hasRows} onClick={onXlsx}>Export Excel</button>
       </div>
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+
 function ZeroCollectionTab() {
-  const [from, setFrom] = useState(daysAgoIso(7));
-  const [to, setTo] = useState(todayIso());
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<ZeroCollectionRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getZeroCollection(from, to)); }
+    try { setRows(await getZeroCollection(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
+
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
       <div className="panel-head">Members who paid nothing in this window (for follow-up calling)</div>
       <div className="panel-body">
-        <DateRangeBar
-          from={from} to={to} onFrom={setFrom} onTo={setTo} onShow={show} busy={busy}
-          hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('zero-collection.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('zero-collection.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('zero-collection.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -172,27 +205,28 @@ function ZeroCollectionTab() {
 }
 
 function CollectionFollowupTab() {
-  const [from, setFrom] = useState(daysAgoIso(7));
-  const [to, setTo] = useState(todayIso());
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<CollectionFollowupRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getCollectionFollowup(from, to)); }
+    try { setRows(await getCollectionFollowup(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
+
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
       <div className="panel-head">Per-loan arrears: opening → demand → collected → closing arrear</div>
       <div className="panel-body">
-        <DateRangeBar
-          from={from} to={to} onFrom={setFrom} onTo={setTo} onShow={show} busy={busy}
-          hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('collection-followup.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('collection-followup.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('collection-followup.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -234,27 +268,28 @@ function CollectionFollowupTab() {
 }
 
 function AdvanceCollectionTab() {
-  const [from, setFrom] = useState(todayIso());
-  const [to, setTo] = useState(daysAgoIso(-14));
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<AdvanceCollectionRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getAdvanceCollection(from, to)); }
+    try { setRows(await getAdvanceCollection(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
+
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
       <div className="panel-head">Upcoming installments (plan ahead)</div>
       <div className="panel-body">
-        <DateRangeBar
-          from={from} to={to} onFrom={setFrom} onTo={setTo} onShow={show} busy={busy}
-          hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('advance-collection.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('advance-collection.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('advance-collection.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -293,38 +328,33 @@ function AdvanceCollectionTab() {
 }
 
 // ---------------------------------------------------------------------------
-
-function SnapshotBar({ onShow, onExport, busy, hasRows }: { onShow: () => void; onExport: () => void; busy: boolean; hasRows: boolean }) {
-  return (
-    <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
-      <div className="form-actions" style={{ marginTop: 0 }}>
-        <button className="btn btn-primary" disabled={busy} onClick={onShow}>{busy ? <span className="spinner" /> : 'Refresh'}</button>
-        <button className="btn btn-ghost" disabled={!hasRows} onClick={onExport}>Export CSV</button>
-      </div>
-    </div>
-  );
-}
+// Portfolio summaries: disbursement/collection within the window; outstanding
+// and arrear as of the window's end date.
 
 function BranchWiseTab() {
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<BranchWiseRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getBranchWise()); }
+    try { setRows(await getBranchWise(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
 
   useEffect(() => { show(); }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
-      <div className="panel-head">Portfolio summary per branch (current snapshot)</div>
+      <div className="panel-head">Portfolio summary per branch</div>
       <div className="panel-body">
-        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('branch-wise.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('branch-wise.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('branch-wise.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -333,7 +363,7 @@ function BranchWiseTab() {
               <thead>
                 <tr>
                   <th>Branch</th><th>Centers</th><th>Clients</th><th>Open Loans</th>
-                  <th>Disbursement</th><th>Portfolio OS</th><th>Total Collected</th><th>Arrear</th>
+                  <th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
                 </tr>
               </thead>
               <tbody>
@@ -360,25 +390,29 @@ function BranchWiseTab() {
 }
 
 function CenterWiseTab() {
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<CenterWiseRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getCenterWise()); }
+    try { setRows(await getCenterWise(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
 
   useEffect(() => { show(); }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
-      <div className="panel-head">Portfolio summary per center (current snapshot)</div>
+      <div className="panel-head">Portfolio summary per center</div>
       <div className="panel-body">
-        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('center-wise.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('center-wise.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('center-wise.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -387,7 +421,7 @@ function CenterWiseTab() {
               <thead>
                 <tr>
                   <th>Branch</th><th>Center</th><th>FDO</th><th>Groups</th><th>Clients</th>
-                  <th>Open Loans</th><th>Disbursement</th><th>Portfolio OS</th><th>Total Collected</th><th>Arrear</th>
+                  <th>Open Loans</th><th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
                 </tr>
               </thead>
               <tbody>
@@ -416,25 +450,29 @@ function CenterWiseTab() {
 }
 
 function GroupWiseTab() {
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<GroupWiseRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getGroupWise()); }
+    try { setRows(await getGroupWise(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
 
   useEffect(() => { show(); }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
-      <div className="panel-head">Portfolio summary per group (current snapshot)</div>
+      <div className="panel-head">Portfolio summary per group</div>
       <div className="panel-body">
-        <SnapshotBar onShow={show} busy={busy} hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('group-wise.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('group-wise.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('group-wise.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
@@ -469,6 +507,7 @@ function GroupWiseTab() {
 }
 
 function ClientWiseTab() {
+  const filter = useDateFilter('month');
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<ClientWiseRow[] | null>(null);
   const [error, setError] = useState('');
@@ -476,33 +515,32 @@ function ClientWiseTab() {
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getClientWise(q || undefined)); }
+    try { setRows(await getClientWise(filter.from, filter.to, q || undefined)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
 
   useEffect(() => { show(); }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
       <div className="panel-head">Loan-wise client portfolio (search by name, client ID, or loan account)</div>
       <div className="panel-body">
-        <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
-          <div className="form-grid">
-            <div className="field">
-              <label>Search</label>
-              <input
-                type="text" className="input" placeholder="Member name, client ID, or loan A/c"
-                value={q} onChange={(e) => setQ(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && show()}
-              />
-            </div>
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('client-wise.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('client-wise.xlsx', asRows())}
+        >
+          <div className="field">
+            <label>Search</label>
+            <input
+              type="text" className="input" placeholder="Member name, client ID, or loan A/c"
+              value={q} onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && show()}
+            />
           </div>
-          <div className="form-actions" style={{ marginTop: 4 }}>
-            <button className="btn btn-primary" disabled={busy} onClick={show}>{busy ? <span className="spinner" /> : 'Show'}</button>
-            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadCsv('client-wise.csv', rows as unknown as Record<string, unknown>[])}>Export CSV</button>
-          </div>
-        </div>
+        </DateFilterBar>
         {error && <div className="alert-error">{error}</div>}
         {rows && (
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
@@ -540,27 +578,28 @@ function ClientWiseTab() {
 }
 
 function EmployeePerformanceTab() {
-  const [from, setFrom] = useState(daysAgoIso(30));
-  const [to, setTo] = useState(todayIso());
+  const filter = useDateFilter('month');
   const [rows, setRows] = useState<EmployeePerformanceRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getEmployeePerformance(from, to)); }
+    try { setRows(await getEmployeePerformance(filter.from, filter.to)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
+
+  const asRows = () => rows as unknown as Record<string, unknown>[];
 
   return (
     <div className="panel">
       <div className="panel-head">Field officer portfolio &amp; collection efficiency</div>
       <div className="panel-body">
-        <DateRangeBar
-          from={from} to={to} onFrom={setFrom} onTo={setTo} onShow={show} busy={busy}
-          hasRows={!!rows?.length}
-          onExport={() => rows && downloadCsv('employee-performance.csv', rows as unknown as Record<string, unknown>[])}
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('employee-performance.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('employee-performance.xlsx', asRows())}
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
