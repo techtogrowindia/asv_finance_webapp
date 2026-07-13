@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { ReportsService } from './reports.service';
 
@@ -19,6 +20,7 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.monitoring')
   @Get('zero-collection')
   zeroCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -26,6 +28,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.monitoring')
   @Get('collection-followup')
   collectionFollowup(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -33,6 +36,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.monitoring')
   @Get('advance-collection')
   advanceCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -43,6 +47,7 @@ export class ReportsController {
   //      outstanding/arrear as of the window's end) ---------------------------
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
   @Get('branch-wise')
   branchWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -50,6 +55,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
   @Get('center-wise')
   centerWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -57,6 +63,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
   @Get('group-wise')
   groupWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);
@@ -64,6 +71,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
   @Get('client-wise')
   clientWise(
     @CurrentUser() user: AuthUser,
@@ -76,6 +84,7 @@ export class ReportsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
   @Get('employee-performance')
   employeePerformance(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);

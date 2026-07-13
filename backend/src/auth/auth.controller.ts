@@ -26,6 +26,7 @@ export class AuthController {
       code: user.code,
       role: user.role,
       branchId: user.branchId,
+      permissions: user.permissions,
       workingDate,
     };
   }

@@ -16,7 +16,7 @@ BEGIN
     'branch','employee','center','employee_center','group_unit','client',
     'co_applicant','frequency','purpose','loan_product','document_type',
     'kyc_document','kyc_number','loan_application','loan','repayment_schedule',
-    'collection','audit_log','eod_closing'
+    'collection','audit_log','eod_closing','access_role'
   ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY;', t);
     EXECUTE format('ALTER TABLE %I FORCE  ROW LEVEL SECURITY;', t);
@@ -41,6 +41,9 @@ CREATE POLICY tenant_isolation ON tenant
 -- SECURITY DEFINER, owned by asvfinance_owner (BYPASSRLS), so it can look up the
 -- login across tenants. It returns only what auth needs. The app role may EXECUTE
 -- it but cannot read the employee table directly without tenant context.
+-- Return signature changed (added permissions) — CREATE OR REPLACE cannot alter
+-- a function's return type, so drop the old one first.
+DROP FUNCTION IF EXISTS auth_login_lookup(text);
 CREATE OR REPLACE FUNCTION auth_login_lookup(p_login text)
 RETURNS TABLE (
   id            uuid,
@@ -50,15 +53,19 @@ RETURNS TABLE (
   name          text,
   code          text,
   status        text,
-  password_hash text
+  password_hash text,
+  permissions   text[]
 )
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT e.id, e.tenant_id, e.branch_id, e.role::text, e.name, e.code,
-         e.status::text, e.password_hash
+         e.status::text, e.password_hash,
+         -- Action permissions from the assigned role (empty if none/inactive).
+         CASE WHEN ar.is_active THEN coalesce(ar.permissions, '{}') ELSE '{}' END
   FROM employee e
+  LEFT JOIN access_role ar ON ar.id = e.access_role_id
   WHERE e.login = p_login
   LIMIT 1;
 $$;

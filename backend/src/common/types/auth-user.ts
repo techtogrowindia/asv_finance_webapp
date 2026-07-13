@@ -8,6 +8,7 @@ export interface AuthUser {
   role: Role;
   name: string;
   code: string;
+  permissions: string[];
 }
 
 /** Fields needed to set the per-request RLS context. */

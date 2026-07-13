@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
+import { useAuth } from '../../auth/AuthContext';
 import { downloadCsv } from '../../lib/csv';
 import { downloadXlsx } from '../../lib/xlsx';
 import { Preset, PRESETS, presetRange } from '../../lib/dateFilter';
@@ -23,15 +24,15 @@ import {
 } from '../../api/reportsAdmin';
 
 type Tab = 'zero' | 'followup' | 'advance' | 'branch' | 'center' | 'group' | 'client' | 'employee';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'zero', label: 'Zero Collection' },
-  { id: 'followup', label: 'Collection Followup' },
-  { id: 'advance', label: 'Advance Collection' },
-  { id: 'branch', label: 'Branch Wise' },
-  { id: 'center', label: 'Center Wise' },
-  { id: 'group', label: 'Group Wise' },
-  { id: 'client', label: 'Client Wise' },
-  { id: 'employee', label: 'Employee Performance' },
+const TABS: { id: Tab; label: string; perm: string }[] = [
+  { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
+  { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
+  { id: 'advance', label: 'Advance Collection', perm: 'report.monitoring' },
+  { id: 'branch', label: 'Branch Wise', perm: 'report.portfolio' },
+  { id: 'center', label: 'Center Wise', perm: 'report.portfolio' },
+  { id: 'group', label: 'Group Wise', perm: 'report.portfolio' },
+  { id: 'client', label: 'Client Wise', perm: 'report.portfolio' },
+  { id: 'employee', label: 'Employee Performance', perm: 'report.portfolio' },
 ];
 
 const inr = (v: string | number) =>
@@ -39,7 +40,9 @@ const inr = (v: string | number) =>
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
 
 export function ReportsPage() {
-  const [tab, setTab] = useState<Tab>('zero');
+  const { can } = useAuth();
+  const tabs = TABS.filter((t) => can(t.perm));
+  const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? 'zero');
 
   return (
     <AdminLayout>
@@ -48,7 +51,7 @@ export function ReportsPage() {
 
       <div className="report-layout">
         <nav className="report-menu">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button
               key={t.id}
               className={`report-menu-item ${tab === t.id ? 'active' : ''}`}

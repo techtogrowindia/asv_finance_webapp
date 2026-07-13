@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -24,6 +25,7 @@ export class EmployeesController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
   @Get()
   list(
     @CurrentUser() user: AuthUser,
@@ -35,12 +37,14 @@ export class EmployeesController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateEmployeeDto) {
     return this.employees.create(user, dto);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
   @Patch(':id')
   update(
     @CurrentUser() user: AuthUser,
@@ -51,6 +55,7 @@ export class EmployeesController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
   @Post(':id/reset-password')
   resetPassword(
     @CurrentUser() user: AuthUser,

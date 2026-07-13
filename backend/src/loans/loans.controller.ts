@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
@@ -10,11 +11,13 @@ import { LoansService } from './loans.service';
 export class LoansController {
   constructor(private readonly loans: LoansService) {}
 
+  @RequirePermission('loan.view')
   @Get('clients/:id/loans')
   existingLoans(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.existingLoans(user, id);
   }
 
+  @RequirePermission('loan.apply')
   @Get('loan-applications/eligibility')
   eligibility(
     @CurrentUser() user: AuthUser,
@@ -25,6 +28,7 @@ export class LoansController {
   }
 
   @Roles('FDO', 'BM')
+  @RequirePermission('loan.apply')
   @Post('loan-applications')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateLoanApplicationDto) {
     return this.loans.createApplication(user, dto);
@@ -32,18 +36,21 @@ export class LoansController {
 
   // ---- Verification & Disbursement (BM/HO) ----
   @Roles('BM', 'HO')
+  @RequirePermission('loan.approve')
   @Get('loan-applications')
   list(@CurrentUser() user: AuthUser, @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
     return this.loans.listApplications(user, status);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('loan.approve')
   @Post('loan-applications/:id/disburse')
   disburse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.disburse(user, id);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('loan.approve')
   @Post('loan-applications/:id/reject')
   reject(
     @CurrentUser() user: AuthUser,
@@ -53,6 +60,7 @@ export class LoansController {
     return this.loans.reject(user, id, dto);
   }
 
+  @RequirePermission('loan.view')
   @Get('loans/:id/ledger')
   ledger(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.ledger(user, id);

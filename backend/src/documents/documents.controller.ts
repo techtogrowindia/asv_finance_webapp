@@ -17,6 +17,7 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { CurrentUser } from '../common/auth/current-user.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { DocumentsService } from './documents.service';
 
@@ -26,11 +27,13 @@ const ALLOWED_MIME = /^image\/(jpeg|png|webp)$/;
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
+  @RequirePermission('member.view')
   @Get()
   checklist(@CurrentUser() user: AuthUser, @Param('clientId', ParseUUIDPipe) clientId: string) {
     return this.documents.checklist(user, clientId);
   }
 
+  @RequirePermission('member.edit')
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
@@ -72,6 +75,7 @@ export class DocumentsController {
 export class DocumentFileController {
   constructor(private readonly documents: DocumentsService) {}
 
+  @RequirePermission('member.view')
   @Get(':id/file')
   async file(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const { filePath, mimeType } = await this.documents.resolveFile(user, id);
@@ -79,6 +83,7 @@ export class DocumentFileController {
     res.sendFile(filePath);
   }
 
+  @RequirePermission('member.delete')
   @Delete(':id')
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.documents.remove(user, id);

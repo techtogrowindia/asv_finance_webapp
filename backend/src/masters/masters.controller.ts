@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { MastersService } from './masters.service';
 import { CreateFrequencyDto, UpdateFrequencyDto } from './dto/frequency.dto';
@@ -21,12 +22,14 @@ export class MastersController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Post('frequencies')
   createFrequency(@CurrentUser() user: AuthUser, @Body() dto: CreateFrequencyDto) {
     return this.masters.createFrequency(user, dto);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Patch('frequencies/:id')
   updateFrequency(
     @CurrentUser() user: AuthUser,
@@ -43,12 +46,14 @@ export class MastersController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Post('purposes')
   createPurpose(@CurrentUser() user: AuthUser, @Body() dto: CreatePurposeDto) {
     return this.masters.createPurpose(user, dto);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Patch('purposes/:id')
   updatePurpose(
     @CurrentUser() user: AuthUser,
@@ -65,12 +70,14 @@ export class MastersController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Post('loan-products')
   createLoanProduct(@CurrentUser() user: AuthUser, @Body() dto: CreateLoanProductDto) {
     return this.masters.createLoanProduct(user, dto);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Patch('loan-products/:id')
   updateLoanProduct(
     @CurrentUser() user: AuthUser,
@@ -87,12 +94,14 @@ export class MastersController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Post('document-types')
   createDocumentType(@CurrentUser() user: AuthUser, @Body() dto: CreateDocumentTypeDto) {
     return this.masters.createDocumentType(user, dto);
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Patch('document-types/:id')
   updateDocumentType(
     @CurrentUser() user: AuthUser,

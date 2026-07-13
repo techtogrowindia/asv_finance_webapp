@@ -10,6 +10,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { ALL_PERMISSIONS, FIELD_OFFICER_PERMISSIONS } from '../src/common/auth/permissions';
 
 const prisma = new PrismaClient({
   datasources: {
@@ -26,6 +27,20 @@ async function main() {
     where: { code: 'ASV' },
     update: {},
     create: { code: 'ASV', name: 'ASV Finance' },
+  });
+
+  // ---- Built-in roles (permission sets) ------------------------------------
+  // Two system roles per tenant so existing logins keep working. Permissions are
+  // refreshed on every seed so they stay in sync with the catalog.
+  const adminRole = await prisma.accessRole.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: 'Administrator' } },
+    update: { permissions: ALL_PERMISSIONS, isSystem: true, isActive: true },
+    create: { tenantId: tenant.id, name: 'Administrator', permissions: ALL_PERMISSIONS, isSystem: true },
+  });
+  const fieldOfficerRole = await prisma.accessRole.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: 'Field Officer' } },
+    update: { permissions: FIELD_OFFICER_PERMISSIONS, isSystem: true, isActive: true },
+    create: { tenantId: tenant.id, name: 'Field Officer', permissions: FIELD_OFFICER_PERMISSIONS, isSystem: true },
   });
 
   const branch = await prisma.branch.upsert({
@@ -195,6 +210,17 @@ async function main() {
       passwordHash: password,
       role: 'BM',
     },
+  });
+
+  // Assign default roles to any employee that has none yet (idempotent backfill,
+  // covers both freshly-seeded and pre-existing production employees).
+  await prisma.employee.updateMany({
+    where: { tenantId: tenant.id, accessRoleId: null, role: 'FDO' },
+    data: { accessRoleId: fieldOfficerRole.id },
+  });
+  await prisma.employee.updateMany({
+    where: { tenantId: tenant.id, accessRoleId: null, role: { in: ['BM', 'HO'] } },
+    data: { accessRoleId: adminRole.id },
   });
 
   // eslint-disable-next-line no-console

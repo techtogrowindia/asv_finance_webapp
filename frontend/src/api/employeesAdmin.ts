@@ -11,6 +11,8 @@ export interface EmployeeRow {
   status: 'ACTIVE' | 'INACTIVE';
   branchId: string | null;
   branchName: string | null;
+  accessRoleId: string | null;
+  roleName: string | null;
   centerCount: number;
 }
 
@@ -27,6 +29,7 @@ export interface CreateEmployeeBody {
   password: string;
   role: EmployeeRole;
   branchId?: string;
+  accessRoleId?: string;
 }
 
 export interface UpdateEmployeeBody {
@@ -35,6 +38,7 @@ export interface UpdateEmployeeBody {
   login?: string;
   role?: EmployeeRole;
   branchId?: string;
+  accessRoleId?: string;
   status?: 'ACTIVE' | 'INACTIVE';
 }
 

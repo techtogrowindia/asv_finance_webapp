@@ -53,7 +53,11 @@ export class EmployeesService {
       const employees = await tx.employee.findMany({
         where,
         orderBy: [{ role: 'asc' }, { name: 'asc' }],
-        include: { branch: { select: { code: true, name: true } }, _count: { select: { managing: true } } },
+        include: {
+          branch: { select: { code: true, name: true } },
+          accessRole: { select: { id: true, name: true } },
+          _count: { select: { managing: true } },
+        },
       });
       return employees.map((e) => this.serialize(e));
     });
@@ -64,6 +68,7 @@ export class EmployeesService {
       this.assertCanManageRole(user, dto.role);
 
       const branchId = await this.resolveBranchId(tx, user, dto.role, dto.branchId);
+      const accessRoleId = await this.resolveAccessRoleId(tx, dto.accessRoleId);
 
       const dupLogin = await tx.employee.findUnique({ where: { login: dto.login } });
       if (dupLogin) throw new BadRequestException(`Login "${dto.login}" is already taken`);
@@ -79,9 +84,14 @@ export class EmployeesService {
           login: dto.login,
           passwordHash,
           role: dto.role,
+          accessRoleId,
           status: 'ACTIVE',
         },
-        include: { branch: { select: { code: true, name: true } }, _count: { select: { managing: true } } },
+        include: {
+          branch: { select: { code: true, name: true } },
+          accessRole: { select: { id: true, name: true } },
+          _count: { select: { managing: true } },
+        },
       });
       return this.serialize(created);
     });
@@ -113,6 +123,9 @@ export class EmployeesService {
         if (dupLogin) throw new BadRequestException(`Login "${dto.login}" is already taken`);
       }
 
+      const accessRoleId =
+        'accessRoleId' in dto ? await this.resolveAccessRoleId(tx, dto.accessRoleId) : undefined;
+
       const updated = await tx.employee.update({
         where: { id },
         data: {
@@ -121,9 +134,14 @@ export class EmployeesService {
           ...('login' in dto ? { login: dto.login } : {}),
           ...('role' in dto ? { role: dto.role } : {}),
           ...(branchId !== undefined ? { branchId } : {}),
+          ...(accessRoleId !== undefined ? { accessRoleId } : {}),
           ...('status' in dto ? { status: dto.status } : {}),
         },
-        include: { branch: { select: { code: true, name: true } }, _count: { select: { managing: true } } },
+        include: {
+          branch: { select: { code: true, name: true } },
+          accessRole: { select: { id: true, name: true } },
+          _count: { select: { managing: true } },
+        },
       });
       return this.serialize(updated);
     });
@@ -146,6 +164,17 @@ export class EmployeesService {
       await tx.employee.update({ where: { id }, data: { passwordHash } });
       return { reset: true };
     });
+  }
+
+  /** Validate an assigned access role belongs to the tenant (RLS already scopes it). */
+  private async resolveAccessRoleId(
+    tx: Prisma.TransactionClient,
+    requestedRoleId: string | undefined,
+  ): Promise<string | null> {
+    if (!requestedRoleId) return null;
+    const role = await tx.accessRole.findFirst({ where: { id: requestedRoleId } });
+    if (!role) throw new BadRequestException('Role not found');
+    return role.id;
   }
 
   /** BM may only create/edit FDOs; HO may manage any role. */
@@ -184,7 +213,9 @@ export class EmployeesService {
     role: string;
     status: string;
     branchId: string | null;
+    accessRoleId: string | null;
     branch: { code: string; name: string } | null;
+    accessRole: { id: string; name: string } | null;
     _count: { managing: number };
   }) {
     return {
@@ -196,6 +227,8 @@ export class EmployeesService {
       status: e.status,
       branchId: e.branchId,
       branchName: e.branch ? `${e.branch.code} - ${e.branch.name}` : null,
+      accessRoleId: e.accessRoleId,
+      roleName: e.accessRole?.name ?? null,
       centerCount: e._count.managing,
     };
   }

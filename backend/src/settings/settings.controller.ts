@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { SettingsService } from './settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -16,6 +17,7 @@ export class SettingsController {
   }
 
   @Roles('BM', 'HO')
+  @RequirePermission('master.manage')
   @Patch()
   update(@CurrentUser() user: AuthUser, @Body() dto: UpdateSettingsDto) {
     return this.settings.update(user, dto);

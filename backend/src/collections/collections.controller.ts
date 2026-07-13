@@ -1,6 +1,7 @@
 import { Body, Controller, Get, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
+import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { CollectionsService } from './collections.service';
 import { PostCollectionDto } from './dto/post-collection.dto';
@@ -9,6 +10,7 @@ import { PostCollectionDto } from './dto/post-collection.dto';
 export class CollectionsController {
   constructor(private readonly collections: CollectionsService) {}
 
+  @RequirePermission('collection.view')
   @Get('due')
   due(
     @CurrentUser() user: AuthUser,
@@ -18,6 +20,7 @@ export class CollectionsController {
     return this.collections.due(user, centerId, date);
   }
 
+  @RequirePermission('collection.view')
   @Get('demand')
   demand(
     @CurrentUser() user: AuthUser,
@@ -28,6 +31,7 @@ export class CollectionsController {
   }
 
   @Roles('FDO', 'BM')
+  @RequirePermission('collection.post')
   @Post()
   post(@CurrentUser() user: AuthUser, @Body() dto: PostCollectionDto) {
     return this.collections.post(user, dto);

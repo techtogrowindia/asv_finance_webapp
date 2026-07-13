@@ -85,8 +85,30 @@ model Tenant {
   collections      Collection[]
   auditLogs        AuditLog[]
   eodClosings      EodClosing[]
+  accessRoles      AccessRole[]
 
   @@map("tenant")
+}
+
+// ---- Access role (permission set) ------------------------------------------
+// A named checklist of ACTION permissions, assigned to employees. Independent of
+// the Role enum below, which is the data-visibility Access Level (FDO/BM/HO).
+model AccessRole {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String
+  permissions String[] @default([]) // permission keys, validated against the catalog
+  isSystem    Boolean  @default(false) @map("is_system")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  employees Employee[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("access_role")
 }
 
 // ---- Branch ----------------------------------------------------------------
@@ -119,15 +141,17 @@ model Employee {
   name         String
   login        String         @unique
   passwordHash String         @map("password_hash")
-  role         Role
+  role         Role // Access Level: data visibility scope (FDO/BM/HO) + portal
+  accessRoleId String?        @map("access_role_id") @db.Uuid
   status       EmployeeStatus @default(ACTIVE)
   createdAt    DateTime       @default(now()) @map("created_at")
   updatedAt    DateTime       @updatedAt @map("updated_at")
 
-  tenant   Tenant           @relation(fields: [tenantId], references: [id])
-  branch   Branch?          @relation(fields: [branchId], references: [id])
-  centers  EmployeeCenter[]
-  managing Center[]         @relation("CenterFdo")
+  tenant     Tenant           @relation(fields: [tenantId], references: [id])
+  branch     Branch?          @relation(fields: [branchId], references: [id])
+  accessRole AccessRole?      @relation(fields: [accessRoleId], references: [id])
+  centers    EmployeeCenter[]
+  managing   Center[]         @relation("CenterFdo")
 
   @@index([tenantId])
   @@map("employee")

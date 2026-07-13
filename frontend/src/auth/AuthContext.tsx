@@ -10,13 +10,14 @@ export interface User {
   code: string;
   role: Role;
   branchId: string | null;
+  permissions: string[];
   workingDate: string;
 }
 
 interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: Omit<User, 'workingDate'>;
+  user: Omit<User, 'workingDate' | 'permissions'>;
 }
 
 interface AuthContextValue {
@@ -24,6 +25,8 @@ interface AuthContextValue {
   loading: boolean;
   login: (portal: Portal, login: string, password: string) => Promise<User>;
   logout: () => void;
+  /** True if the signed-in user holds the given permission key. */
+  can: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
+      can: (permission: string) => !!user?.permissions?.includes(permission),
       async login(portal, login, password) {
         const res = await api<LoginResponse>('/auth/login', {
           method: 'POST',

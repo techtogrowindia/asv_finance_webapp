@@ -9,5 +9,6 @@ export class UpdateEmployeeDto {
   @IsOptional() @IsString() @MinLength(3) @MaxLength(60) login?: string;
   @IsOptional() @IsIn(ROLES) role?: (typeof ROLES)[number];
   @IsOptional() @IsUUID() branchId?: string;
+  @IsOptional() @IsUUID() accessRoleId?: string;
   @IsOptional() @IsIn(STATUSES) status?: (typeof STATUSES)[number];
 }

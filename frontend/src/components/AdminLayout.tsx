@@ -3,28 +3,31 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Logo } from './Logo';
 
-const ADMIN_NAV = [
+/** `perm`: nav item shows if the user holds ANY of these keys (undefined = always). */
+const ADMIN_NAV: { to: string; label: string; icon: string; perm?: string[] }[] = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: '▤' },
-  { to: '/admin/employees', label: 'Employees', icon: '☺' },
-  { to: '/admin/centers', label: 'Centers', icon: '⌂' },
-  { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓' },
-  { to: '/admin/eod', label: 'End of Day', icon: '◨' },
-  { to: '/admin/reports', label: 'Reports', icon: '▦' },
-  { to: '/admin/masters', label: 'Masters', icon: '⚙' },
+  { to: '/admin/employees', label: 'Employees', icon: '☺', perm: ['employee.manage'] },
+  { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
+  { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
+  { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
+  { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
+  { to: '/admin/roles', label: 'Roles', icon: '◈', perm: ['role.manage'] },
+  { to: '/admin/masters', label: 'Masters', icon: '⚙', perm: ['master.manage'] },
 ];
 
 export function AdminLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
+  const nav = ADMIN_NAV.filter((item) => !item.perm || item.perm.some((p) => can(p)));
 
   return (
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <Logo light />
         <nav className="side-nav">
-          {ADMIN_NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

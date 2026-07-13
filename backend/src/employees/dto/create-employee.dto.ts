@@ -9,4 +9,5 @@ export class CreateEmployeeDto {
   @IsString() @MinLength(8) @MaxLength(100) password!: string;
   @IsIn(ROLES) role!: (typeof ROLES)[number];
   @IsOptional() @IsUUID() branchId?: string;
+  @IsOptional() @IsUUID() accessRoleId?: string;
 }

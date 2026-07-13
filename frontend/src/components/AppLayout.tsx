@@ -7,30 +7,33 @@ interface NavItem {
   to: string;
   label: string;
   icon: string;
+  perm?: string[];
 }
 
-/** Employee (Field Officer) portal shell. Nav is task-oriented, not a clone. */
+/** Employee (Field Officer) portal shell. Nav is task-oriented, not a clone.
+ *  `perm`: item shows if the user holds ANY of these keys (undefined = always). */
 const EMPLOYEE_NAV: NavItem[] = [
   { to: '/app', label: 'Dashboard', icon: '▤' },
-  { to: '/app/clients', label: 'Members', icon: '☺' },
-  { to: '/app/enroll', label: 'Enroll Member', icon: '＋' },
-  { to: '/app/loans', label: 'Loans', icon: '₹' },
-  { to: '/app/collections', label: 'Collections', icon: '✓' },
-  { to: '/app/reports', label: 'Reports', icon: '▦' },
+  { to: '/app/clients', label: 'Members', icon: '☺', perm: ['member.view'] },
+  { to: '/app/enroll', label: 'Enroll Member', icon: '＋', perm: ['member.create'] },
+  { to: '/app/loans', label: 'Loans', icon: '₹', perm: ['loan.apply', 'loan.view'] },
+  { to: '/app/collections', label: 'Collections', icon: '✓', perm: ['collection.view'] },
+  { to: '/app/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
+  const nav = EMPLOYEE_NAV.filter((item) => !item.perm || item.perm.some((p) => can(p)));
 
   return (
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <Logo light />
         <nav className="side-nav">
-          {EMPLOYEE_NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

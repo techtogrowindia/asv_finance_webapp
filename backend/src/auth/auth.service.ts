@@ -15,6 +15,7 @@ interface LoginLookupRow {
   code: string;
   status: string;
   password_hash: string;
+  permissions: string[] | null;
 }
 
 const PORTAL_ROLES: Record<'employee' | 'admin', Role[]> = {
@@ -53,6 +54,7 @@ export class AuthService {
       role: emp.role,
       name: emp.name,
       code: emp.code,
+      permissions: emp.permissions ?? [],
     };
 
     const [accessToken, refreshToken] = await Promise.all([

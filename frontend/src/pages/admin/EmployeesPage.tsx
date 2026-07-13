@@ -12,6 +12,7 @@ import {
   resetEmployeePassword,
   updateEmployee,
 } from '../../api/employeesAdmin';
+import { RoleLite, listAssignableRoles } from '../../api/rolesAdmin';
 
 const ROLE_LABEL: Record<EmployeeRole, string> = { FDO: 'Field Officer', BM: 'Branch Manager', HO: 'Head Office' };
 
@@ -21,6 +22,7 @@ export function EmployeesPage() {
 
   const [rows, setRows] = useState<EmployeeRow[] | null>(null);
   const [branches, setBranches] = useState<BranchLite[]>([]);
+  const [roles, setRoles] = useState<RoleLite[]>([]);
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
@@ -39,6 +41,7 @@ export function EmployeesPage() {
   }, [q]);
   useEffect(() => {
     listAdminBranches().then(setBranches).catch(() => {});
+    listAssignableRoles().then(setRoles).catch(() => {});
   }, []);
 
   async function onToggleStatus(row: EmployeeRow) {
@@ -80,6 +83,7 @@ export function EmployeesPage() {
         <EmployeeForm
           initial={editing}
           branches={branches}
+          roles={roles}
           isBM={isBM}
           onCancel={() => { setAdding(false); setEditing(null); }}
           onSaved={() => { setAdding(false); setEditing(null); refresh(); }}
@@ -94,7 +98,7 @@ export function EmployeesPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Code</th><th>Name</th><th>Login</th><th>Role</th><th>Branch</th>
+              <th>Code</th><th>Name</th><th>Login</th><th>Access Level</th><th>Role</th><th>Branch</th>
               <th>Centers</th><th>Status</th><th></th>
             </tr>
           </thead>
@@ -105,6 +109,7 @@ export function EmployeesPage() {
                 <td>{e.name}</td>
                 <td className="mono">{e.login}</td>
                 <td>{ROLE_LABEL[e.role]}</td>
+                <td>{e.roleName ?? <span style={{ color: 'var(--ink-500)' }}>—</span>}</td>
                 <td>{e.branchName ?? <span style={{ color: 'var(--ink-500)' }}>Tenant-wide</span>}</td>
                 <td>{e.role === 'FDO' ? e.centerCount : '—'}</td>
                 <td><span className={`badge ${e.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{e.status}</span></td>
@@ -124,7 +129,7 @@ export function EmployeesPage() {
               </tr>
             ))}
             {rows && rows.length === 0 && (
-              <tr><td colSpan={8} className="empty">No employees yet. Click “Add Employee”.</td></tr>
+              <tr><td colSpan={9} className="empty">No employees yet. Click “Add Employee”.</td></tr>
             )}
           </tbody>
         </table>
@@ -136,12 +141,14 @@ export function EmployeesPage() {
 function EmployeeForm({
   initial,
   branches,
+  roles,
   isBM,
   onCancel,
   onSaved,
 }: {
   initial: EmployeeRow | null;
   branches: BranchLite[];
+  roles: RoleLite[];
   isBM: boolean;
   onCancel: () => void;
   onSaved: () => void;
@@ -153,6 +160,7 @@ function EmployeeForm({
     password: '',
     role: initial?.role ?? ('FDO' as EmployeeRole),
     branchId: initial?.branchId ?? '',
+    accessRoleId: initial?.accessRoleId ?? '',
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -161,7 +169,11 @@ function EmployeeForm({
   async function save() {
     setError('');
     if (form.role !== 'HO' && !form.branchId && !isBM) {
-      setError('Select a branch for this role');
+      setError('Select a branch for this access level');
+      return;
+    }
+    if (!form.accessRoleId) {
+      setError('Select a role');
       return;
     }
     if (!initial && form.password.length < 8) {
@@ -177,6 +189,7 @@ function EmployeeForm({
           login: form.login.trim(),
           role: isBM ? undefined : form.role,
           branchId: isBM ? undefined : form.branchId || undefined,
+          accessRoleId: form.accessRoleId,
         });
       } else {
         const body: CreateEmployeeBody = {
@@ -186,6 +199,7 @@ function EmployeeForm({
           password: form.password,
           role: isBM ? 'FDO' : form.role,
           branchId: form.branchId || undefined,
+          accessRoleId: form.accessRoleId,
         };
         await createEmployee(body);
       }
@@ -211,7 +225,7 @@ function EmployeeForm({
           </Field>
         )}
         {!isBM && (
-          <Field label="Role *">
+          <Field label="Access Level *">
             <select className="input" value={form.role} onChange={(e) => set('role', e.target.value)}>
               <option value="FDO">Field Officer</option>
               <option value="BM">Branch Manager</option>
@@ -219,6 +233,12 @@ function EmployeeForm({
             </select>
           </Field>
         )}
+        <Field label="Role *">
+          <select className="input" value={form.accessRoleId} onChange={(e) => set('accessRoleId', e.target.value)}>
+            <option value="">Select role</option>
+            {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+        </Field>
         {!isBM && form.role !== 'HO' && (
           <Field label="Branch *">
             <select className="input" value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
@@ -227,6 +247,10 @@ function EmployeeForm({
             </select>
           </Field>
         )}
+      </div>
+      <div className="hint">
+        <strong>Access Level</strong> controls what data this person sees (their centers / branch / company).
+        <strong> Role</strong> controls which actions they may perform — manage these on the Roles page.
       </div>
       <div className="hint">
         {initial ? 'Leave password unchanged — use “Reset Password” in the table to set a new one.' : 'The employee signs in with this login and password.'}

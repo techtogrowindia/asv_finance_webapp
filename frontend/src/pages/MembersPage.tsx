@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
 import { CenterLite, listCenters, listMembers, MemberListItem } from '../api/members';
 
 export function MembersPage() {
   const navigate = useNavigate();
+  const { can } = useAuth();
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [q, setQ] = useState('');
@@ -50,9 +52,11 @@ export function MembersPage() {
               </option>
             ))}
           </select>
-          <button className="btn btn-primary" onClick={() => navigate('/app/enroll')}>
-            + Enroll
-          </button>
+          {can('member.create') && (
+            <button className="btn btn-primary" onClick={() => navigate('/app/enroll')}>
+              + Enroll
+            </button>
+          )}
         </div>
       </div>
 
