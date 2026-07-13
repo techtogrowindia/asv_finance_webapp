@@ -235,8 +235,10 @@ a { color: var(--brand-700); text-decoration: none; }
 
 /* ---- Toolbar (title row + actions) ---- */
 .toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-.toolbar-actions { display: flex; gap: 10px; align-items: center; }
+.toolbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .search { min-width: 240px; }
+/* Shared wrapping action-button row (Edit/Delete/etc.) — replaces ad-hoc inline flex styles. */
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .select { padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 15px; background: #fff; }
 .select:focus, .search:focus { outline: none; border-color: var(--brand-500); box-shadow: 0 0 0 3px var(--brand-050); }
 
@@ -271,12 +273,13 @@ table.data tbody tr:hover { background: #f8faf9; }
 .badge.active { background: #e3f5ee; color: #157a5b; }
 .badge.pending { background: #fdf3d8; color: #9a7208; }
 .badge.inactive, .badge.closed { background: #eef1f3; color: #64748b; }
+.badge.rejected { background: var(--danger-bg); color: var(--danger); }
 
 /* ---- Forms ---- */
 .form-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 24px; max-width: 900px; }
 .form-section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--brand-700); margin: 6px 0 16px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 20px; }
-.form-actions { display: flex; gap: 12px; margin-top: 20px; }
+.form-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
 .hint { font-size: 12px; color: var(--ink-500); margin-top: -8px; margin-bottom: 14px; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-500); font-size: 14px; margin-bottom: 12px; cursor: pointer; background: none; border: none; }
 .back-link:hover { color: var(--brand-700); }
@@ -349,6 +352,17 @@ table.data tbody tr:hover { background: #f8faf9; }
   /* On small screens the topbar name block can hide to save room. */
   .topbar { padding: 0 14px; }
   .topbar .who > div { display: none; }
+}
+
+/* Small phones: tables/toolbars get tighter so they fit without clipping.
+   (.table-wrap already scrolls horizontally — this just reduces how much
+   scrolling is needed and stops toolbars/search boxes overflowing.) */
+@media (max-width: 480px) {
+  .content { padding: 16px 12px; }
+  table.data { font-size: 13px; }
+  table.data th, table.data td { padding: 10px 12px; }
+  .search { min-width: 0; width: 100%; }
+  .form-card { padding: 16px; }
 }
 
 /* ---- Print (reports) ---- */

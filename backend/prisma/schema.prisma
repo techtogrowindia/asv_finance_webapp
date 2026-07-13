@@ -37,6 +37,14 @@ enum CenterStatus {
   INACTIVE
 }
 
+// Per-document KYC review state — an uploaded photo isn't trusted until a
+// BM/HO explicitly approves it (see kyc-status.util.ts / member.verify).
+enum DocumentReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LoanApplicationStatus {
   PENDING
   APPROVED
@@ -385,17 +393,23 @@ model DocumentType {
   @@map("document_type")
 }
 
-// An uploaded KYC document image for a client (or their nominee).
+// An uploaded KYC document image for a client (or their nominee). Every upload
+// starts PENDING review; a BM/HO must explicitly approve it (member.verify)
+// before it counts toward the client's KYC-active gate on loan disbursement.
 model KycDocument {
-  id             String        @id @default(uuid()) @db.Uuid
-  tenantId       String        @map("tenant_id") @db.Uuid
-  clientId       String        @map("client_id") @db.Uuid
-  documentTypeId String        @map("document_type_id") @db.Uuid
-  party          DocumentParty @default(CLIENT)
-  filePath       String?       @map("file_path")
-  mimeType       String?       @map("mime_type")
-  originalName   String?       @map("original_name")
-  uploadedAt     DateTime      @default(now()) @map("uploaded_at")
+  id              String               @id @default(uuid()) @db.Uuid
+  tenantId        String               @map("tenant_id") @db.Uuid
+  clientId        String               @map("client_id") @db.Uuid
+  documentTypeId  String               @map("document_type_id") @db.Uuid
+  party           DocumentParty        @default(CLIENT)
+  filePath        String?              @map("file_path")
+  mimeType        String?              @map("mime_type")
+  originalName    String?              @map("original_name")
+  uploadedAt      DateTime             @default(now()) @map("uploaded_at")
+  status          DocumentReviewStatus @default(PENDING)
+  reviewedBy      String?              @map("reviewed_by") @db.Uuid
+  reviewedAt      DateTime?            @map("reviewed_at")
+  rejectionReason String?              @map("rejection_reason")
 
   tenant       Tenant       @relation(fields: [tenantId], references: [id])
   client       Client       @relation(fields: [clientId], references: [id])

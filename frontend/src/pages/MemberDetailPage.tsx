@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getMember, KycNumberInfo, MemberDetail } from '../api/members';
 import { ExistingLoan, listExistingLoans } from '../api/loans';
+import { useAuth } from '../auth/AuthContext';
 import { KycNumbersSection } from '../components/KycNumbersSection';
 import { KycDocumentGrid } from '../components/KycDocumentGrid';
 
@@ -12,6 +13,8 @@ const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') 
 export function MemberDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const base = user?.role === 'FDO' ? '/app' : '/admin';
   const [m, setM] = useState<MemberDetail | null>(null);
   const [loans, setLoans] = useState<ExistingLoan[] | null>(null);
   const [error, setError] = useState('');
@@ -27,7 +30,7 @@ export function MemberDetailPage() {
 
   return (
     <>
-      <button className="back-link" onClick={() => navigate('/app/clients')}>
+      <button className="back-link" onClick={() => navigate(user?.role === 'FDO' ? '/app/clients' : '/admin/kyc-verification')}>
         ← Back to members
       </button>
       <div className="toolbar">
@@ -143,7 +146,7 @@ export function MemberDetailPage() {
                       <td>{inr(String(l.priBalance))}</td>
                       <td>{inr(String(l.intBalance))}</td>
                       <td>
-                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/app/loans/${l.id}/ledger`)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/ledger`)}>
                           View Ledger
                         </button>
                       </td>

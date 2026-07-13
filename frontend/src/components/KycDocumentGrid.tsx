@@ -4,10 +4,15 @@ import {
   deleteDocument,
   fetchDocumentBlobUrl,
   getChecklist,
+  reviewDocument,
   uploadDocument,
 } from '../api/documents';
+import { useAuth } from '../auth/AuthContext';
 import { useConfirm } from './ConfirmProvider';
 import { ImagePreviewModal } from './ImagePreviewModal';
+
+const STATUS_LABEL: Record<string, string> = { PENDING: 'Pending review', APPROVED: 'Approved', REJECTED: 'Rejected' };
+const STATUS_CLASS: Record<string, string> = { PENDING: 'pending', APPROVED: 'active', REJECTED: 'rejected' };
 
 const key = (i: Pick<DocumentChecklistItem, 'documentTypeId' | 'party'>) => `${i.documentTypeId}:${i.party}`;
 
@@ -20,6 +25,8 @@ const key = (i: Pick<DocumentChecklistItem, 'documentTypeId' | 'party'>) => `${i
  */
 export function KycDocumentGrid({ clientId, party }: { clientId: string; party?: 'CLIENT' | 'NOMINEE' }) {
   const confirm = useConfirm();
+  const { can } = useAuth();
+  const canReview = can('member.verify');
   const [allItems, setAllItems] = useState<DocumentChecklistItem[] | null>(null);
   const items = allItems ? (party ? allItems.filter((i) => i.party === party) : allItems) : null;
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -102,6 +109,28 @@ export function KycDocumentGrid({ clientId, party }: { clientId: string; party?:
     }
   }
 
+  async function onReview(item: DocumentChecklistItem, decision: 'APPROVE' | 'REJECT') {
+    if (!item.documentId) return;
+    if (decision === 'REJECT') {
+      const ok = await confirm({
+        title: 'Reject document?',
+        message: `Mark "${item.name}" as rejected? The member will drop out of KYC-active status until a valid photo is re-uploaded and approved.`,
+        confirmLabel: 'Reject',
+        danger: true,
+      });
+      if (!ok) return;
+    }
+    setBusyKey(key(item));
+    try {
+      await reviewDocument(item.documentId, decision);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Review failed');
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   if (error) return <div className="alert-error">{error}</div>;
   if (!items) return <div className="empty">Loading…</div>;
   if (items.length === 0) return <div className="empty">No document types require a photo.</div>;
@@ -118,6 +147,11 @@ export function KycDocumentGrid({ clientId, party }: { clientId: string; party?:
               <div className="doc-card-title">
                 {item.name}
                 {item.isMandatory && <span className="req">•</span>}
+                {item.documentId && item.status && (
+                  <span className={`badge ${STATUS_CLASS[item.status]}`} style={{ marginLeft: 'auto' }}>
+                    {STATUS_LABEL[item.status]}
+                  </span>
+                )}
               </div>
               <div className="doc-card-image">
                 {url ? (
@@ -133,6 +167,23 @@ export function KycDocumentGrid({ clientId, party }: { clientId: string; party?:
                   <div className="doc-card-empty">Not uploaded</div>
                 )}
               </div>
+              {item.documentId && item.status === 'REJECTED' && item.rejectionReason && (
+                <div className="doc-card-empty" style={{ padding: '0 12px', color: 'var(--danger)' }}>
+                  Reason: {item.rejectionReason}
+                </div>
+              )}
+              {canReview && item.documentId && item.status !== 'APPROVED' && (
+                <div className="doc-card-actions">
+                  <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => onReview(item, 'APPROVE')}>
+                    {busy ? <span className="spinner" /> : 'Approve'}
+                  </button>
+                  {item.status !== 'REJECTED' && (
+                    <button className="btn btn-danger btn-sm" disabled={busy} onClick={() => onReview(item, 'REJECT')}>
+                      Reject
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="doc-card-actions">
                 {item.documentId ? (
                   <>

@@ -64,3 +64,25 @@ export const resetEmployeePassword = (id: string, password: string) =>
     method: 'POST',
     body: JSON.stringify({ password }),
   });
+
+export interface EmployeeCenterOption {
+  id: string;
+  code: string;
+  name: string;
+  assigned: boolean;
+}
+
+export const listEmployeeCenters = (employeeId: string) =>
+  api<EmployeeCenterOption[]>(`/employees/${employeeId}/centers`);
+
+export const updateEmployeeCenters = (employeeId: string, centerIds: string[]) =>
+  api<EmployeeCenterOption[]>(`/employees/${employeeId}/centers`, {
+    method: 'PATCH',
+    body: JSON.stringify({ centerIds }),
+  });
+
+export const reassignEmployeeCenters = (employeeId: string, toEmployeeId: string) =>
+  api<{ movedCount: number }>(`/employees/${employeeId}/reassign-centers`, {
+    method: 'POST',
+    body: JSON.stringify({ toEmployeeId }),
+  });

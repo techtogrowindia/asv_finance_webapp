@@ -153,13 +153,18 @@ export class LoansService {
       const application = await tx.loanApplication.findFirst({
         where: { id: applicationId, client: clientCenterScope(user) },
         include: {
-          client: { select: { id: true, clientCode: true, center: { select: { branchId: true } } } },
+          client: { select: { id: true, clientCode: true, status: true, center: { select: { branchId: true } } } },
           product: { include: { frequency: true } },
         },
       });
       if (!application) throw new NotFoundException('Loan application not found');
       if (application.status !== 'PENDING') {
         throw new BadRequestException(`Application is already ${application.status}`);
+      }
+      if (application.client.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Member is not KYC-active yet — approve all mandatory documents before disbursing',
+        );
       }
 
       const branch = await tx.branch.findUnique({ where: { id: application.client.center.branchId } });
@@ -302,10 +307,16 @@ export class LoansService {
   /** Loan-balance / arrear / missing-document warnings, matching the reference's yellow list. */
   private async computeWarnings(
     tx: Prisma.TransactionClient,
-    client: { id: string; coApplicant: unknown },
+    client: { id: string; status: string; coApplicant: unknown },
     tenantId: string,
   ): Promise<string[]> {
     const warnings: string[] = [];
+
+    // Advisory only — disbursement is the hard gate (see disburse()); this just
+    // surfaces it early so the FDO/BM see it before submitting.
+    if (client.status !== 'ACTIVE') {
+      warnings.push('Member KYC Not Yet Fully Approved — Required Before Disbursement');
+    }
 
     const openLoan = await tx.loan.findFirst({ where: { clientId: client.id, loanType: 'OPEN' } });
     if (openLoan) {

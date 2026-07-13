@@ -6,6 +6,8 @@ import { AuthUser } from '../common/types/auth-user';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateCentersDto } from './dto/update-centers.dto';
+import { ReassignCentersDto } from './dto/reassign-centers.dto';
 
 @Injectable()
 export class EmployeesService {
@@ -164,6 +166,80 @@ export class EmployeesService {
       await tx.employee.update({ where: { id }, data: { passwordHash } });
       return { reset: true };
     });
+  }
+
+  /** All centers in this FDO's branch, flagged whether currently assigned to them. */
+  async centersFor(user: AuthUser, employeeId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const fdo = await this.findManagedFdo(tx, user, employeeId);
+      const centers = await tx.center.findMany({
+        where: { branchId: fdo.branchId ?? undefined },
+        orderBy: { code: 'asc' },
+      });
+      return centers.map((c) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        assigned: c.fdoId === employeeId,
+      }));
+    });
+  }
+
+  /** Set this FDO's managed centers to exactly the given set (add + remove in one action). */
+  async updateCenters(user: AuthUser, employeeId: string, dto: UpdateCentersDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const fdo = await this.findManagedFdo(tx, user, employeeId);
+
+      if (dto.centerIds.length > 0) {
+        const targets = await tx.center.findMany({ where: { id: { in: dto.centerIds } } });
+        if (targets.length !== dto.centerIds.length) throw new BadRequestException('One or more centers not found');
+        const wrongBranch = targets.some((c) => c.branchId !== fdo.branchId);
+        if (wrongBranch) throw new ForbiddenException('All centers must be in this field officer\'s branch');
+      }
+
+      await tx.center.updateMany({
+        where: { fdoId: employeeId, id: { notIn: dto.centerIds } },
+        data: { fdoId: null },
+      });
+      if (dto.centerIds.length > 0) {
+        await tx.center.updateMany({
+          where: { id: { in: dto.centerIds } },
+          data: { fdoId: employeeId },
+        });
+      }
+      return this.centersFor(user, employeeId);
+    });
+  }
+
+  /** Bulk handover: move every center this FDO manages to a different FDO. */
+  async reassignCenters(user: AuthUser, employeeId: string, dto: ReassignCentersDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const fromFdo = await this.findManagedFdo(tx, user, employeeId);
+      if (dto.toEmployeeId === employeeId) throw new BadRequestException('Choose a different field officer');
+
+      const toFdo = await tx.employee.findFirst({ where: { id: dto.toEmployeeId } });
+      if (!toFdo) throw new BadRequestException('Target field officer not found');
+      if (toFdo.role !== 'FDO') throw new BadRequestException('Target employee is not a field officer');
+      if (toFdo.branchId !== fromFdo.branchId) {
+        throw new ForbiddenException('Target field officer must be in the same branch');
+      }
+
+      const { count } = await tx.center.updateMany({
+        where: { fdoId: employeeId },
+        data: { fdoId: dto.toEmployeeId },
+      });
+      return { movedCount: count };
+    });
+  }
+
+  /** Look up an employee this caller may manage centers for — must be an FDO, and (for BM) in their own branch. */
+  private async findManagedFdo(tx: Prisma.TransactionClient, user: AuthUser, employeeId: string) {
+    const fdo = await tx.employee.findFirst({
+      where: { id: employeeId, ...(user.role === 'BM' && user.branchId ? { branchId: user.branchId } : {}) },
+    });
+    if (!fdo) throw new NotFoundException('Employee not found');
+    if (fdo.role !== 'FDO') throw new BadRequestException('Only field officers manage centers');
+    return fdo;
   }
 
   /** Validate an assigned access role belongs to the tenant (RLS already scopes it). */

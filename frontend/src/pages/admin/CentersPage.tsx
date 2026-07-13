@@ -90,7 +90,7 @@ export function CentersPage() {
                 <td>{c.clientCount}</td>
                 <td><span className={`badge ${c.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{c.status}</span></td>
                 <td>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="row-actions">
                     <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(c); setAdding(false); }}>Edit</button>
                     <button
                       className="btn btn-ghost"

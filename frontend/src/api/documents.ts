@@ -1,6 +1,8 @@
 import { api } from '../lib/api';
 import { tokenStore } from '../lib/api';
 
+export type DocumentReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface DocumentChecklistItem {
   documentTypeId: string;
   name: string;
@@ -9,6 +11,9 @@ export interface DocumentChecklistItem {
   isMandatory: boolean;
   documentId: string | null;
   uploadedAt: string | null;
+  status: DocumentReviewStatus | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
 }
 
 export const getChecklist = (clientId: string) =>
@@ -16,6 +21,12 @@ export const getChecklist = (clientId: string) =>
 
 export const deleteDocument = (documentId: string) =>
   api<{ deleted: boolean }>(`/documents/${documentId}`, { method: 'DELETE' });
+
+export const reviewDocument = (documentId: string, decision: 'APPROVE' | 'REJECT', reason?: string) =>
+  api<{ documentId: string; status: DocumentReviewStatus; reviewedAt: string }>(
+    `/documents/${documentId}/review`,
+    { method: 'POST', body: JSON.stringify({ decision, reason }) },
+  );
 
 export async function uploadDocument(
   clientId: string,

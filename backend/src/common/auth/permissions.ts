@@ -20,6 +20,8 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'member.create', label: 'Enroll member' },
       { key: 'member.edit', label: 'Edit member & KYC' },
       { key: 'member.delete', label: 'Delete member / documents' },
+      { key: 'member.verify', label: 'Approve/reject KYC documents' },
+      { key: 'member.transfer', label: 'Transfer member to another center' },
     ],
   },
   {

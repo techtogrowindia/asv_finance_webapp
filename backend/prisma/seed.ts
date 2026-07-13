@@ -223,6 +223,18 @@ async function main() {
     data: { accessRoleId: adminRole.id },
   });
 
+  // Backfill for the KYC-approval feature: every KycDocument uploaded before
+  // per-document review existed (this feature ships 2026-07-15) was implicitly
+  // trusted, so mark them APPROVED — otherwise every already-active client's
+  // photos would appear as an unreviewed backlog. Bounded by uploaded_at (not
+  // just "reviewed_at IS NULL") so re-running seed later can NEVER sweep up a
+  // genuinely new PENDING upload made after rollout — the upload path always
+  // sets status:'PENDING' explicitly, and this cutoff must never touch that.
+  await prisma.$executeRaw`
+    UPDATE kyc_document SET status = 'APPROVED', reviewed_at = uploaded_at
+    WHERE reviewed_at IS NULL AND uploaded_at < '2026-07-15 00:00:00+00'
+  `;
+
   // eslint-disable-next-line no-console
   console.log('Seeded tenant ASV Finance, branch 005-NATHAM, logins: kannan (FDO), bm-natham (BM).');
 }

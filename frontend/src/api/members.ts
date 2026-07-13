@@ -115,6 +115,16 @@ export const listMembers = (params: { centerId?: string; q?: string }) => {
 
 export const getMember = (id: string) => api<MemberDetail>(`/clients/${id}`);
 
+/** Clients whose KYC isn't fully approved yet — the review queue (BM/HO, member.verify). */
+export const getKycPending = () => api<MemberListItem[]>('/clients/kyc-pending');
+
+/** Move a client to a different center/group (BM/HO only, member.transfer). */
+export const transferMember = (id: string, centerId: string, groupNo: number) =>
+  api<MemberDetail>(`/clients/${id}/transfer`, {
+    method: 'POST',
+    body: JSON.stringify({ centerId, groupNo }),
+  });
+
 export const createMember = (body: CreateMemberBody) =>
   api<MemberDetail>('/clients', { method: 'POST', body: JSON.stringify(body) });
 

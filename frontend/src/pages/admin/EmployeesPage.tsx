@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { useAuth } from '../../auth/AuthContext';
+import { useConfirm } from '../../components/ConfirmProvider';
 import {
   BranchLite,
   CreateEmployeeBody,
+  EmployeeCenterOption,
   EmployeeRole,
   EmployeeRow,
   createEmployee,
   listAdminBranches,
+  listEmployeeCenters,
   listEmployees,
+  reassignEmployeeCenters,
   resetEmployeePassword,
   updateEmployee,
+  updateEmployeeCenters,
 } from '../../api/employeesAdmin';
 import { RoleLite, listAssignableRoles } from '../../api/rolesAdmin';
 
@@ -28,6 +33,7 @@ export function EmployeesPage() {
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState<EmployeeRow | null>(null);
+  const [managingCenters, setManagingCenters] = useState<EmployeeRow | null>(null);
   const [error, setError] = useState('');
 
   function refresh() {
@@ -94,6 +100,15 @@ export function EmployeesPage() {
         <ResetPasswordForm employee={resetting} onCancel={() => setResetting(null)} onSaved={() => setResetting(null)} />
       )}
 
+      {managingCenters && (
+        <EmployeeCentersForm
+          employee={managingCenters}
+          otherFdos={(rows ?? []).filter((r) => r.role === 'FDO' && r.id !== managingCenters.id)}
+          onClose={() => setManagingCenters(null)}
+          onChanged={refresh}
+        />
+      )}
+
       <div className="table-wrap">
         <table className="data">
           <thead>
@@ -117,8 +132,11 @@ export function EmployeesPage() {
                   {e.id === user?.id ? (
                     <span style={{ color: 'var(--ink-500)', fontSize: 13 }}>This is you</span>
                   ) : (
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="row-actions">
                       <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(e); setAdding(false); }}>Edit</button>
+                      {e.role === 'FDO' && (
+                        <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setManagingCenters(e)}>Centers</button>
+                      )}
                       <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => setResetting(e)}>Reset Password</button>
                       <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => onToggleStatus(e)}>
                         {e.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
@@ -296,6 +314,132 @@ function ResetPasswordForm({ employee, onCancel, onSaved }: { employee: Employee
         <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? <span className="spinner" /> : 'Set password'}</button>
         <button className="btn btn-ghost" onClick={onCancel}>Cancel</button>
       </div>
+    </div>
+  );
+}
+
+function EmployeeCentersForm({
+  employee,
+  otherFdos,
+  onClose,
+  onChanged,
+}: {
+  employee: EmployeeRow;
+  otherFdos: EmployeeRow[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const confirm = useConfirm();
+  const [centers, setCenters] = useState<EmployeeCenterOption[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [handoverTo, setHandoverTo] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    listEmployeeCenters(employee.id)
+      .then((list) => {
+        setCenters(list);
+        setSelected(new Set(list.filter((c) => c.assigned).map((c) => c.id)));
+      })
+      .catch((e) => setError(e.message));
+  }, [employee.id]);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  async function save() {
+    setError('');
+    setBusy(true);
+    try {
+      const updated = await updateEmployeeCenters(employee.id, [...selected]);
+      setCenters(updated);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handover() {
+    if (!handoverTo) return;
+    const target = otherFdos.find((f) => f.id === handoverTo);
+    const ok = await confirm({
+      title: 'Transfer all centers?',
+      message: `Move every center ${employee.name} manages to ${target?.name ?? 'the selected officer'}? This cannot be undone from here.`,
+      confirmLabel: 'Transfer',
+    });
+    if (!ok) return;
+    setError('');
+    setBusy(true);
+    try {
+      await reassignEmployeeCenters(employee.id, handoverTo);
+      onChanged();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Transfer failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="form-card" style={{ maxWidth: 'none', marginBottom: 18 }}>
+      <div className="form-section-title">Centers managed by {employee.name}</div>
+      {error && <div className="alert-error">{error}</div>}
+
+      {!centers ? (
+        <div className="empty">Loading…</div>
+      ) : (
+        <>
+          <div className="perm-groups">
+            <div className="perm-group">
+              <div className="perm-group-head" style={{ cursor: 'default' }}>
+                <span>Assigned centers</span>
+                <span className="perm-count">{selected.size}/{centers.length}</span>
+              </div>
+              <div className="perm-items">
+                {centers.map((c) => (
+                  <label className="perm-item" key={c.id}>
+                    <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
+                    <span>{c.code} — {c.name}</span>
+                  </label>
+                ))}
+                {centers.length === 0 && <div className="empty">No centers in this branch yet.</div>}
+              </div>
+            </div>
+          </div>
+
+          <div className="form-actions">
+            <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? <span className="spinner" /> : 'Save centers'}</button>
+            <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          </div>
+
+          {otherFdos.length > 0 && (
+            <>
+              <div className="form-section-title" style={{ marginTop: 22 }}>Transfer all centers to another officer</div>
+              <div className="form-grid">
+                <Field label="Field officer">
+                  <select className="input" value={handoverTo} onChange={(e) => setHandoverTo(e.target.value)}>
+                    <option value="">Select officer</option>
+                    {otherFdos.map((f) => <option key={f.id} value={f.id}>{f.code} - {f.name}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-danger" disabled={busy || !handoverTo} onClick={handover}>
+                  {busy ? <span className="spinner" /> : 'Transfer all centers'}
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

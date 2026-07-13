@@ -9,6 +9,8 @@ const ADMIN_NAV: { to: string; label: string; icon: string; perm?: string[] }[] 
   { to: '/admin/employees', label: 'Employees', icon: '☺', perm: ['employee.manage'] },
   { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
+  { to: '/admin/kyc-verification', label: 'KYC Verification', icon: '⚿', perm: ['member.verify'] },
+  { to: '/admin/client-transfer', label: 'Client Transfer', icon: '⇄', perm: ['member.transfer'] },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
   { to: '/admin/roles', label: 'Roles', icon: '◈', perm: ['role.manage'] },

@@ -7,6 +7,8 @@ import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdateCentersDto } from './dto/update-centers.dto';
+import { ReassignCentersDto } from './dto/reassign-centers.dto';
 
 @Controller('employees')
 export class EmployeesController {
@@ -63,5 +65,34 @@ export class EmployeesController {
     @Body() dto: ResetPasswordDto,
   ) {
     return this.employees.resetPassword(user, id, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
+  @Get(':id/centers')
+  centersFor(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.employees.centersFor(user, id);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
+  @Patch(':id/centers')
+  updateCenters(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCentersDto,
+  ) {
+    return this.employees.updateCenters(user, id, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('employee.manage')
+  @Post(':id/reassign-centers')
+  reassignCenters(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReassignCentersDto,
+  ) {
+    return this.employees.reassignCenters(user, id, dto);
   }
 }

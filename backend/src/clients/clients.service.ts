@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../common/audit.service';
 import { AuthUser } from '../common/types/auth-user';
 import { centerScope, clientCenterScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { KycNumberEntryDto, UpdateKycNumbersDto } from './dto/kyc-number.dto';
+import { TransferClientDto } from './dto/transfer-client.dto';
 
 const GROUP_CAPACITY = 5;
 
@@ -28,7 +30,10 @@ const FULL_INCLUDE = {
 
 @Injectable()
 export class ClientsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async list(user: AuthUser, opts: { centerId?: string; q?: string }) {
     return this.prisma.withTenant(user, async (tx) => {
@@ -118,7 +123,10 @@ export class ClientsService {
           dateOfJoining: dto.dateOfJoining ? new Date(dto.dateOfJoining) : new Date(),
           requestedProductId: dto.productId,
           requestedPurposeId: dto.purposeId,
-          status: 'ACTIVE',
+          // KYC-active gate: a fresh enrollment has no approved documents yet.
+          // recomputeClientStatus() flips this to ACTIVE once all mandatory
+          // photos are approved (see documents.service.ts).
+          status: 'PENDING',
           ...(dto.coApplicant
             ? {
                 coApplicant: {
@@ -177,6 +185,76 @@ export class ClientsService {
         },
       });
       return this.fetchFull(tx, user, id);
+    });
+  }
+
+  /** Clients in scope whose KYC isn't fully approved yet (the review queue). */
+  async kycPending(user: AuthUser) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const clients = await tx.client.findMany({
+        where: { isActive: true, status: { not: 'ACTIVE' }, ...clientCenterScope(user) },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+          group: { select: { groupNo: true } },
+        },
+      });
+      return clients.map((c) => this.serialize(c));
+    });
+  }
+
+  /**
+   * Move a client to a different center/group (BM/HO only — see the @Roles
+   * gate on the controller route). Both the source client and the destination
+   * center are resolved through the caller's own scope, so a BM is naturally
+   * confined to their own branch while HO can move across branches — no extra
+   * scoping logic needed. clientCode never changes; displayId is derived live
+   * from center/group/memberNo, so it updates for free. Loans/collections/
+   * schedules key off clientId only, so nothing else needs to move.
+   */
+  async transfer(user: AuthUser, clientId: string, dto: TransferClientDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: clientId, ...clientCenterScope(user) },
+      });
+      if (!client) throw new NotFoundException('Member not found');
+
+      const destCenter = await tx.center.findFirst({
+        where: { id: dto.centerId, ...centerScope(user) },
+      });
+      if (!destCenter) throw new ForbiddenException('Destination center not in your scope');
+
+      const destGroup = await tx.groupUnit.findFirst({
+        where: { centerId: destCenter.id, groupNo: dto.groupNo },
+      });
+      if (!destGroup) throw new BadRequestException(`Group ${dto.groupNo} does not exist in this center`);
+
+      const memberCount = await tx.client.count({
+        where: { groupId: destGroup.id, isActive: true },
+      });
+      if (memberCount >= GROUP_CAPACITY) {
+        throw new BadRequestException(`Group ${dto.groupNo} is full (max ${GROUP_CAPACITY} members)`);
+      }
+
+      const before = { centerId: client.centerId, groupId: client.groupId, memberNo: client.memberNo };
+      const newMemberNo = memberCount + 1;
+
+      await tx.client.update({
+        where: { id: clientId },
+        data: { centerId: destCenter.id, groupId: destGroup.id, memberNo: newMemberNo },
+      });
+
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'Client',
+        entityId: clientId,
+        action: 'TRANSFER',
+        employeeId: user.employeeId,
+        before,
+        after: { centerId: destCenter.id, groupId: destGroup.id, memberNo: newMemberNo },
+      });
+
+      return this.fetchFull(tx, user, clientId);
     });
   }
 

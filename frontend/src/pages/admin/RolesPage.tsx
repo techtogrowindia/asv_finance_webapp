@@ -92,7 +92,7 @@ export function RolesPage() {
                   {r.isSystem ? (
                     <span style={{ color: 'var(--ink-500)', fontSize: 13 }}>Read-only</span>
                   ) : (
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="row-actions">
                       <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setEditing(r); setAdding(false); }}>Edit</button>
                       <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => onDelete(r)}>Delete</button>
                     </div>

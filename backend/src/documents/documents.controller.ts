@@ -18,8 +18,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { RequirePermission } from '../common/auth/permissions.decorator';
+import { Roles } from '../common/auth/roles.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { DocumentsService } from './documents.service';
+import { ReviewDocumentDto } from './dto/review-document.dto';
 
 const ALLOWED_MIME = /^image\/(jpeg|png|webp)$/;
 
@@ -87,5 +89,12 @@ export class DocumentFileController {
   @Delete(':id')
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.documents.remove(user, id);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('member.verify')
+  @Post(':id/review')
+  review(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ReviewDocumentDto) {
+    return this.documents.review(user, id, dto.decision === 'APPROVE' ? 'APPROVE' : 'REJECT', dto.reason);
   }
 }
