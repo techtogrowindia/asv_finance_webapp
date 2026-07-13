@@ -4,10 +4,13 @@ import { KycNumberInfo, updateMemberKycNumbers } from '../api/members';
 
 /**
  * Admin-configured ID-number fields (Aadhaar, PAN, ...) for one party (CLIENT
- * or NOMINEE) of a member — always shown as editable fields (no separate
- * view/edit toggle). DocumentType (requiresNumber + appliesTo) is the single
- * source of truth for which fields appear here — matches whatever admin has
- * configured in Masters > Document Types.
+ * or NOMINEE) of a member. All fields are always visible (no click needed to
+ * reveal them); they're read-only until "Edit" is pressed. This matters for
+ * masked types (e.g. Aadhaar): the true value never round-trips to the
+ * browser, so an always-editable field would show blank right after saving,
+ * looking like the data vanished. In read-only mode we display the already
+ * masked value (e.g. "XXXX XXXX 6789") instead of blanking it; only entering
+ * edit mode clears masked fields, ready for a fresh value.
  */
 export function KycNumbersSection({
   clientId,
@@ -23,6 +26,7 @@ export function KycNumbersSection({
   onSaved: (numbers: KycNumberInfo[]) => void;
 }) {
   const [types, setTypes] = useState<DocumentTypeRow[] | null>(null);
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,18 +39,17 @@ export function KycNumbersSection({
 
   const byType = new Map(numbers.map((n) => [n.documentTypeId, n]));
 
-  // Seed the form once the field list and current values are known.
-  useEffect(() => {
-    if (!types) return;
+  function startEdit() {
     const next: Record<string, string> = {};
-    for (const t of types) {
+    for (const t of types ?? []) {
       const existing = byType.get(t.id);
-      // Masked values can't round-trip — leave blank with a hint instead.
+      // Masked values can't round-trip — start blank so typing replaces them.
       next[t.id] = existing && !t.maskValue ? existing.value : '';
     }
     setForm(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [types, numbers]);
+    setError('');
+    setEditing(true);
+  }
 
   async function save() {
     setError('');
@@ -55,6 +58,7 @@ export function KycNumbersSection({
       const entries = (types ?? []).map((t) => ({ documentTypeId: t.id, value: form[t.id] ?? '' }));
       const updated = await updateMemberKycNumbers(clientId, party, entries);
       onSaved(updated.kycNumbers.filter((n) => n.party === party));
+      setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -77,24 +81,38 @@ export function KycNumbersSection({
             <div className="form-grid">
               {types.map((t) => {
                 const existing = byType.get(t.id);
+                const readOnlyValue = existing?.value ?? '';
                 return (
                   <div className="field" key={t.id}>
-                    <label>{t.name}</label>
-                    <input
-                      className="input"
-                      value={form[t.id] ?? ''}
-                      placeholder={t.maskValue && existing ? `Current: ${existing.value} — type to change` : ''}
-                      onChange={(e) => setForm((s) => ({ ...s, [t.id]: e.target.value }))}
-                    />
+                    <label>{t.name}{t.isMandatory && ' *'}</label>
+                    {editing ? (
+                      <input
+                        className="input"
+                        value={form[t.id] ?? ''}
+                        placeholder={t.maskValue && existing ? `Current: ${existing.value} — type to change` : ''}
+                        onChange={(e) => setForm((s) => ({ ...s, [t.id]: e.target.value }))}
+                      />
+                    ) : (
+                      <input className="input" value={readOnlyValue || '—'} disabled readOnly />
+                    )}
                   </div>
                 );
               })}
             </div>
-            <div className="hint">Masked numbers (like Aadhaar) stay hidden after saving; leave blank to keep the existing one.</div>
+            {editing && (
+              <div className="hint">Masked numbers (like Aadhaar) stay hidden after saving; leave blank to keep the existing one.</div>
+            )}
             <div className="form-actions">
-              <button className="btn btn-primary" disabled={busy} onClick={save}>
-                {busy ? <span className="spinner" /> : 'Save'}
-              </button>
+              {editing ? (
+                <>
+                  <button className="btn btn-primary" disabled={busy} onClick={save}>
+                    {busy ? <span className="spinner" /> : 'Save'}
+                  </button>
+                  <button className="btn btn-ghost" disabled={busy} onClick={() => setEditing(false)}>Cancel</button>
+                </>
+              ) : (
+                <button className="btn btn-ghost" onClick={startEdit}>Edit</button>
+              )}
             </div>
           </>
         )}
