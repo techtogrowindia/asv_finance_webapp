@@ -25,6 +25,10 @@ export function SearchableSelect({
   placeholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The arrow always browses the FULL list (to pick something different),
+  // while typing narrows it down — otherwise reopening after a value is
+  // already selected would show just the one already-matching option.
+  const [showAll, setShowAll] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -35,7 +39,7 @@ export function SearchableSelect({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  const filtered = value.trim()
+  const filtered = !showAll && value.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(value.trim().toLowerCase()))
     : options;
 
@@ -52,14 +56,14 @@ export function SearchableSelect({
           className="input"
           value={value}
           placeholder={placeholder}
-          onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+          onChange={(e) => { onChange(e.target.value); setShowAll(false); setOpen(true); }}
           onFocus={() => setOpen(true)}
         />
         <button
           type="button"
           className="combo-arrow"
           aria-label="Show options"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen((v) => { const next = !v; if (next) setShowAll(true); return next; })}
         >
           ▾
         </button>
