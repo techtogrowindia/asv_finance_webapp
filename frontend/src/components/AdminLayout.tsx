@@ -9,6 +9,7 @@ const ADMIN_NAV = [
   { to: '/admin/centers', label: 'Centers', icon: '⌂' },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓' },
   { to: '/admin/eod', label: 'End of Day', icon: '◨' },
+  { to: '/admin/reports', label: 'Reports', icon: '▦' },
   { to: '/admin/masters', label: 'Masters', icon: '⚙' },
 ];
 
