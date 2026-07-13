@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Logo } from './Logo';
@@ -22,11 +22,12 @@ const EMPLOYEE_NAV: NavItem[] = [
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
 
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <Logo light />
         <nav className="side-nav">
           {EMPLOYEE_NAV.map((item) => (
@@ -35,6 +36,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               to={item.to}
               end={item.to === '/app'}
               className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}
+              onClick={() => setMenuOpen(false)}
             >
               <span className="side-ico">{item.icon}</span>
               {item.label}
@@ -44,13 +46,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <div className="side-foot">Field Officer · {user?.code}</div>
       </aside>
 
+      {menuOpen && <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />}
+
       <div className="main">
         <header className="topbar">
-          <div className="who">
-            <span className="avatar">{initials}</span>
-            <div>
-              <div className="who-name">{user?.name}</div>
-              <div className="who-meta">Field Officer · Code {user?.code}</div>
+          <div className="topbar-left">
+            <button className="menu-btn" aria-label="Menu" onClick={() => setMenuOpen((v) => !v)}>☰</button>
+            <div className="who">
+              <span className="avatar">{initials}</span>
+              <div>
+                <div className="who-name">{user?.name}</div>
+                <div className="who-meta">Field Officer · Code {user?.code}</div>
+              </div>
             </div>
           </div>
           <button

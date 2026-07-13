@@ -178,7 +178,15 @@ a { color: var(--brand-700); text-decoration: none; }
   height: 62px; background: var(--surface); border-bottom: 1px solid var(--line);
   display: flex; align-items: center; justify-content: space-between; padding: 0 24px;
 }
-.topbar .who { display: flex; align-items: center; gap: 10px; }
+.topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.topbar .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.menu-btn {
+  display: none; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--ink-700); font-size: 20px; line-height: 1; cursor: pointer; flex: none;
+}
+.menu-btn:hover { background: var(--brand-050); color: var(--brand-700); }
+.sidebar-backdrop { position: fixed; inset: 0; background: rgba(8, 46, 40, .45); z-index: 40; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--brand-050); color: var(--brand-700);
   display: grid; place-items: center; font-weight: 700; }
 .who-name { font-weight: 600; font-size: 14px; }
@@ -314,7 +322,16 @@ table.data tbody tr:hover { background: #f8faf9; }
 
 @media (max-width: 720px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
+  .menu-btn { display: inline-flex; }
+  /* Sidebar becomes an off-canvas drawer, toggled by the hamburger. */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 260px; max-width: 82vw; z-index: 50;
+    transform: translateX(-100%); transition: transform .22s ease; overflow-y: auto;
+  }
+  .sidebar.open { transform: translateX(0); box-shadow: 8px 0 40px rgba(0, 0, 0, .35); }
+  /* On small screens the topbar name block can hide to save room. */
+  .topbar { padding: 0 14px; }
+  .topbar .who > div { display: none; }
 }
 
 /* ---- Print (reports) ---- */
