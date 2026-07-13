@@ -10,8 +10,11 @@ server {
     index index.html;
 
     # SPA history fallback: /login, /admin, /app/* all resolve to index.html.
+    # index.html must NOT be cached — it references content-hashed assets, so a
+    # stale copy would keep loading old JS/CSS and users never get updates.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
     }
 
     # --- API reverse proxy ---
