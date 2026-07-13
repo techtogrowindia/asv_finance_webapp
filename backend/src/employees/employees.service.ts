@@ -172,16 +172,7 @@ export class EmployeesService {
   async centersFor(user: AuthUser, employeeId: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const fdo = await this.findManagedFdo(tx, user, employeeId);
-      const centers = await tx.center.findMany({
-        where: { branchId: fdo.branchId ?? undefined },
-        orderBy: { code: 'asc' },
-      });
-      return centers.map((c) => ({
-        id: c.id,
-        code: c.code,
-        name: c.name,
-        assigned: c.fdoId === employeeId,
-      }));
+      return this.listCentersFor(tx, employeeId, fdo.branchId);
     });
   }
 
@@ -207,8 +198,24 @@ export class EmployeesService {
           data: { fdoId: employeeId },
         });
       }
-      return this.centersFor(user, employeeId);
+      // Read back within the SAME transaction — calling the public centersFor()
+      // here would open a brand-new withTenant transaction that can't see
+      // these still-uncommitted writes (read-committed isolation).
+      return this.listCentersFor(tx, employeeId, fdo.branchId);
     });
+  }
+
+  private async listCentersFor(tx: Prisma.TransactionClient, employeeId: string, branchId: string | null) {
+    const centers = await tx.center.findMany({
+      where: { branchId: branchId ?? undefined },
+      orderBy: { code: 'asc' },
+    });
+    return centers.map((c) => ({
+      id: c.id,
+      code: c.code,
+      name: c.name,
+      assigned: c.fdoId === employeeId,
+    }));
   }
 
   /** Bulk handover: move every center this FDO manages to a different FDO. */
