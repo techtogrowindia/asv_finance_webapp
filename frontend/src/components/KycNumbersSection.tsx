@@ -4,9 +4,10 @@ import { KycNumberInfo, updateMemberKycNumbers } from '../api/members';
 
 /**
  * Admin-configured ID-number fields (Aadhaar, PAN, ...) for one party (CLIENT
- * or NOMINEE) of a member, with an inline Edit form. DocumentType (requiresNumber
- * + appliesTo) is the single source of truth for which fields appear here —
- * matches whatever admin has configured in Masters > Document Types.
+ * or NOMINEE) of a member — always shown as editable fields (no separate
+ * view/edit toggle). DocumentType (requiresNumber + appliesTo) is the single
+ * source of truth for which fields appear here — matches whatever admin has
+ * configured in Masters > Document Types.
  */
 export function KycNumbersSection({
   clientId,
@@ -22,7 +23,6 @@ export function KycNumbersSection({
   onSaved: (numbers: KycNumberInfo[]) => void;
 }) {
   const [types, setTypes] = useState<DocumentTypeRow[] | null>(null);
-  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,17 +35,18 @@ export function KycNumbersSection({
 
   const byType = new Map(numbers.map((n) => [n.documentTypeId, n]));
 
-  function startEdit() {
+  // Seed the form once the field list and current values are known.
+  useEffect(() => {
+    if (!types) return;
     const next: Record<string, string> = {};
-    for (const t of types ?? []) {
+    for (const t of types) {
       const existing = byType.get(t.id);
       // Masked values can't round-trip — leave blank with a hint instead.
       next[t.id] = existing && !t.maskValue ? existing.value : '';
     }
     setForm(next);
-    setError('');
-    setEditing(true);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [types, numbers]);
 
   async function save() {
     setError('');
@@ -54,7 +55,6 @@ export function KycNumbersSection({
       const entries = (types ?? []).map((t) => ({ documentTypeId: t.id, value: form[t.id] ?? '' }));
       const updated = await updateMemberKycNumbers(clientId, party, entries);
       onSaved(updated.kycNumbers.filter((n) => n.party === party));
-      setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -66,20 +66,13 @@ export function KycNumbersSection({
 
   return (
     <div className="panel" style={{ marginTop: 18 }}>
-      <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>{title}</span>
-        {!editing && types && (
-          <button className="btn btn-ghost btn-sm" onClick={startEdit}>
-            {numbers.length ? 'Edit' : 'Add numbers'}
-          </button>
-        )}
-      </div>
+      <div className="panel-head">{title}</div>
       <div className="panel-body">
         {error && <div className="alert-error">{error}</div>}
 
         {!types ? (
           <div className="empty">Loading…</div>
-        ) : editing ? (
+        ) : (
           <>
             <div className="form-grid">
               {types.map((t) => {
@@ -102,29 +95,10 @@ export function KycNumbersSection({
               <button className="btn btn-primary" disabled={busy} onClick={save}>
                 {busy ? <span className="spinner" /> : 'Save'}
               </button>
-              <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
             </div>
           </>
-        ) : numbers.length > 0 ? (
-          <div className="detail-grid">
-            {types.map((t) => {
-              const n = byType.get(t.id);
-              return <Item key={t.id} k={t.name} v={n?.value ?? '—'} />;
-            })}
-          </div>
-        ) : (
-          <div className="empty">No ID numbers recorded yet. Click "Add numbers".</div>
         )}
       </div>
-    </div>
-  );
-}
-
-function Item({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="detail-item">
-      <div className="k">{k}</div>
-      <div className="v">{v}</div>
     </div>
   );
 }
