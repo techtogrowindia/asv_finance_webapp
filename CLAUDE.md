@@ -4,12 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Working in this repo (developer guidance)
 
-**Project state:** Employee-portal foundation scaffolded. Monorepo: `backend/`
-(NestJS + Prisma + PostgreSQL/RLS) and `frontend/` (React + Vite). Working today:
-auth (login with portal enforcement + JWT), RLS request-context, `/api/v1/health`,
-`/api/v1/auth/login|me`, `/api/v1/dashboard`; web app with `/login` (employee) and
-`/admin` (admin) portals, guarded routes, dashboard. Most employee sub-screens are
-`ComingSoon` stubs. Loan/collection modules not built yet.
+**Project state:** Live in production at https://asvsmallfinance.com. Monorepo:
+`backend/` (NestJS + Prisma + PostgreSQL/RLS) and `frontend/` (React + Vite).
+Built & deployed: auth (portal-enforced login + JWT), RLS request-context,
+dashboard, client enrollment + KYC + document upload, loan application →
+verification → disbursement (flat-interest schedule engine), daily collections,
+End of Day cash reconciliation, admin masters/centers/employees, monitoring +
+portfolio **Reports** (CSV/Excel export, preset date filters), and a configurable
+**Roles & Permissions** module (RBAC — see invariant #10). Both `/login`
+(employee/FDO) and `/admin` (BM/HO) portals are mobile-responsive.
 
 **Commands:**
 
@@ -48,13 +51,17 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
    request runs in a transaction that first sets `SET LOCAL app.tenant_id` (and
    `app.branch_id`, `app.role`, `app.employee_id`) from the **JWT** — never from
    the client body. This requires transaction-scoped connections (watch PgBouncer
-   mode). Any new table needs its tenant-isolation policy or it is a data-leak bug.
+   mode). Any new tenant table must be added to the table array in
+   `backend/prisma/rls.sql` (and `rls:apply` re-run) or it is a data-leak bug.
 2. **API-first.** All business logic (loan math, eligibility, arrears, scoping)
    lives in the NestJS API; the React web app — and the future mobile app — are
    thin clients over the versioned `/api/v1`. Never put rules in the frontend.
 3. **Domain hierarchy & scoping:** Tenant → Branch → Center → Group → Client.
-   Roles FDO/BM/HO limit visibility (FDO = own centers, BM = own branch, HO =
-   tenant). Enforce server-side.
+   The FDO/BM/HO value is the **Access Level** = *data visibility* (FDO = own
+   centers, BM = own branch, HO = tenant), enforced server-side via
+   `centerScope()` (`backend/src/common/scope.ts`). This is separate from
+   **Roles** (configurable permission sets that govern *actions* — invariant #10);
+   Access Level = what you can see, Role = what you can do.
 4. **Use the branch `working_date`, never `now()`,** for demand/schedule/EOD logic.
 5. **Money:** `numeric(14,2)`; UUID primary keys; **soft-delete only** on financial
    data; write an `audit_log` entry for money-affecting actions; **maker-checker**
@@ -73,9 +80,27 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
    buttons that are actually a soft `isActive=false` toggle (reversible) are
    exempt, but any endpoint that truly removes a row needs this on the frontend
    and should double-check ownership/scope on the backend before deleting.
+10. **Role-based permissions (RBAC) — every feature must define and enforce them.**
+    Actions are gated by a configurable permission catalog
+    (`backend/src/common/auth/permissions.ts` — the single source of truth,
+    grouped by module). Each employee is assigned an **`AccessRole`** (a named set
+    of permission keys, admin-managed on the Roles page); the granted keys ride in
+    the **JWT** and on `/auth/me`. Enforce server-side with
+    `@RequirePermission('module.action')` (checked by the global `PermissionsGuard`)
+    — the **backend is the source of truth** — and mirror it in the UI with
+    `can(key)` from `useAuth()` to hide/disable anything that would 403 (nav items,
+    tabs, action buttons). **Plan permissions up front for any new section /
+    module / screen:** (a) add the new key(s) to the catalog, (b) gate every
+    mutating/sensitive route with `@RequirePermission`, (c) seed sensible defaults
+    into the system roles in `prisma/seed.ts` (`Administrator` gets all;
+    `Field Officer` gets field-appropriate ones), (d) gate the nav/buttons with
+    `can()`. A new mutating route with no permission gate is an access-control bug.
+    Permissions live in the JWT, so role edits take effect on next login (≤30m TTL).
 
 **Conventions:** DB `snake_case`, API `camelCase`; deploy is git push→pull (secrets
-live only in the server's `backend/.env`, never in git).
+live only in the server's `backend/.env`, never in git). **Schema changes** use
+`prisma db push` (no migration files yet) → `npm run rls:apply` → `npm run seed`
+(idempotent), not `prisma migrate`.
 
 ---
 
