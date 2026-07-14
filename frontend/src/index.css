@@ -260,14 +260,15 @@ a { color: var(--brand-700); text-decoration: none; }
 .combo-option:hover { background: var(--brand-050); }
 
 /* ---- Per-row "⋮" action menu (replaces a row of separate buttons) ---- */
-.action-menu { position: relative; display: inline-block; }
 .action-menu-btn {
   width: 32px; height: 32px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #fff;
   color: var(--ink-700); font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center;
 }
 .action-menu-btn:hover { background: var(--brand-050); color: var(--brand-700); }
+/* Rendered in a portal (document.body) with inline top/right, so it can
+   never be clipped by an ancestor's overflow:auto (e.g. .table-wrap). */
 .action-menu-list {
-  position: absolute; z-index: 30; top: calc(100% + 4px); right: 0; min-width: 170px;
+  position: fixed; z-index: 60; min-width: 170px;
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
   display: flex; flex-direction: column; padding: 4px;
 }
