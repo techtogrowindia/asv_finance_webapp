@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { DueRow, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
+import { getSettings } from '../api/settings';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -13,11 +14,13 @@ export function CollectionsPage() {
   const [rows, setRows] = useState<DueRow[] | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
+  const [savings, setSavings] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
+    getSettings().then((s) => setSavings(s.savingsPerCollection)).catch(() => {});
   }, []);
 
   function refresh(cid: string) {
@@ -50,7 +53,8 @@ export function CollectionsPage() {
       const res = await postCollection(row.loanId, amount);
       setSuccess(
         `Collected ${inr(res.applied)} from ${row.clientName}` +
-          (res.loanClosed ? ' — loan fully closed!' : res.unallocated > 0 ? ` (₹${res.unallocated} extra unallocated)` : ''),
+          (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') +
+          (res.loanClosed ? ' — loan fully closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : ''),
       );
       refresh(centerId);
     } catch (e) {
@@ -92,7 +96,7 @@ export function CollectionsPage() {
             <thead>
               <tr>
                 <th>Client ID</th><th>Name</th><th>Loan A/c</th><th>Dues Pending</th>
-                <th>Total Due</th><th>Collect Amount</th><th></th>
+                <th>Total Due</th>{savings > 0 && <th>Savings</th>}<th>Collect Amount</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -103,6 +107,7 @@ export function CollectionsPage() {
                   <td className="mono">{r.loanAccount}</td>
                   <td>{r.dueCount}</td>
                   <td>{inr(r.totalDue)}</td>
+                  {savings > 0 && <td>{inr(savings)}</td>}
                   <td>
                     <input
                       className="input"
@@ -125,7 +130,7 @@ export function CollectionsPage() {
                 </tr>
               ))}
               {rows && rows.length === 0 && (
-                <tr><td colSpan={7} className="empty">Nothing pending for this center. All caught up!</td></tr>
+                <tr><td colSpan={savings > 0 ? 8 : 7} className="empty">Nothing pending for this center. All caught up!</td></tr>
               )}
             </tbody>
           </table>

@@ -33,7 +33,7 @@ export const getDemandClientwise = (date?: string) =>
   api<DemandClientRow[]>(`/collections/demand?type=CLIENTWISE${date ? `&date=${date}` : ''}`);
 
 export const postCollection = (loanId: string, amount: number) =>
-  api<{ applied: number; advanceBanked: number; unallocated: number; loanClosed: boolean }>('/collections', {
+  api<{ applied: number; advanceBanked: number; unallocated: number; savingsCollected: number; loanClosed: boolean }>('/collections', {
     method: 'POST',
     body: JSON.stringify({ loanId, amount }),
   });
@@ -58,10 +58,24 @@ export const getArrears = (centerId: string) =>
   api<DueRow[]>(`/collections/arrears?centerId=${centerId}`);
 
 export const bulkCollectDemand = (centerId: string) =>
-  api<{ loansCollected: number; totalCollected: number }>('/collections/bulk-demand', {
+  api<{ loansCollected: number; totalCollected: number; totalSavings: number }>('/collections/bulk-demand', {
     method: 'POST',
     body: JSON.stringify({ centerId }),
   });
+
+export interface SavingsBalance {
+  clientId: string;
+  clientName: string;
+  displayId: string;
+  centerName: string;
+  savingsBalance: number;
+  hasOpenLoan: boolean;
+}
+
+export const getSavingsBalances = () => api<SavingsBalance[]>('/collections/savings/balances');
+
+export const refundSavings = (clientId: string) =>
+  api<{ clientId: string; refunded: number }>(`/collections/savings/${clientId}/refund`, { method: 'POST' });
 
 export interface AdvanceLoan {
   loanId: string;

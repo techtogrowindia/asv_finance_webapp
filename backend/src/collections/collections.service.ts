@@ -171,6 +171,7 @@ export class CollectionsService {
 
       let loansCollected = 0;
       let totalCollected = 0;
+      let totalSavings = 0;
       for (const loan of loans) {
         const rows = await this.pendingRows(tx, loan.id, workingDate);
         const demand = rows.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
@@ -179,6 +180,7 @@ export class CollectionsService {
         if (applied > 0) {
           loansCollected += 1;
           totalCollected += applied;
+          totalSavings += await this.depositSavings(tx, user, loan.id, loan.clientId, workingDate);
         }
       }
 
@@ -188,10 +190,10 @@ export class CollectionsService {
         entityId: centerId,
         action: 'BULK_COLLECT',
         employeeId: user.employeeId,
-        after: { loansCollected, totalCollected: round2(totalCollected), eodDate: workingDate },
+        after: { loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings), eodDate: workingDate },
       });
 
-      return { loansCollected, totalCollected: round2(totalCollected) };
+      return { loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings) };
     });
   }
 
@@ -226,16 +228,21 @@ export class CollectionsService {
         });
       }
 
+      // A collection event also banks the fixed savings deposit (if configured).
+      const savingsCollected = applied > 0
+        ? await this.depositSavings(tx, user, loan.id, loan.clientId, workingDate)
+        : 0;
+
       await this.audit.record(tx, {
         tenantId: user.tenantId,
         entity: 'Collection',
         entityId: loan.id,
         action: 'COLLECT',
         employeeId: user.employeeId,
-        after: { amount: round2(dto.amount), applied, advanceBanked, loanClosed },
+        after: { amount: round2(dto.amount), applied, advanceBanked, savingsCollected, loanClosed },
       });
 
-      return { applied, advanceBanked, unallocated: advanceBanked, loanClosed };
+      return { applied, advanceBanked, unallocated: advanceBanked, savingsCollected, loanClosed };
     });
   }
 
@@ -422,7 +429,103 @@ export class CollectionsService {
     });
   }
 
+  /** Clients holding a savings balance (Savings report + refund list). */
+  async savingsBalances(user: AuthUser) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const clients = await tx.client.findMany({
+        where: { savingsBalance: { gt: 0 }, ...clientCenterScope(user) },
+        orderBy: [{ center: { code: 'asc' } }, { name: 'asc' }],
+        include: {
+          group: { select: { groupNo: true } },
+          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+          loans: { where: { loanType: 'OPEN' }, select: { id: true } },
+        },
+      });
+      return clients.map((c) => ({
+        clientId: c.id,
+        clientName: c.name,
+        displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+        centerName: `${c.center.code} — ${c.center.name}`,
+        savingsBalance: round2(Number(c.savingsBalance)),
+        hasOpenLoan: c.loans.length > 0,
+      }));
+    });
+  }
+
+  /** Refund a client's held savings once all their loans are closed. */
+  async refundSavings(user: AuthUser, clientId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: clientId, ...clientCenterScope(user) },
+        include: {
+          loans: { where: { loanType: 'OPEN' }, select: { id: true } },
+          center: { select: { branchId: true } },
+        },
+      });
+      if (!client) throw new NotFoundException('Member not found');
+
+      const balance = round2(Number(client.savingsBalance));
+      if (balance <= 0) throw new BadRequestException('No savings balance to refund');
+      if (client.loans.length > 0) throw new BadRequestException('Client still has an open loan — refund after all loans close');
+
+      const workingDate = await this.resolveWorkingDate(tx, client.center.branchId);
+      await tx.savingsTxn.create({
+        data: {
+          tenantId: user.tenantId,
+          clientId,
+          loanId: null,
+          amount: balance,
+          kind: 'REFUND',
+          collectedOn: workingDate,
+          enteredBy: user.employeeId,
+        },
+      });
+      await tx.client.update({ where: { id: clientId }, data: { savingsBalance: 0 } });
+
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'Client',
+        entityId: clientId,
+        action: 'SAVINGS_REFUND',
+        employeeId: user.employeeId,
+        after: { refunded: balance, eodDate: workingDate },
+      });
+
+      return { clientId, refunded: balance };
+    });
+  }
+
   // ---- internals -----------------------------------------------------------
+
+  /** Bank the tenant's fixed savings deposit for one collection event; returns
+   *  the amount deposited (0 when savings is disabled). */
+  private async depositSavings(
+    tx: Prisma.TransactionClient,
+    user: AuthUser,
+    loanId: string,
+    clientId: string,
+    workingDate: Date,
+  ): Promise<number> {
+    const tenant = await tx.tenant.findFirst({
+      where: { id: user.tenantId },
+      select: { savingsPerCollection: true },
+    });
+    const amount = round2(Number(tenant?.savingsPerCollection ?? 0));
+    if (amount <= 0) return 0;
+    await tx.savingsTxn.create({
+      data: {
+        tenantId: user.tenantId,
+        clientId,
+        loanId,
+        amount,
+        kind: 'DEPOSIT',
+        collectedOn: workingDate,
+        enteredBy: user.employeeId,
+      },
+    });
+    await tx.client.update({ where: { id: clientId }, data: { savingsBalance: { increment: amount } } });
+    return amount;
+  }
 
   /**
    * FIFO-apply `amount` across the loan's unpaid rows, oldest first; closes the

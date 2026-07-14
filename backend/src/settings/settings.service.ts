@@ -17,6 +17,7 @@ export class SettingsService {
         foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
         foreclosureChargePercent: Number(tenant.foreclosureChargePercent),
         foreclosureChargeFlat: Number(tenant.foreclosureChargeFlat),
+        savingsPerCollection: Number(tenant.savingsPerCollection),
       };
     });
   }
@@ -31,6 +32,7 @@ export class SettingsService {
           ...('foreclosureInterestPolicy' in dto ? { foreclosureInterestPolicy: dto.foreclosureInterestPolicy } : {}),
           ...('foreclosureChargePercent' in dto ? { foreclosureChargePercent: dto.foreclosureChargePercent } : {}),
           ...('foreclosureChargeFlat' in dto ? { foreclosureChargeFlat: dto.foreclosureChargeFlat } : {}),
+          ...('savingsPerCollection' in dto ? { savingsPerCollection: dto.savingsPerCollection } : {}),
         },
       });
       return {
@@ -39,6 +41,7 @@ export class SettingsService {
         foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
         foreclosureChargePercent: Number(tenant.foreclosureChargePercent),
         foreclosureChargeFlat: Number(tenant.foreclosureChargeFlat),
+        savingsPerCollection: Number(tenant.savingsPerCollection),
       };
     });
   }

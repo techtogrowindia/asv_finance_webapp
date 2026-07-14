@@ -11,6 +11,7 @@ import {
   ClientWiseRow,
   CollectionFollowupRow,
   EmployeePerformanceRow,
+  ForeclosureReportRow,
   GroupWiseRow,
   ZeroCollectionRow,
   getAdvanceCollection,
@@ -19,11 +20,14 @@ import {
   getClientWise,
   getCollectionFollowup,
   getEmployeePerformance,
+  getForeclosures,
   getGroupWise,
   getZeroCollection,
 } from '../../api/reportsAdmin';
+import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
+import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'zero' | 'followup' | 'advance' | 'branch' | 'center' | 'group' | 'client' | 'employee';
+type Tab = 'zero' | 'followup' | 'advance' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'foreclosure' | 'savings';
 const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
@@ -33,6 +37,8 @@ const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'group', label: 'Group Wise', perm: 'report.portfolio' },
   { id: 'client', label: 'Client Wise', perm: 'report.portfolio' },
   { id: 'employee', label: 'Employee Performance', perm: 'report.portfolio' },
+  { id: 'foreclosure', label: 'Foreclosure', perm: 'report.portfolio' },
+  { id: 'savings', label: 'Savings', perm: 'report.portfolio' },
 ];
 
 const inr = (v: string | number) =>
@@ -71,6 +77,8 @@ export function ReportsPage() {
           {tab === 'group' && <GroupWiseTab />}
           {tab === 'client' && <ClientWiseTab />}
           {tab === 'employee' && <EmployeePerformanceTab />}
+          {tab === 'foreclosure' && <ForeclosureTab />}
+          {tab === 'savings' && <SavingsTab />}
         </div>
       </div>
     </AdminLayout>
@@ -639,4 +647,176 @@ function EmployeePerformanceTab() {
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+
+function ForeclosureTab() {
+  const filter = useDateFilter('year');
+  const [rows, setRows] = useState<ForeclosureReportRow[] | null>(null);
+  const [selected, setSelected] = useState<ForeclosureReportRow | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getForeclosures(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+
+  if (selected) {
+    return (
+      <div>
+        <div className="no-print" style={{ marginBottom: 14, display: 'flex', justifyContent: 'space-between' }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>← Back to list</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+        </div>
+        <div className="panel ledger-print">
+          <div className="panel-body">
+            <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>ASV FINANCE</h2>
+            <p style={{ textAlign: 'center', margin: '0 0 20px', color: 'var(--ink-500)' }}>Loan Foreclosure Certificate</p>
+            <div className="detail-grid" style={{ marginBottom: 20 }}>
+              <Item k="Client ID" v={selected.displayId} />
+              <Item k="Client Name" v={selected.memberName} />
+              <Item k="Center" v={`${selected.centerCode} — ${selected.centerName}`} />
+              <Item k="Loan Account" v={selected.loanAccount} />
+              <Item k="Disbursed" v={date(selected.disbursalDate)} />
+              <Item k="Loan Amount" v={inr(selected.loanAmount)} />
+              <Item k="Closed On" v={date(selected.closedDate)} />
+              <Item k="Principal Paid" v={inr(selected.principalPaid)} />
+              <Item k="Interest Charged" v={inr(selected.interestCharged)} />
+              <Item k="Interest Waived" v={inr(selected.interestWaived)} />
+              <Item k="Foreclosure Charge" v={inr(selected.foreclosureCharge)} />
+              <Item k="Total Paid to Close" v={inr(selected.payoffTotal)} />
+            </div>
+            <p style={{ color: 'var(--ink-700)' }}>
+              This certifies that loan account <strong>{selected.loanAccount}</strong> of{' '}
+              <strong>{selected.memberName}</strong> was foreclosed and fully settled on{' '}
+              <strong>{date(selected.closedDate)}</strong>. No further dues remain against this loan.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Loans foreclosed (early-closed) in this window</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('foreclosures.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('foreclosures.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Closed On</th>
+                  <th>Principal</th><th>Interest</th><th>Waived</th><th>Charge</th><th>Total Paid</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.loanId}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{date(r.closedDate)}</td>
+                    <td>{inr(r.principalPaid)}</td>
+                    <td>{inr(r.interestCharged)}</td>
+                    <td>{inr(r.interestWaived)}</td>
+                    <td>{inr(r.foreclosureCharge)}</td>
+                    <td>{inr(r.payoffTotal)}</td>
+                    <td><button className="btn btn-primary btn-sm" onClick={() => setSelected(r)}>Report</button></td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No foreclosures in this window.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SavingsTab() {
+  const { can } = useAuth();
+  const confirm = useConfirm();
+  const [rows, setRows] = useState<SavingsBalance[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  function refresh() { getSavingsBalances().then(setRows).catch((e) => setError(e.message)); }
+  useEffect(refresh, []);
+
+  async function onRefund(r: SavingsBalance) {
+    const ok = await confirm({
+      title: 'Refund savings?',
+      message: `Refund ${inr(r.savingsBalance)} of held savings to ${r.clientName} (${r.displayId})? This records the payout and zeroes their savings balance.`,
+      confirmLabel: 'Refund',
+    });
+    if (!ok) return;
+    setError(''); setSuccess(''); setBusyId(r.clientId);
+    try {
+      const res = await refundSavings(r.clientId);
+      setSuccess(`Refunded ${inr(res.refunded)} to ${r.clientName}.`);
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Refund failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Clients holding a savings balance</div>
+      <div className="panel-body">
+        {error && <div className="alert-error">{error}</div>}
+        {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th>{can('savings.refund') && <th></th>}</tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.clientId}>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.clientName}</td>
+                    <td>{r.centerName}</td>
+                    <td>{inr(r.savingsBalance)}</td>
+                    <td>{r.hasOpenLoan ? <span className="badge active">Open loan</span> : <span className="badge closed">No open loan</span>}</td>
+                    {can('savings.refund') && (
+                      <td>
+                        <button className="btn btn-primary btn-sm" disabled={r.hasOpenLoan || busyId === r.clientId} title={r.hasOpenLoan ? 'Refund only after all loans close' : ''} onClick={() => onRefund(r)}>
+                          {busyId === r.clientId ? <span className="spinner" /> : 'Refund'}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={6} className="empty">No clients are holding savings.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Item({ k, v }: { k: string; v: string }) {
+  return <div className="detail-item"><div className="k">{k}</div><div className="v">{v}</div></div>;
 }

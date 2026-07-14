@@ -5,11 +5,11 @@ import {
   getDemandCenterwise,
   getDemandClientwise,
 } from '../api/collections';
-import { CenterLoanRow, getLedger, listLoansByCenter, LoanLedger } from '../api/loans';
+import { CenterLoanRow, getLedger, listLoansByCenter, LoanApplicationSummary, listLoanApplications, LoanLedger } from '../api/loans';
 import { CenterLite, listCenters } from '../api/members';
 import { LedgerView } from '../components/LedgerView';
 
-type Tab = 'demand' | 'ledger';
+type Tab = 'demand' | 'ledger' | 'apps';
 
 const inr = (v: string | number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -29,10 +29,14 @@ export function ReportsPage() {
         <button className={`btn ${tab === 'ledger' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('ledger')}>
           Loan Ledger
         </button>
+        <button className={`btn ${tab === 'apps' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('apps')}>
+          Loan Applications
+        </button>
       </div>
 
       {tab === 'demand' && <DemandSheetTab />}
       {tab === 'ledger' && <LoanLedgerTab />}
+      {tab === 'apps' && <LoanApplicationsTab />}
     </>
   );
 }
@@ -108,6 +112,58 @@ function DemandSheetTab() {
 }
 
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
+
+function LoanApplicationsTab() {
+  const [status, setStatus] = useState<'' | 'PENDING' | 'APPROVED' | 'REJECTED'>('');
+  const [rows, setRows] = useState<LoanApplicationSummary[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setError('');
+    listLoanApplications(status || undefined).then(setRows).catch((e) => setError(e.message));
+  }, [status]);
+
+  return (
+    <div className="panel">
+      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span>Loan Applications</span>
+          <select className="select" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+            <option value="">All statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+      </div>
+      <div className="panel-body">
+        {error && <div className="alert-error">{error}</div>}
+        <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+          <table className="data">
+            <thead>
+              <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Product</th><th>Amount</th><th>Applied</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {rows?.map((a) => (
+                <tr key={a.id}>
+                  <td className="mono">{a.displayId}</td>
+                  <td>{a.clientName}</td>
+                  <td>{a.centerName}</td>
+                  <td>{a.productName}</td>
+                  <td>{inr(a.loanAmount)}</td>
+                  <td>{date(a.createdAt)}</td>
+                  <td><span className={`badge ${a.status === 'APPROVED' ? 'active' : a.status === 'REJECTED' ? 'closed' : 'pending'}`}>{a.status}</span></td>
+                </tr>
+              ))}
+              {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No loan applications.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function LoanLedgerTab() {
   const [centers, setCenters] = useState<CenterLite[]>([]);

@@ -458,4 +458,58 @@ export class ReportsService {
       });
     });
   }
+
+  /** Foreclosed loans closed within [from, to] — closure certificates. Amounts
+   *  (principal, interest charged/waived, charge, payoff) come from the FORECLOSE
+   *  audit entry written at closure. */
+  async foreclosureReport(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await tx.loan.findMany({
+        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        orderBy: { closedDate: 'desc' },
+        include: {
+          client: {
+            select: {
+              name: true,
+              memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+      if (loans.length === 0) return [];
+
+      // Only loans that were actually foreclosed (have a FORECLOSE audit row).
+      const audits = await tx.auditLog.findMany({
+        where: { entity: 'Loan', action: 'FORECLOSE', entityId: { in: loans.map((l) => l.id) } },
+      });
+      const byLoan = new Map(audits.map((a) => [a.entityId, (a.after ?? {}) as Record<string, unknown>]));
+
+      return loans
+        .filter((l) => byLoan.has(l.id))
+        .map((l) => {
+          const a = byLoan.get(l.id)!;
+          const c = l.client;
+          const num = (k: string) => round2(Number(a[k] ?? 0));
+          return {
+            loanId: l.id,
+            loanAccount: l.loanAccount,
+            displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+            memberName: c.name,
+            centerCode: c.center.code,
+            centerName: c.center.name,
+            disbursalDate: l.disbursalDate,
+            loanAmount: round2(Number(l.loanAmount)),
+            closedDate: l.closedDate,
+            principalPaid: num('principal'),
+            interestCharged: num('interestCharged'),
+            interestWaived: num('interestWaived'),
+            foreclosureCharge: num('foreclosureCharge'),
+            payoffTotal: num('payoffTotal'),
+            policy: String(a['policy'] ?? ''),
+          };
+        });
+    });
+  }
 }

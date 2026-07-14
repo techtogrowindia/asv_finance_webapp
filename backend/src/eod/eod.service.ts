@@ -113,17 +113,28 @@ export class EodService {
       where: { collectedOn: workingDate, loan: { client: { center: { branchId } } } },
       _sum: { amount: true },
     });
-    const totalReceipts = round2(Number(receipts._sum.amount ?? 0));
+    // Savings collected is cash received too; refunds are cash paid out.
+    const savingsIn = await tx.savingsTxn.aggregate({
+      where: { collectedOn: workingDate, kind: 'DEPOSIT', client: { center: { branchId } } },
+      _sum: { amount: true },
+    });
+    const savingsOut = await tx.savingsTxn.aggregate({
+      where: { collectedOn: workingDate, kind: 'REFUND', client: { center: { branchId } } },
+      _sum: { amount: true },
+    });
+    const savingsDeposits = round2(Number(savingsIn._sum.amount ?? 0));
+    const savingsRefunds = round2(Number(savingsOut._sum.amount ?? 0));
+    const totalReceipts = round2(Number(receipts._sum.amount ?? 0) + savingsDeposits);
 
     const payments = await tx.loan.aggregate({
       where: { disbursalDate: workingDate, client: { center: { branchId } } },
       _sum: { loanAmount: true },
     });
-    const totalPayments = round2(Number(payments._sum.loanAmount ?? 0));
+    const totalPayments = round2(Number(payments._sum.loanAmount ?? 0) + savingsRefunds);
 
     const closingBalance = round2(openingBalance + totalReceipts - totalPayments);
 
-    return { openingBalance, totalReceipts, totalPayments, closingBalance };
+    return { openingBalance, totalReceipts, totalPayments, closingBalance, savingsDeposits, savingsRefunds };
   }
 
   /** BM is pinned to their own branch; HO must name a real branch in the tenant. */

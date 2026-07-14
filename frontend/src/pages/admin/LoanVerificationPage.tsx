@@ -27,6 +27,7 @@ export function LoanVerificationPage() {
   const { user } = useAuth();
   const confirm = useConfirm();
   const [rows, setRows] = useState<LoanApplicationSummary[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dates, setDates] = useState<Record<string, DisburseDates>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export function LoanVerificationPage() {
     try {
       const res = await disburseApplication(a.id, d);
       setSuccess(`Disbursed as loan account ${res.loanAccount}.`);
+      setSelectedId(null);
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Disbursement failed');
@@ -100,6 +102,7 @@ export function LoanVerificationPage() {
     setBusyId(a.id);
     try {
       await rejectApplication(a.id);
+      setSelectedId(null);
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Reject failed');
@@ -122,10 +125,48 @@ export function LoanVerificationPage() {
         </div>
       )}
 
-      {rows?.map((a) => {
+      {/* List mode — a compact table of pending applications to pick from. */}
+      {!selectedId && rows && (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Client ID</th><th>Name</th><th>Center</th><th>Product</th>
+                <th>Amount</th><th>Applied</th><th>Flags</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.id}>
+                  <td className="mono">{a.displayId}</td>
+                  <td>{a.clientName}</td>
+                  <td>{a.centerName}</td>
+                  <td>{a.productName}</td>
+                  <td>{inr(a.loanAmount)}</td>
+                  <td>{new Date(a.createdAt).toLocaleDateString('en-IN')}</td>
+                  <td>{a.warnings.length > 0 ? <span className="badge pending">{a.warnings.length}</span> : '—'}</td>
+                  <td>
+                    <button className="btn btn-primary btn-sm" onClick={() => { setSelectedId(a.id); setError(''); setSuccess(''); }}>
+                      View / Verify
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={8} className="empty">No pending applications.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail mode — verify & disburse the selected application. */}
+      {selectedId && rows?.filter((a) => a.id === selectedId).map((a) => {
         const d = getDates(a);
         return (
-          <div className="panel" key={a.id} style={{ marginBottom: 16 }}>
+          <div key={a.id}>
+            <div style={{ marginBottom: 14 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedId(null)}>← Back to list</button>
+            </div>
+            <div className="panel" style={{ marginBottom: 16 }}>
             <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{a.clientName} <span className="mono" style={{ fontWeight: 400 }}>· {a.displayId} · {a.clientCode}</span></span>
               <span className="badge pending">PENDING</span>
@@ -201,13 +242,10 @@ export function LoanVerificationPage() {
                 </button>
               </div>
             </div>
+            </div>
           </div>
         );
       })}
-
-      {rows && rows.length === 0 && (
-        <div className="panel"><div className="panel-body"><div className="empty">No pending applications.</div></div></div>
-      )}
     </AdminLayout>
   );
 }

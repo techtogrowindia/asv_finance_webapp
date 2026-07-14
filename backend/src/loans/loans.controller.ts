@@ -37,8 +37,10 @@ export class LoansController {
   }
 
   // ---- Verification & Disbursement (BM/HO) ----
-  @Roles('BM', 'HO')
-  @RequirePermission('loan.approve')
+  // List is visible to FDOs too (scoped to their centers) for the employee
+  // Reports view; disburse/reject below stay BM/HO.
+  @Roles('FDO', 'BM', 'HO')
+  @RequirePermission('loan.view')
   @Get('loan-applications')
   list(@CurrentUser() user: AuthUser, @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
     return this.loans.listApplications(user, status);

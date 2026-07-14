@@ -93,6 +93,9 @@ model Tenant {
   // be 0. Charged on top of the policy payoff; see CollectionsService.
   foreclosureChargePercent       Decimal  @default(0) @map("foreclosure_charge_percent") @db.Decimal(5, 2)
   foreclosureChargeFlat          Decimal  @default(0) @map("foreclosure_charge_flat") @db.Decimal(14, 2)
+  // Fixed savings amount collected from each client on every collection, held and
+  // refunded to the client at loan closure. 0 = savings disabled. Configurable.
+  savingsPerCollection           Decimal  @default(0) @map("savings_per_collection") @db.Decimal(14, 2)
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
@@ -114,6 +117,7 @@ model Tenant {
   auditLogs        AuditLog[]
   eodClosings      EodClosing[]
   accessRoles      AccessRole[]
+  savingsTxns      SavingsTxn[]
 
   @@map("tenant")
 }
@@ -276,6 +280,8 @@ model Client {
   dateOfJoining     DateTime?    @map("date_of_joining") @db.Date
   status            ClientStatus @default(PENDING)
   isActive          Boolean      @default(true) @map("is_active")
+  // Running total of savings collected from this client (refunded at closure).
+  savingsBalance    Decimal      @default(0) @map("savings_balance") @db.Decimal(14, 2)
   // Optional loan-product + purpose preference captured at enrollment
   // (informational — NOT a LoanApplication; the formal application step,
   // with its own eligibility gate, happens later).
@@ -294,6 +300,7 @@ model Client {
   kycNumbers       KycNumber[]
   applications     LoanApplication[]
   loans            Loan[]
+  savingsTxns      SavingsTxn[]
 
   @@index([tenantId, centerId])
   @@map("client")
@@ -575,6 +582,32 @@ model Collection {
   @@index([tenantId, loanId])
   @@index([tenantId, scheduleId])
   @@map("collection")
+}
+
+enum SavingsTxnKind {
+  DEPOSIT
+  REFUND
+}
+
+/// Savings passbook: a DEPOSIT is banked with each collection; a REFUND returns
+/// the balance to the client when the loan closes. Client.savingsBalance is the
+/// cached running total.
+model SavingsTxn {
+  id          String         @id @default(uuid()) @db.Uuid
+  tenantId    String         @map("tenant_id") @db.Uuid
+  clientId    String         @map("client_id") @db.Uuid
+  loanId      String?        @map("loan_id") @db.Uuid // the loan being collected (deposits); null for refunds
+  amount      Decimal        @db.Decimal(14, 2) // always positive; kind gives the direction
+  kind        SavingsTxnKind
+  collectedOn DateTime       @map("collected_on") @db.Date // branch working_date at time of entry
+  enteredBy   String         @map("entered_by") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([tenantId, clientId])
+  @@map("savings_txn")
 }
 
 // ---- Audit log (generic, money-affecting actions) --------------------------

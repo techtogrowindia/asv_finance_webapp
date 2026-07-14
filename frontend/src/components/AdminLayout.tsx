@@ -7,7 +7,13 @@ import { SideNav, SideNavItem } from './SideNav';
 /** `perm`: nav item shows if the user holds ANY of these keys (undefined = always). */
 const ADMIN_NAV: SideNavItem[] = [
   { to: '/admin/dashboard', label: 'Dashboard', icon: '▤', end: true },
-  { to: '/admin/employees', label: 'Employees', icon: '☺', perm: ['employee.manage'] },
+  {
+    label: 'Employees', icon: '☺', perm: ['employee.manage', 'role.manage'],
+    children: [
+      { to: '/admin/employees', label: 'Employees', perm: ['employee.manage'] },
+      { to: '/admin/roles', label: 'Roles', perm: ['role.manage'] },
+    ],
+  },
   { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
   { to: '/admin/kyc-verification', label: 'KYC Verification', icon: '⚿', perm: ['member.verify'] },
@@ -24,7 +30,6 @@ const ADMIN_NAV: SideNavItem[] = [
   },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
-  { to: '/admin/roles', label: 'Roles', icon: '◈', perm: ['role.manage'] },
   { to: '/admin/masters', label: 'Business Settings', icon: '⚙', perm: ['master.manage'] },
 ];
 

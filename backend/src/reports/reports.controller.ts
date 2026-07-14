@@ -90,4 +90,12 @@ export class ReportsController {
     const [f, t] = parseRange(from, to);
     return this.reports.employeePerformance(user, f, t);
   }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
+  @Get('foreclosures')
+  foreclosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.foreclosureReport(user, f, t);
+  }
 }

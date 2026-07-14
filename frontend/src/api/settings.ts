@@ -8,6 +8,7 @@ export interface TenantSettings {
   foreclosureInterestPolicy: ForeclosureInterestPolicy;
   foreclosureChargePercent: number;
   foreclosureChargeFlat: number;
+  savingsPerCollection: number;
 }
 
 export const getSettings = () => api<TenantSettings>('/settings');

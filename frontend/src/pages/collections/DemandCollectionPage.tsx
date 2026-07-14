@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
+import { getSettings } from '../../api/settings';
 import {
   bulkCollectDemand,
   CenterSummary,
@@ -23,11 +24,13 @@ export function DemandCollectionPage() {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [savings, setSavings] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
+    getSettings().then((s) => setSavings(s.savingsPerCollection)).catch(() => {});
   }, []);
 
   function refresh(cid: string) {
@@ -49,7 +52,7 @@ export function DemandCollectionPage() {
     setError(''); setSuccess(''); setBusyLoanId(row.loanId);
     try {
       const res = await postCollection(row.loanId, amount);
-      setSuccess(`Collected ${inr(res.applied)} from ${row.clientName}` + (res.loanClosed ? ' — loan closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : ''));
+      setSuccess(`Collected ${inr(res.applied)} from ${row.clientName}` + (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') + (res.loanClosed ? ' — loan closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : ''));
       refresh(centerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collection failed');
@@ -69,7 +72,7 @@ export function DemandCollectionPage() {
     setError(''); setSuccess(''); setBulkBusy(true);
     try {
       const res = await bulkCollectDemand(centerId);
-      setSuccess(`Collected ${inr(res.totalCollected)} across ${res.loansCollected} loan(s).`);
+      setSuccess(`Collected ${inr(res.totalCollected)} across ${res.loansCollected} loan(s).` + (res.totalSavings > 0 ? ` + ${inr(res.totalSavings)} savings.` : ''));
       refresh(centerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Bulk collect failed');
@@ -120,7 +123,7 @@ export function DemandCollectionPage() {
           <div className="table-wrap">
             <table className="data">
               <thead>
-                <tr><th>Client ID</th><th>Name</th><th>Loan A/c</th><th>Dues</th><th>Total Due</th><th>Collect</th><th></th></tr>
+                <tr><th>Client ID</th><th>Name</th><th>Loan A/c</th><th>Dues</th><th>Total Due</th>{savings > 0 && <th>Savings</th>}<th>Collect</th><th></th></tr>
               </thead>
               <tbody>
                 {rows?.map((r) => (
@@ -130,6 +133,7 @@ export function DemandCollectionPage() {
                     <td className="mono">{r.loanAccount}</td>
                     <td>{r.dueCount}</td>
                     <td>{inr(r.totalDue)}</td>
+                    {savings > 0 && <td>{inr(savings)}</td>}
                     <td>
                       <input className="input" style={{ width: 120, padding: '7px 10px' }} type="number" min="0"
                         value={amounts[r.loanId] ?? ''} onChange={(e) => setAmounts((a) => ({ ...a, [r.loanId]: e.target.value }))} />
@@ -141,7 +145,7 @@ export function DemandCollectionPage() {
                     </td>
                   </tr>
                 ))}
-                {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">Nothing pending for this center.</td></tr>}
+                {rows && rows.length === 0 && <tr><td colSpan={savings > 0 ? 8 : 7} className="empty">Nothing pending for this center.</td></tr>}
               </tbody>
             </table>
           </div>

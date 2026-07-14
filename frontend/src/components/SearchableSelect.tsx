@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface SearchableSelectOption {
   id: string;
@@ -31,7 +32,10 @@ export function SearchableSelect({
   // already selected would show just the one already-matching option.
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState('');
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   // Keep the displayed text in sync with the selected id, including when the
   // parent resets/changes it programmatically (e.g. clearing Client when
@@ -44,11 +48,32 @@ export function SearchableSelect({
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The list is portaled to document.body, so check it too (else clicking an
+      // option would close/unmount it before the pick registers).
+      if (rootRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  // Position the portal-rendered list against the input, and keep it in sync
+  // while open (scroll/resize) so it can't drift or be clipped by an ancestor.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function place() {
+      const r = wrapRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open]);
 
   const filtered = !showAll && query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()))
@@ -76,7 +101,7 @@ export function SearchableSelect({
 
   return (
     <div className="combo" ref={rootRef}>
-      <div className="combo-input-wrap">
+      <div className="combo-input-wrap" ref={wrapRef}>
         <input
           className="input"
           value={query}
@@ -102,15 +127,17 @@ export function SearchableSelect({
           ▾
         </button>
       </div>
-      {open && filtered.length > 0 && (
-        <div className="combo-list">
-          {filtered.map((o) => (
-            <div key={o.id} className="combo-option" onMouseDown={() => pick(o)}>
-              {o.label}
-            </div>
-          ))}
-        </div>
-      )}
+      {open && pos && filtered.length > 0 &&
+        createPortal(
+          <div ref={listRef} className="combo-list" style={{ top: pos.top, left: pos.left, width: pos.width }}>
+            {filtered.map((o) => (
+              <div key={o.id} className="combo-option" onMouseDown={() => pick(o)}>
+                {o.label}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

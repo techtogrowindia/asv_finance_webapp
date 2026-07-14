@@ -124,6 +124,24 @@ export interface EmployeePerformanceRow {
   collectionEfficiency: number | null;
 }
 
+export interface ForeclosureReportRow {
+  loanId: string;
+  loanAccount: string;
+  displayId: string;
+  memberName: string;
+  centerCode: string;
+  centerName: string;
+  disbursalDate: string;
+  loanAmount: number;
+  closedDate: string | null;
+  principalPaid: number;
+  interestCharged: number;
+  interestWaived: number;
+  foreclosureCharge: number;
+  payoffTotal: number;
+  policy: string;
+}
+
 const qs = (from: string, to: string) => `?from=${from}&to=${to}`;
 
 export const getZeroCollection = (from: string, to: string) =>
@@ -145,3 +163,5 @@ export const getClientWise = (from: string, to: string, q?: string) =>
   api<ClientWiseRow[]>(`/reports/client-wise${qs(from, to)}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
 export const getEmployeePerformance = (from: string, to: string) =>
   api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to)}`);
+export const getForeclosures = (from: string, to: string) =>
+  api<ForeclosureReportRow[]>(`/reports/foreclosures${qs(from, to)}`);

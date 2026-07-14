@@ -93,4 +93,18 @@ export class CollectionsController {
   ) {
     return this.collections.foreclose(user, loanId, dto.waiveInterest);
   }
+
+  // ---- Savings (view balances; refund is BM/HO — savings.refund) ----
+  @RequirePermission('report.portfolio')
+  @Get('savings/balances')
+  savingsBalances(@CurrentUser() user: AuthUser) {
+    return this.collections.savingsBalances(user);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('savings.refund')
+  @Post('savings/:clientId/refund')
+  refundSavings(@CurrentUser() user: AuthUser, @Param('clientId', ParseUUIDPipe) clientId: string) {
+    return this.collections.refundSavings(user, clientId);
+  }
 }

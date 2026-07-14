@@ -268,8 +268,10 @@ a { color: var(--brand-700); text-decoration: none; }
 .combo-arrow:hover { background: var(--brand-050); color: var(--brand-700); }
 .combo-arrow:disabled { cursor: not-allowed; color: var(--ink-500); }
 .combo-arrow:disabled:hover { background: transparent; }
+/* Rendered in a portal (document.body) with inline fixed top/left/width, so the
+   list can never be clipped by an ancestor's overflow:auto (.content, cards). */
 .combo-list {
-  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto;
+  position: fixed; z-index: 60; max-height: 240px; overflow-y: auto;
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
 }
 .combo-option { padding: 10px 13px; font-size: 14px; color: var(--ink-900); cursor: pointer; }

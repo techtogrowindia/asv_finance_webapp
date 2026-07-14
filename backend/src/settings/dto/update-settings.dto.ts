@@ -8,4 +8,5 @@ export class UpdateSettingsDto {
   @IsOptional() @IsIn(FORECLOSURE_POLICIES) foreclosureInterestPolicy?: (typeof FORECLOSURE_POLICIES)[number];
   @IsOptional() @IsNumber() @Min(0) @Max(100) foreclosureChargePercent?: number;
   @IsOptional() @IsNumber() @Min(0) foreclosureChargeFlat?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100000) savingsPerCollection?: number;
 }

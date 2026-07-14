@@ -83,6 +83,8 @@ function SettingsTab() {
   const [chargePercent, setChargePercent] = useState('');
   const [chargeFlat, setChargeFlat] = useState('');
   const [chargeSaved, setChargeSaved] = useState(false);
+  const [savings, setSavings] = useState('');
+  const [savingsSaved, setSavingsSaved] = useState(false);
   const [error, setError] = useState('');
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpMsg, setCatchUpMsg] = useState('');
@@ -95,9 +97,26 @@ function SettingsTab() {
         setForeclosurePolicy(s.foreclosureInterestPolicy);
         setChargePercent(String(s.foreclosureChargePercent));
         setChargeFlat(String(s.foreclosureChargeFlat));
+        setSavings(String(s.savingsPerCollection));
       })
       .catch((e) => setError(e.message));
   }, []);
+
+  async function saveSavings() {
+    setError('');
+    setSavingsSaved(false);
+    const amount = Number(savings);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError('Savings amount must be 0 or more');
+      return;
+    }
+    try {
+      await updateSettings({ savingsPerCollection: amount });
+      setSavingsSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    }
+  }
 
   async function saveCharges() {
     setError('');
@@ -292,6 +311,36 @@ function SettingsTab() {
             <div className="field" style={{ maxWidth: 160 }}>
               <button className="btn btn-primary" onClick={saveCharges} disabled={chargePercent === ''}>
                 {chargeSaved ? 'Saved ✓' : 'Save charge'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">Savings</div>
+        <div className="panel-body">
+          <div className="hint" style={{ margin: '0 0 12px' }}>
+            A fixed amount collected from every client on each collection, held as savings and
+            refunded to the client when their loan closes. Set to 0 to disable savings collection.
+            You can change this amount any time; it applies to future collections.
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ maxWidth: 220 }}>
+              <label>Savings per collection (₹)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                step="1"
+                value={savings}
+                disabled={savings === ''}
+                onChange={(e) => { setSavings(e.target.value); setSavingsSaved(false); }}
+              />
+            </div>
+            <div className="field" style={{ maxWidth: 160 }}>
+              <button className="btn btn-primary" onClick={saveSavings} disabled={savings === ''}>
+                {savingsSaved ? 'Saved ✓' : 'Save savings'}
               </button>
             </div>
           </div>
