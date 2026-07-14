@@ -32,7 +32,7 @@ export function LoanApplicationPage() {
   const [clientId, setClientId] = useState('');
   const [frequencyId, setFrequencyId] = useState('');
   const [productId, setProductId] = useState('');
-  const [purposeQuery, setPurposeQuery] = useState('');
+  const [purposeId, setPurposeId] = useState('');
 
   const [client, setClient] = useState<MemberDetail | null>(null);
   const [existingLoans, setExistingLoans] = useState<ExistingLoan[] | null>(null);
@@ -82,19 +82,12 @@ export function LoanApplicationPage() {
   const selectedProduct = products.find((p) => p.id === productId) ?? null;
 
   async function onSave() {
-    if (!clientId || !productId) return;
+    if (!clientId || !productId || !purposeId) return;
     setError('');
     setSuccess('');
-
-    const purpose = purposes.find((p) => p.name.toLowerCase() === purposeQuery.trim().toLowerCase());
-    if (!purpose) {
-      setError('Select a valid purpose from the list');
-      return;
-    }
-
     setBusy(true);
     try {
-      await createLoanApplication({ clientId, productId, purposeId: purpose.id });
+      await createLoanApplication({ clientId, productId, purposeId });
       setSuccess('Loan application submitted for verification.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not submit application');
@@ -114,43 +107,43 @@ export function LoanApplicationPage() {
       <div className="form-card" style={{ maxWidth: 'none' }}>
         <div className="form-grid">
           <Field label="Center *">
-            <select className="input" value={centerId} onChange={(e) => { setCenterId(e.target.value); setClientId(''); }}>
-              <option value="">Select center</option>
-              {centers.map((c) => (
-                <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))}
+              value={centerId}
+              onChange={(id) => { setCenterId(id); setClientId(''); }}
+              placeholder="Type to search…"
+            />
           </Field>
           <Field label="Client *">
-            <select className="input" value={clientId} disabled={!centerId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">Select member</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.displayId} — {m.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={members.map((m) => ({ id: m.id, label: `${m.displayId} — ${m.name}` }))}
+              value={clientId}
+              onChange={setClientId}
+              disabled={!centerId}
+              placeholder="Type to search…"
+            />
           </Field>
           <Field label="Frequency">
-            <select className="input" value={frequencyId} onChange={(e) => { setFrequencyId(e.target.value); setProductId(''); }}>
-              <option value="">All</option>
-              {frequencies.map((f) => (
-                <option key={f.id} value={f.id}>{f.code}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={frequencies.map((f) => ({ id: f.id, label: f.code }))}
+              value={frequencyId}
+              onChange={(id) => { setFrequencyId(id); setProductId(''); }}
+              placeholder="All"
+            />
           </Field>
           <Field label="Loan Product *">
-            <select className="input" value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">Select product</option>
-              {productsForFrequency.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={productsForFrequency.map((p) => ({ id: p.id, label: p.name }))}
+              value={productId}
+              onChange={setProductId}
+              placeholder="Type to search…"
+            />
           </Field>
           <Field label="Purpose *">
             <SearchableSelect
               options={purposes.map((p) => ({ id: p.id, label: p.name }))}
-              value={purposeQuery}
-              onChange={setPurposeQuery}
-              onSelect={() => {}}
+              value={purposeId}
+              onChange={setPurposeId}
               placeholder="Type to search…"
             />
           </Field>
@@ -261,7 +254,7 @@ export function LoanApplicationPage() {
       )}
 
       <div className="form-actions">
-        <button className="btn btn-primary" disabled={!clientId || !productId || busy} onClick={onSave}>
+        <button className="btn btn-primary" disabled={!clientId || !productId || !purposeId || busy} onClick={onSave}>
           {busy ? <span className="spinner" /> : 'Save'}
         </button>
         <button className="btn btn-ghost" type="button" onClick={() => navigate('/app')}>

@@ -82,6 +82,7 @@ a { color: var(--brand-700); text-decoration: none; }
   font-size: 15px; background: #fff; color: var(--ink-900); transition: border-color .15s, box-shadow .15s;
 }
 .input:focus { outline: none; border-color: var(--brand-500); box-shadow: 0 0 0 3px var(--brand-050); }
+.input:disabled { background: var(--canvas); color: var(--ink-500); cursor: not-allowed; }
 
 /* ---- Alerts ---- */
 .alert-error {
@@ -252,6 +253,8 @@ a { color: var(--brand-700); text-decoration: none; }
   border-radius: var(--radius-sm); display: grid; place-items: center;
 }
 .combo-arrow:hover { background: var(--brand-050); color: var(--brand-700); }
+.combo-arrow:disabled { cursor: not-allowed; color: var(--ink-500); }
+.combo-arrow:disabled:hover { background: transparent; }
 .combo-list {
   position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 240px; overflow-y: auto;
   background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-md);

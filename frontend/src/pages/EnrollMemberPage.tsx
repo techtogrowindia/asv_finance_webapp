@@ -42,7 +42,7 @@ export function EnrollMemberPage() {
     monthlyExpense: '',
     fatherName: '',
     productId: '',
-    purposeQuery: '',
+    purposeId: '',
     coName: '',
     coGender: '',
     coDob: '',
@@ -85,15 +85,7 @@ export function EnrollMemberPage() {
     e.preventDefault();
     setError('');
 
-    let purposeId: string | undefined;
-    if (form.purposeQuery.trim()) {
-      const match = purposes.find((p) => p.name.toLowerCase() === form.purposeQuery.trim().toLowerCase());
-      if (!match) {
-        setError('Select a valid purpose from the list, or clear the field');
-        return;
-      }
-      purposeId = match.id;
-    }
+    const purposeId = form.purposeId || undefined;
     if (productRequired && (!form.productId || !purposeId)) {
       setError('Loan product and purpose are both required to enroll this member');
       return;
@@ -207,9 +199,8 @@ export function EnrollMemberPage() {
           <Field label={`Purpose${productRequired ? ' *' : ' (optional)'}`}>
             <SearchableSelect
               options={purposes.map((p) => ({ id: p.id, label: p.name }))}
-              value={form.purposeQuery}
-              onChange={(v) => set('purposeQuery', v)}
-              onSelect={() => {}}
+              value={form.purposeId}
+              onChange={(v) => set('purposeId', v)}
               placeholder="Type to search…"
             />
           </Field>
