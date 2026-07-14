@@ -5,8 +5,8 @@ import {
   getDemandCenterwise,
   getDemandClientwise,
 } from '../api/collections';
-import { ExistingLoan, getLedger, listExistingLoans, LoanLedger } from '../api/loans';
-import { CenterLite, listCenters, listMembers, MemberListItem } from '../api/members';
+import { CenterLoanRow, getLedger, listLoansByCenter, LoanLedger } from '../api/loans';
+import { CenterLite, listCenters } from '../api/members';
 import { LedgerView } from '../components/LedgerView';
 
 type Tab = 'demand' | 'ledger';
@@ -107,67 +107,102 @@ function DemandSheetTab() {
   );
 }
 
+const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
+
 function LoanLedgerTab() {
   const [centers, setCenters] = useState<CenterLite[]>([]);
-  const [members, setMembers] = useState<MemberListItem[]>([]);
-  const [loans, setLoans] = useState<ExistingLoan[]>([]);
   const [centerId, setCenterId] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [loanId, setLoanId] = useState('');
+  const [type, setType] = useState<'OPEN' | 'CLOSED' | 'ALL'>('OPEN');
+  const [loans, setLoans] = useState<CenterLoanRow[] | null>(null);
   const [ledger, setLedger] = useState<LoanLedger | null>(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
   useEffect(() => {
-    if (!centerId) { setMembers([]); return; }
-    listMembers({ centerId }).then(setMembers).catch((e) => setError(e.message));
-  }, [centerId]);
-  useEffect(() => {
-    if (!clientId) { setLoans([]); return; }
-    listExistingLoans(clientId).then(setLoans).catch((e) => setError(e.message));
-  }, [clientId]);
-  useEffect(() => {
-    if (!loanId) { setLedger(null); return; }
-    getLedger(loanId).then(setLedger).catch((e) => setError(e.message));
-  }, [loanId]);
+    setLedger(null);
+    if (!centerId) { setLoans(null); return; }
+    setError('');
+    listLoansByCenter(centerId, type).then(setLoans).catch((e) => setError(e.message));
+  }, [centerId, type]);
+
+  function viewLedger(loanId: string) {
+    setError('');
+    setLoadingLedger(true);
+    getLedger(loanId)
+      .then(setLedger)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoadingLedger(false));
+  }
+
+  // Viewing one loan's full ledger — show it with a way back to the list.
+  if (ledger) {
+    return (
+      <>
+        <div className="no-print" style={{ marginBottom: 14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLedger(null)}>← Back to loan list</button>
+        </div>
+        <LedgerView ledger={ledger} />
+      </>
+    );
+  }
 
   return (
     <>
-      {error && <div className="alert-error no-print">{error}</div>}
-      <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 18 }}>
+      {error && <div className="alert-error">{error}</div>}
+      <div className="form-card" style={{ maxWidth: 'none', marginBottom: 18 }}>
         <div className="form-grid">
-          <Field label="Center">
-            <select className="input" value={centerId} onChange={(e) => { setCenterId(e.target.value); setClientId(''); setLoanId(''); }}>
+          <div className="field">
+            <label>Center</label>
+            <select className="input" value={centerId} onChange={(e) => setCenterId(e.target.value)}>
               <option value="">Select center</option>
               {centers.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
-          </Field>
-          <Field label="Client">
-            <select className="input" value={clientId} disabled={!centerId} onChange={(e) => { setClientId(e.target.value); setLoanId(''); }}>
-              <option value="">Select member</option>
-              {members.map((m) => <option key={m.id} value={m.id}>{m.displayId} — {m.name}</option>)}
+          </div>
+          <div className="field">
+            <label>Loan Type</label>
+            <select className="input" value={type} onChange={(e) => setType(e.target.value as 'OPEN' | 'CLOSED' | 'ALL')}>
+              <option value="OPEN">Open</option>
+              <option value="CLOSED">Closed</option>
+              <option value="ALL">All</option>
             </select>
-          </Field>
-          <Field label="Loan Account">
-            <select className="input" value={loanId} disabled={!clientId} onChange={(e) => setLoanId(e.target.value)}>
-              <option value="">Select loan</option>
-              {loans.map((l) => <option key={l.id} value={l.id}>{l.loanAccount} ({l.loanType})</option>)}
-            </select>
-          </Field>
+          </div>
         </div>
       </div>
 
-      {ledger && <LedgerView ledger={ledger} />}
-      {!ledger && <div className="panel no-print"><div className="panel-body"><div className="empty">Select a center, member, and loan account to view the ledger.</div></div></div>}
+      {!centerId ? (
+        <div className="panel"><div className="panel-body"><div className="empty">Select a center to list its loans.</div></div></div>
+      ) : (
+        <div className="panel">
+          <div className="panel-head">Client Loan Schedule</div>
+          <div className="panel-body">
+            <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+              <table className="data">
+                <thead>
+                  <tr><th>Client ID</th><th>Client Name</th><th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {loans?.map((l) => (
+                    <tr key={l.id}>
+                      <td className="mono">{l.displayId}</td>
+                      <td>{l.clientName}</td>
+                      <td className="mono">{l.loanAccount}</td>
+                      <td>{date(l.disbursalDate)}</td>
+                      <td>{inr(l.loanAmount)}</td>
+                      <td>
+                        <button className="btn btn-primary btn-sm" disabled={loadingLedger} onClick={() => viewLedger(l.id)}>
+                          View ledger
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {loans && loans.length === 0 && <tr><td colSpan={6} className="empty">No {type === 'ALL' ? '' : type.toLowerCase() + ' '}loans in this center.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="field">
-      <label>{label}</label>
-      {children}
-    </div>
   );
 }

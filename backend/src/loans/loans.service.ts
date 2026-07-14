@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
 import { AuthUser } from '../common/types/auth-user';
-import { clientCenterScope } from '../common/scope';
+import { centerScope, clientCenterScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
@@ -64,6 +64,38 @@ export class LoansService {
           closingArrInt,
         };
       });
+    });
+  }
+
+  /** All loans in one center (Client Loan Schedule list), filtered by loan type. */
+  async loansByCenter(user: AuthUser, centerId: string, type: 'OPEN' | 'CLOSED' | 'ALL') {
+    return this.prisma.withTenant(user, async (tx) => {
+      const center = await tx.center.findFirst({
+        where: { id: centerId, ...centerScope(user) },
+        include: { branch: { select: { code: true } } },
+      });
+      if (!center) throw new ForbiddenException('Center not assigned to you');
+
+      const loans = await tx.loan.findMany({
+        where: {
+          client: { centerId },
+          ...(type === 'ALL' ? {} : { loanType: type }),
+        },
+        orderBy: [{ client: { group: { groupNo: 'asc' } } }, { client: { memberNo: 'asc' } }, { disbursalDate: 'desc' }],
+        include: {
+          client: { select: { name: true, memberNo: true, group: { select: { groupNo: true } } } },
+        },
+      });
+
+      return loans.map((loan) => ({
+        id: loan.id,
+        loanAccount: loan.loanAccount,
+        displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
+        clientName: loan.client.name,
+        disbursalDate: loan.disbursalDate,
+        loanAmount: loan.loanAmount,
+        loanType: loan.loanType,
+      }));
     });
   }
 

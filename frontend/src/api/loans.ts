@@ -130,3 +130,18 @@ export interface LoanLedger {
 }
 
 export const getLedger = (loanId: string) => api<LoanLedger>(`/loans/${loanId}/ledger`);
+
+// ---- Client Loan Schedule (all loans in a center) --------------------------
+
+export interface CenterLoanRow {
+  id: string;
+  loanAccount: string;
+  displayId: string;
+  clientName: string;
+  disbursalDate: string;
+  loanAmount: string;
+  loanType: 'OPEN' | 'CLOSED';
+}
+
+export const listLoansByCenter = (centerId: string, type: 'OPEN' | 'CLOSED' | 'ALL') =>
+  api<CenterLoanRow[]>(`/loans?centerId=${centerId}&type=${type}`);

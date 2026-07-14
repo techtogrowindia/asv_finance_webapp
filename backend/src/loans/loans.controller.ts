@@ -78,6 +78,16 @@ export class LoansController {
   }
 
   @RequirePermission('loan.view')
+  @Get('loans')
+  loansByCenter(
+    @CurrentUser() user: AuthUser,
+    @Query('centerId', ParseUUIDPipe) centerId: string,
+    @Query('type') type: 'OPEN' | 'CLOSED' | 'ALL' = 'OPEN',
+  ) {
+    return this.loans.loansByCenter(user, centerId, type);
+  }
+
+  @RequirePermission('loan.view')
   @Get('loans/:id/ledger')
   ledger(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.ledger(user, id);
