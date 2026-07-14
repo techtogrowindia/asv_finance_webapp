@@ -14,7 +14,7 @@ const ADMIN_NAV: { to: string; label: string; icon: string; perm?: string[] }[] 
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
   { to: '/admin/roles', label: 'Roles', icon: '◈', perm: ['role.manage'] },
-  { to: '/admin/masters', label: 'Masters', icon: '⚙', perm: ['master.manage'] },
+  { to: '/admin/masters', label: 'Business Settings', icon: '⚙', perm: ['master.manage'] },
 ];
 
 export function AdminLayout({ children }: { children: ReactNode }) {

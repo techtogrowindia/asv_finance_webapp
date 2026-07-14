@@ -263,7 +263,7 @@ export function EnrollMemberPage() {
           Government ID proofs (KYC)
         </div>
         <div className="hint">
-          These fields are managed by the admin under Masters → Document Types. Masked numbers (like Aadhaar) are hidden everywhere they're shown after saving.
+          These fields are managed by the admin under Business Settings → Document Types. Masked numbers (like Aadhaar) are hidden everywhere they're shown after saving.
         </div>
         <div className="form-grid">
           {clientTypes.map((t) => (

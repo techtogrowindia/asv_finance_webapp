@@ -96,7 +96,7 @@ export function AdminDashboard() {
         <div className="panel-body">
           <div className="empty">
             🚧 End-of-day cash reconciliation and daily monitoring reports (zero-collection,
-            follow-up, advance-collection) are scheduled next. Master data is under <b>Masters</b>.
+            follow-up, advance-collection) are scheduled next. Master data is under <b>Business Settings</b>.
           </div>
         </div>
       </div>

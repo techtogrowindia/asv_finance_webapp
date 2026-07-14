@@ -40,7 +40,7 @@ export function MastersPage() {
 
   return (
     <AdminLayout>
-      <h1 className="page-title">Masters</h1>
+      <h1 className="page-title">Business Settings</h1>
       <p className="page-sub">
         Manage the dropdown data used across Enrollment and Loan Application. Editing a
         record here updates it everywhere it's referenced — nothing is hardcoded.
