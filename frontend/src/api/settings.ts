@@ -6,6 +6,8 @@ export interface TenantSettings {
   requireLoanProductAtEnrollment: boolean;
   autoCloseEod: boolean;
   foreclosureInterestPolicy: ForeclosureInterestPolicy;
+  foreclosureChargePercent: number;
+  foreclosureChargeFlat: number;
 }
 
 export const getSettings = () => api<TenantSettings>('/settings');

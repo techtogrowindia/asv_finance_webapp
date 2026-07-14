@@ -22,6 +22,7 @@ export function ForeclosurePage() {
   const [centerId, setCenterId] = useState('');
   const [clientId, setClientId] = useState('');
   const [loanId, setLoanId] = useState('');
+  const [waive, setWaive] = useState('');
   const [quote, setQuote] = useState<ForeclosureQuote | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -33,28 +34,37 @@ export function ForeclosurePage() {
     if (centerId) listMembers({ centerId }).then(setMembers).catch((e) => setError(e.message));
   }, [centerId]);
   useEffect(() => {
-    setLoanId(''); setLoans([]); setQuote(null);
+    setLoanId(''); setLoans([]); setQuote(null); setWaive('');
     if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN'))).catch((e) => setError(e.message));
   }, [clientId]);
+  useEffect(() => { setWaive(''); }, [loanId]);
+  // Re-quote whenever the loan or the waiver amount changes (debounced).
   useEffect(() => {
-    setQuote(null);
-    if (loanId) getForeclosureQuote(loanId).then(setQuote).catch((e) => setError(e.message));
-  }, [loanId]);
+    if (!loanId) { setQuote(null); return; }
+    const waiveNum = Math.max(0, Number(waive) || 0);
+    const t = setTimeout(() => {
+      getForeclosureQuote(loanId, waiveNum || undefined).then(setQuote).catch((e) => setError(e.message));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [loanId, waive]);
 
   async function onForeclose() {
     if (!quote) return;
+    const waiveNum = quote.canWaive ? Math.max(0, Number(waive) || 0) : 0;
     const ok = await confirm({
       title: 'Foreclose this loan?',
-      message: `Close ${quote.loanAccount} early for a payoff of ${inr(quote.payoffTotal)} (${inr(quote.interestWaived)} interest waived)? This settles and closes the loan — it cannot be undone.`,
+      message: `Close ${quote.loanAccount} early for a payoff of ${inr(quote.payoffTotal)}`
+        + (quote.foreclosureCharge > 0 ? ` (includes ${inr(quote.foreclosureCharge)} foreclosure charge)` : '')
+        + `${quote.interestWaived > 0 ? `, with ${inr(quote.interestWaived)} interest waived` : ''}? This settles and closes the loan — it cannot be undone.`,
       confirmLabel: 'Foreclose',
       danger: true,
     });
     if (!ok) return;
     setError(''); setSuccess(''); setBusy(true);
     try {
-      const res = await foreclose(quote.loanId);
+      const res = await foreclose(quote.loanId, waiveNum || undefined);
       setSuccess(`Loan closed. Payoff ${inr(res.payoffTotal)}, interest waived ${inr(res.interestWaived)}.`);
-      setLoanId(''); setQuote(null);
+      setLoanId(''); setQuote(null); setWaive('');
       if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN')));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Foreclosure failed');
@@ -96,9 +106,40 @@ export function ForeclosurePage() {
               <div className="detail-item"><div className="k">Remaining principal</div><div className="v">{inr(quote.remainingPrincipal)}</div></div>
               <div className="detail-item"><div className="k">Interest charged</div><div className="v">{inr(quote.interestCharged)}</div></div>
               <div className="detail-item"><div className="k">Interest waived</div><div className="v">{inr(quote.interestWaived)}</div></div>
+              <div className="detail-item">
+                <div className="k">Foreclosure charge</div>
+                <div className="v">{inr(quote.foreclosureCharge)}
+                  {(quote.chargePercent > 0 || quote.chargeFlat > 0) && (
+                    <span className="hint" style={{ display: 'block' }}>
+                      {quote.chargePercent > 0 ? `${quote.chargePercent}% of principal` : ''}
+                      {quote.chargePercent > 0 && quote.chargeFlat > 0 ? ' + ' : ''}
+                      {quote.chargeFlat > 0 ? `${inr(quote.chargeFlat)} flat` : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
               <div className="detail-item"><div className="k">Advance on hand</div><div className="v">{inr(quote.advanceBalance)}</div></div>
               <div className="detail-item"><div className="k">Payoff total</div><div className="v" style={{ fontWeight: 700 }}>{inr(quote.payoffTotal)}</div></div>
             </div>
+
+            {quote.canWaive && (
+              <div className="field" style={{ maxWidth: 280, marginTop: 16 }}>
+                <label>Waive interest (₹) — optional</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={waive}
+                  placeholder="0"
+                  onChange={(e) => setWaive(e.target.value)}
+                />
+                <div className="hint" style={{ marginTop: 6 }}>
+                  Reduce the interest this member pays on early closure. The payoff above updates as you type.
+                </div>
+              </div>
+            )}
+
             <div className="form-actions" style={{ marginTop: 18 }}>
               <button className="btn btn-danger" disabled={busy} onClick={onForeclose}>
                 {busy ? <span className="spinner" /> : 'Foreclose loan'}

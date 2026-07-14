@@ -39,6 +39,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'collection.post', label: 'Post collections' },
       { key: 'collection.advance', label: 'Apply loan advance' },
       { key: 'collection.foreclose', label: 'Foreclose (early-close) a loan' },
+      { key: 'collection.waive', label: 'Waive interest on foreclosure' },
     ],
   },
   {

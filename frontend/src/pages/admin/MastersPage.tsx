@@ -80,6 +80,9 @@ function SettingsTab() {
   const [requireLoanProductAtEnrollment, setRequireLoanProductAtEnrollment] = useState<boolean | null>(null);
   const [autoCloseEod, setAutoCloseEod] = useState<boolean | null>(null);
   const [foreclosurePolicy, setForeclosurePolicy] = useState<string | null>(null);
+  const [chargePercent, setChargePercent] = useState('');
+  const [chargeFlat, setChargeFlat] = useState('');
+  const [chargeSaved, setChargeSaved] = useState(false);
   const [error, setError] = useState('');
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpMsg, setCatchUpMsg] = useState('');
@@ -90,9 +93,32 @@ function SettingsTab() {
         setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment);
         setAutoCloseEod(s.autoCloseEod);
         setForeclosurePolicy(s.foreclosureInterestPolicy);
+        setChargePercent(String(s.foreclosureChargePercent));
+        setChargeFlat(String(s.foreclosureChargeFlat));
       })
       .catch((e) => setError(e.message));
   }, []);
+
+  async function saveCharges() {
+    setError('');
+    setChargeSaved(false);
+    const percent = Number(chargePercent);
+    const flat = Number(chargeFlat);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      setError('Charge percent must be between 0 and 100');
+      return;
+    }
+    if (!Number.isFinite(flat) || flat < 0) {
+      setError('Flat fee must be 0 or more');
+      return;
+    }
+    try {
+      await updateSettings({ foreclosureChargePercent: percent, foreclosureChargeFlat: flat });
+      setChargeSaved(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    }
+  }
 
   async function changeForeclosurePolicy(next: string) {
     setError('');
@@ -228,6 +254,46 @@ function SettingsTab() {
             When a member closes a loan early, this decides how much of the remaining (upfront flat)
             interest they still owe. The Foreclosure screen always shows the exact payoff for the
             chosen policy before you confirm.
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--line)', margin: '18px 0' }} />
+
+          <label style={{ fontWeight: 600 }}>Foreclosure charge</label>
+          <div className="hint" style={{ margin: '4px 0 12px' }}>
+            An optional fee added on top of the payoff when a loan is foreclosed:
+            a percentage of the remaining principal plus a flat fee. Leave both at 0 for no charge.
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="field" style={{ maxWidth: 200 }}>
+              <label>Percent of principal (%)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={chargePercent}
+                disabled={chargePercent === ''}
+                onChange={(e) => { setChargePercent(e.target.value); setChargeSaved(false); }}
+              />
+            </div>
+            <div className="field" style={{ maxWidth: 200 }}>
+              <label>Flat fee (₹)</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                step="0.01"
+                value={chargeFlat}
+                disabled={chargeFlat === ''}
+                onChange={(e) => { setChargeFlat(e.target.value); setChargeSaved(false); }}
+              />
+            </div>
+            <div className="field" style={{ maxWidth: 160 }}>
+              <button className="btn btn-primary" onClick={saveCharges} disabled={chargePercent === ''}>
+                {chargeSaved ? 'Saved ✓' : 'Save charge'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

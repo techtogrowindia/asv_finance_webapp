@@ -86,14 +86,25 @@ export interface ForeclosureQuote {
   remainingPrincipal: number;
   interestCharged: number;
   interestWaived: number;
+  manualWaived: number;
+  foreclosureCharge: number;
+  chargePercent: number;
+  chargeFlat: number;
+  canWaive: boolean;
   payoffTotal: number;
   advanceBalance: number;
 }
 
-export const getForeclosureQuote = (loanId: string) =>
-  api<ForeclosureQuote>(`/collections/${loanId}/foreclosure-quote`);
+export const getForeclosureQuote = (loanId: string, waiveInterest?: number) =>
+  api<ForeclosureQuote>(
+    `/collections/${loanId}/foreclosure-quote${waiveInterest ? `?waiveInterest=${waiveInterest}` : ''}`,
+  );
 
-export const foreclose = (loanId: string) =>
-  api<{ loanId: string; closed: boolean; payoffTotal: number; interestWaived: number }>(`/collections/${loanId}/foreclose`, {
-    method: 'POST',
-  });
+export const foreclose = (loanId: string, waiveInterest?: number) =>
+  api<{ loanId: string; closed: boolean; payoffTotal: number; interestWaived: number; manualWaived: number; foreclosureCharge: number }>(
+    `/collections/${loanId}/foreclose`,
+    {
+      method: 'POST',
+      body: JSON.stringify(waiveInterest ? { waiveInterest } : {}),
+    },
+  );

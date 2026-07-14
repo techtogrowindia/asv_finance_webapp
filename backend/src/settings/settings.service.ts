@@ -15,6 +15,8 @@ export class SettingsService {
         requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
         autoCloseEod: tenant.autoCloseEod,
         foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
+        foreclosureChargePercent: Number(tenant.foreclosureChargePercent),
+        foreclosureChargeFlat: Number(tenant.foreclosureChargeFlat),
       };
     });
   }
@@ -27,12 +29,16 @@ export class SettingsService {
           ...('requireLoanProductAtEnrollment' in dto ? { requireLoanProductAtEnrollment: dto.requireLoanProductAtEnrollment } : {}),
           ...('autoCloseEod' in dto ? { autoCloseEod: dto.autoCloseEod } : {}),
           ...('foreclosureInterestPolicy' in dto ? { foreclosureInterestPolicy: dto.foreclosureInterestPolicy } : {}),
+          ...('foreclosureChargePercent' in dto ? { foreclosureChargePercent: dto.foreclosureChargePercent } : {}),
+          ...('foreclosureChargeFlat' in dto ? { foreclosureChargeFlat: dto.foreclosureChargeFlat } : {}),
         },
       });
       return {
         requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
         autoCloseEod: tenant.autoCloseEod,
         foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
+        foreclosureChargePercent: Number(tenant.foreclosureChargePercent),
+        foreclosureChargeFlat: Number(tenant.foreclosureChargeFlat),
       };
     });
   }

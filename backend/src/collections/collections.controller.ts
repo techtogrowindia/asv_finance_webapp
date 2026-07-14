@@ -6,6 +6,7 @@ import { AuthUser } from '../common/types/auth-user';
 import { CollectionsService } from './collections.service';
 import { PostCollectionDto } from './dto/post-collection.dto';
 import { CenterIdDto } from './dto/center-id.dto';
+import { ForecloseDto } from './dto/foreclose.dto';
 
 @Controller('collections')
 export class CollectionsController {
@@ -73,14 +74,23 @@ export class CollectionsController {
   // ---- Foreclosure (BM/HO — collection.foreclose) ----
   @RequirePermission('collection.foreclose')
   @Get(':loanId/foreclosure-quote')
-  foreclosureQuote(@CurrentUser() user: AuthUser, @Param('loanId', ParseUUIDPipe) loanId: string) {
-    return this.collections.foreclosureQuote(user, loanId);
+  foreclosureQuote(
+    @CurrentUser() user: AuthUser,
+    @Param('loanId', ParseUUIDPipe) loanId: string,
+    @Query('waiveInterest') waiveInterest?: string,
+  ) {
+    const waive = waiveInterest !== undefined ? Number(waiveInterest) : undefined;
+    return this.collections.foreclosureQuote(user, loanId, Number.isFinite(waive) ? waive : undefined);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('collection.foreclose')
   @Post(':loanId/foreclose')
-  foreclose(@CurrentUser() user: AuthUser, @Param('loanId', ParseUUIDPipe) loanId: string) {
-    return this.collections.foreclose(user, loanId);
+  foreclose(
+    @CurrentUser() user: AuthUser,
+    @Param('loanId', ParseUUIDPipe) loanId: string,
+    @Body() dto: ForecloseDto,
+  ) {
+    return this.collections.foreclose(user, loanId, dto.waiveInterest);
   }
 }

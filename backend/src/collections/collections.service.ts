@@ -294,34 +294,52 @@ export class CollectionsService {
   }
 
   /** What a borrower would owe to foreclose this loan today, per the tenant policy. */
-  async foreclosureQuote(user: AuthUser, loanId: string) {
+  async foreclosureQuote(user: AuthUser, loanId: string, waiveInterest?: number) {
     return this.prisma.withTenant(user, async (tx) => {
       const loan = await this.getScopedOpenLoan(tx, user, loanId);
       const workingDate = await this.resolveWorkingDate(tx, loan.client.center.branchId);
-      const policy = await this.foreclosurePolicy(tx, user.tenantId);
+      const cfg = await this.foreclosureConfig(tx, user.tenantId);
       const rows = await this.pendingRows(tx, loan.id, undefined);
-      const q = this.computeForeclosure(rows, policy, workingDate);
+      const canWaive = user.permissions.includes('collection.waive');
+      const q = this.computeForeclosure(rows, cfg.policy, workingDate, {
+        chargePercent: cfg.chargePercent,
+        chargeFlat: cfg.chargeFlat,
+        manualWaiveInt: canWaive ? waiveInterest : 0,
+      });
       return {
         loanId: loan.id,
         loanAccount: loan.loanAccount,
-        policy,
+        policy: cfg.policy,
         remainingPrincipal: q.principal,
         interestCharged: q.interest,
         interestWaived: q.waived,
+        manualWaived: q.manualWaived,
+        foreclosureCharge: q.charge,
+        chargePercent: cfg.chargePercent,
+        chargeFlat: cfg.chargeFlat,
+        canWaive,
         payoffTotal: q.total,
         advanceBalance: round2(Number(loan.advanceBalance)),
       };
     });
   }
 
-  /** Foreclose (early-close) a loan: settle per policy, mark CLOSED. */
-  async foreclose(user: AuthUser, loanId: string) {
+  /** Foreclose (early-close) a loan: settle per policy + charge, mark CLOSED. */
+  async foreclose(user: AuthUser, loanId: string, waiveInterest?: number) {
+    const requestedWaive = round2(Math.max(0, waiveInterest ?? 0));
+    if (requestedWaive > 0 && !user.permissions.includes('collection.waive')) {
+      throw new ForbiddenException('You do not have permission to waive interest on foreclosure');
+    }
     return this.prisma.withTenant(user, async (tx) => {
       const loan = await this.getScopedOpenLoan(tx, user, loanId);
       const workingDate = await this.resolveWorkingDate(tx, loan.client.center.branchId);
-      const policy = await this.foreclosurePolicy(tx, user.tenantId);
+      const cfg = await this.foreclosureConfig(tx, user.tenantId);
       const rows = await this.pendingRows(tx, loan.id, undefined);
-      const q = this.computeForeclosure(rows, policy, workingDate);
+      const q = this.computeForeclosure(rows, cfg.policy, workingDate, {
+        chargePercent: cfg.chargePercent,
+        chargeFlat: cfg.chargeFlat,
+        manualWaiveInt: requestedWaive,
+      });
 
       for (const line of q.lines) {
         if (line.pay <= 0 && line.newDueBalance === Number(line.row.dueAmt) - Number(line.row.collAmt)) continue;
@@ -352,6 +370,23 @@ export class CollectionsService {
         });
       }
 
+      // Foreclosure charge — a loan-level receipt, not tied to any installment.
+      if (q.charge > 0) {
+        await tx.collection.create({
+          data: {
+            tenantId: user.tenantId,
+            loanId: loan.id,
+            scheduleId: null,
+            collectedOn: workingDate,
+            amount: q.charge,
+            pri: 0,
+            int: 0,
+            kind: 'FORECLOSURE_CHARGE',
+            enteredBy: user.employeeId,
+          },
+        });
+      }
+
       await tx.loan.update({
         where: { id: loan.id },
         data: { loanType: 'CLOSED', closedDate: workingDate },
@@ -364,16 +399,26 @@ export class CollectionsService {
         action: 'FORECLOSE',
         employeeId: user.employeeId,
         after: {
-          policy,
+          policy: cfg.policy,
           principal: q.principal,
           interestCharged: q.interest,
           interestWaived: q.waived,
+          policyWaived: q.policyWaived,
+          manualWaived: q.manualWaived,
+          foreclosureCharge: q.charge,
           payoffTotal: q.total,
           eodDate: workingDate,
         },
       });
 
-      return { loanId: loan.id, closed: true, payoffTotal: q.total, interestWaived: q.waived };
+      return {
+        loanId: loan.id,
+        closed: true,
+        payoffTotal: q.total,
+        interestWaived: q.waived,
+        manualWaived: q.manualWaived,
+        foreclosureCharge: q.charge,
+      };
     });
   }
 
@@ -452,11 +497,22 @@ export class CollectionsService {
     return all.filter((s) => Number(s.collAmt) < Number(s.dueAmt) && (!asOf || s.dueDate <= asOf));
   }
 
-  /** Foreclosure math: per-row principal always due; interest depends on policy. */
-  private computeForeclosure(rows: ScheduleRow[], policy: string, workingDate: Date) {
+  /**
+   * Foreclosure math: per-row principal is always due; interest depends on the
+   * tenant policy. A discretionary `manualWaiveInt` (BM/HO, gated by
+   * collection.waive) reduces the charged interest further, spread across rows
+   * proportionally so each schedule row still settles to zero. A foreclosure
+   * charge (percent of principal + flat fee) is added on top of the payoff.
+   */
+  private computeForeclosure(
+    rows: ScheduleRow[],
+    policy: string,
+    workingDate: Date,
+    opts: { chargePercent?: number; chargeFlat?: number; manualWaiveInt?: number } = {},
+  ) {
     let principal = 0;
-    let interest = 0;
-    let waived = 0;
+    let policyInterest = 0;
+    let policyWaived = 0;
     const lines = rows.map((row) => {
       const remPri = round2(Number(row.duePri) - Number(row.collPri));
       const remInt = round2(Number(row.dueInt) - Number(row.collInt));
@@ -465,25 +521,54 @@ export class CollectionsService {
       if (policy === 'PRINCIPAL_ONLY') chargeInt = 0;
       else if (policy === 'INTEREST_TO_DATE') chargeInt = isDue ? remInt : 0;
       else chargeInt = remInt; // FULL
-      const waiveInt = round2(remInt - chargeInt);
       principal += remPri;
-      interest += chargeInt;
-      waived += waiveInt;
-      const pay = round2(remPri + chargeInt);
-      return { row, pay, payPri: remPri, payInt: chargeInt, newDueBalance: 0 };
+      policyInterest += chargeInt;
+      policyWaived += round2(remInt - chargeInt);
+      return { row, remPri, chargeInt };
     });
+    principal = round2(principal);
+    policyInterest = round2(policyInterest);
+
+    // Apply the manual waiver against the policy-charged interest, spread across
+    // rows in proportion to each row's charged interest (largest-remainder safe).
+    const manualWaive = round2(Math.min(Math.max(0, opts.manualWaiveInt ?? 0), policyInterest));
+    let waiveLeft = manualWaive;
+    const finalLines = lines.map((l, i) => {
+      let payInt = l.chargeInt;
+      if (manualWaive > 0 && policyInterest > 0) {
+        // Last row absorbs the rounding remainder so the totals reconcile exactly.
+        const share = i === lines.length - 1 ? waiveLeft : round2((manualWaive * l.chargeInt) / policyInterest);
+        const cut = Math.min(payInt, round2(share));
+        payInt = round2(payInt - cut);
+        waiveLeft = round2(waiveLeft - cut);
+      }
+      return { row: l.row, pay: round2(l.remPri + payInt), payPri: l.remPri, payInt, newDueBalance: 0 };
+    });
+
+    const interest = round2(policyInterest - manualWaive);
+    const charge = round2(round2((principal * (opts.chargePercent ?? 0)) / 100) + (opts.chargeFlat ?? 0));
     return {
-      principal: round2(principal),
-      interest: round2(interest),
-      waived: round2(waived),
-      total: round2(principal + interest),
-      lines,
+      principal,
+      interest,
+      waived: round2(policyWaived + manualWaive),
+      policyWaived: round2(policyWaived),
+      manualWaived: manualWaive,
+      charge,
+      total: round2(principal + interest + charge),
+      lines: finalLines,
     };
   }
 
-  private async foreclosurePolicy(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
+  private async foreclosureConfig(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+  ): Promise<{ policy: string; chargePercent: number; chargeFlat: number }> {
     const tenant = await tx.tenant.findFirst({ where: { id: tenantId } });
-    return tenant?.foreclosureInterestPolicy ?? 'FULL';
+    return {
+      policy: tenant?.foreclosureInterestPolicy ?? 'FULL',
+      chargePercent: Number(tenant?.foreclosureChargePercent ?? 0),
+      chargeFlat: Number(tenant?.foreclosureChargeFlat ?? 0),
+    };
   }
 
   private async getScopedCenter(tx: Prisma.TransactionClient, user: AuthUser, centerId: string) {

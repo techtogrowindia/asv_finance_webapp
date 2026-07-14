@@ -89,6 +89,10 @@ model Tenant {
   autoCloseEod                   Boolean  @default(false) @map("auto_close_eod")
   // Interest charged on early loan closure — see ForeclosureInterestPolicy.
   foreclosureInterestPolicy      ForeclosureInterestPolicy @default(FULL) @map("foreclosure_interest_policy")
+  // Foreclosure fee = (percent of remaining principal) + (flat fee). Either may
+  // be 0. Charged on top of the policy payoff; see CollectionsService.
+  foreclosureChargePercent       Decimal  @default(0) @map("foreclosure_charge_percent") @db.Decimal(5, 2)
+  foreclosureChargeFlat          Decimal  @default(0) @map("foreclosure_charge_flat") @db.Decimal(14, 2)
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
@@ -555,18 +559,18 @@ model Collection {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @map("tenant_id") @db.Uuid
   loanId      String   @map("loan_id") @db.Uuid
-  scheduleId  String   @map("schedule_id") @db.Uuid
+  scheduleId  String?  @map("schedule_id") @db.Uuid // null for loan-level receipts (e.g. foreclosure charge)
   collectedOn DateTime @map("collected_on") @db.Date // branch working_date at time of entry
   amount      Decimal  @db.Decimal(14, 2)
   pri         Decimal  @db.Decimal(14, 2)
   int         Decimal  @db.Decimal(14, 2)
-  kind        String   @default("REGULAR") // REGULAR | ADVANCE | FORECLOSURE
+  kind        String   @default("REGULAR") // REGULAR | ADVANCE | FORECLOSURE | FORECLOSURE_CHARGE
   enteredBy   String   @map("entered_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
   tenant   Tenant            @relation(fields: [tenantId], references: [id])
   loan     Loan              @relation(fields: [loanId], references: [id])
-  schedule RepaymentSchedule @relation(fields: [scheduleId], references: [id])
+  schedule RepaymentSchedule? @relation(fields: [scheduleId], references: [id])
 
   @@index([tenantId, loanId])
   @@index([tenantId, scheduleId])
