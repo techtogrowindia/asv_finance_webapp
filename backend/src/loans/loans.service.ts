@@ -143,7 +143,16 @@ export class LoansService {
         where: { client: clientCenterScope(user), ...(status ? { status } : {}) },
         orderBy: { createdAt: 'desc' },
         include: {
-          client: { select: { id: true, clientCode: true, name: true } },
+          client: {
+            select: {
+              id: true,
+              clientCode: true,
+              name: true,
+              memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+            },
+          },
           product: { select: { name: true, loanAmount: true, totalDues: true } },
           purpose: { select: { name: true } },
         },
@@ -153,6 +162,8 @@ export class LoansService {
         clientId: a.client.id,
         clientCode: a.client.clientCode,
         clientName: a.client.name,
+        displayId: `${stripLeadingZeros(a.client.center.branch.code)}.${stripLeadingZeros(a.client.center.code)}.${a.client.group.groupNo}.${a.client.memberNo}`,
+        centerName: `${a.client.center.code} — ${a.client.center.name}`,
         productName: a.product.name,
         loanAmount: a.product.loanAmount,
         totalDues: a.product.totalDues,

@@ -127,11 +127,12 @@ export function LoanVerificationPage() {
         return (
           <div className="panel" key={a.id} style={{ marginBottom: 16 }}>
             <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>{a.clientName} <span className="mono" style={{ fontWeight: 400 }}>· {a.clientCode}</span></span>
+              <span>{a.clientName} <span className="mono" style={{ fontWeight: 400 }}>· {a.displayId} · {a.clientCode}</span></span>
               <span className="badge pending">PENDING</span>
             </div>
             <div className="panel-body">
               <div className="detail-grid" style={{ marginBottom: 18 }}>
+                <div className="detail-item"><div className="k">Center</div><div className="v">{a.centerName}</div></div>
                 <div className="detail-item"><div className="k">Product</div><div className="v">{a.productName}</div></div>
                 <div className="detail-item"><div className="k">Loan Amount</div><div className="v">{inr(a.loanAmount)}</div></div>
                 <div className="detail-item"><div className="k">Total Dues</div><div className="v">{a.totalDues}</div></div>
@@ -147,7 +148,7 @@ export function LoanVerificationPage() {
               )}
 
               <div className="field" style={{ marginBottom: 18 }}>
-                <label>Notes — why is this pending?</label>
+                <label>Approver Notes</label>
                 <textarea
                   className="input"
                   rows={2}

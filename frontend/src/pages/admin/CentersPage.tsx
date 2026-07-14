@@ -134,8 +134,6 @@ function CenterForm({
     meetingTime: initial?.meetingTime ?? '',
     meetingPlace: initial?.meetingPlace ?? '',
     mobile: initial?.mobile ?? '',
-    latitude: initial?.latitude ?? '',
-    longitude: initial?.longitude ?? '',
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -154,8 +152,6 @@ function CenterForm({
         meetingTime: form.meetingTime || undefined,
         meetingPlace: form.meetingPlace || undefined,
         mobile: form.mobile || undefined,
-        latitude: form.latitude ? Number(form.latitude) : undefined,
-        longitude: form.longitude ? Number(form.longitude) : undefined,
       };
       if (initial) await updateCenter(initial.id, body);
       else await createCenter(body);
@@ -190,8 +186,6 @@ function CenterForm({
         <Field label="Meeting place"><input className="input" value={form.meetingPlace} onChange={(e) => set('meetingPlace', e.target.value)} /></Field>
         <Field label="Address"><input className="input" value={form.address} onChange={(e) => set('address', e.target.value)} /></Field>
         <Field label="Mobile"><input className="input" value={form.mobile} onChange={(e) => set('mobile', e.target.value)} /></Field>
-        <Field label="Latitude"><input className="input" value={form.latitude} onChange={(e) => set('latitude', e.target.value)} placeholder="e.g. 10.1234567" /></Field>
-        <Field label="Longitude"><input className="input" value={form.longitude} onChange={(e) => set('longitude', e.target.value)} placeholder="e.g. 78.1234567" /></Field>
       </div>
       <div className="form-actions">
         <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? <span className="spinner" /> : 'Save'}</button>

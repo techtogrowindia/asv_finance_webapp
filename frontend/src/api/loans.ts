@@ -66,6 +66,8 @@ export interface LoanApplicationSummary {
   clientId: string;
   clientCode: string;
   clientName: string;
+  displayId: string;
+  centerName: string;
   productName: string;
   loanAmount: string;
   totalDues: number;
