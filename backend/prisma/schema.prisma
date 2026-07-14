@@ -45,6 +45,15 @@ enum DocumentReviewStatus {
   REJECTED
 }
 
+// How much interest a borrower owes when foreclosing (paying off early) a
+// flat-interest loan. Admin-configurable in Business Settings (invariant #6 —
+// never hardcode loan interest rules).
+enum ForeclosureInterestPolicy {
+  FULL // all remaining principal + all remaining interest (nothing waived)
+  PRINCIPAL_ONLY // remaining principal only; all future interest waived
+  INTEREST_TO_DATE // remaining principal + interest only on installments already due
+}
+
 enum LoanApplicationStatus {
   PENDING
   APPROVED
@@ -78,6 +87,8 @@ model Tenant {
   // manual cash entry — so this is safe to automate). When false (default),
   // staff must close each day by hand on the End of Day page, as before.
   autoCloseEod                   Boolean  @default(false) @map("auto_close_eod")
+  // Interest charged on early loan closure — see ForeclosureInterestPolicy.
+  foreclosureInterestPolicy      ForeclosureInterestPolicy @default(FULL) @map("foreclosure_interest_policy")
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 
@@ -494,6 +505,9 @@ model Loan {
   maturityDate   DateTime   @map("maturity_date") @db.Date
   closedDate     DateTime?  @map("closed_date") @db.Date
   loanType       LoanStatus @default(OPEN) @map("loan_type")
+  // Money collected beyond the current demand is banked here and later applied
+  // to upcoming installments (Loan Advance Adjustment).
+  advanceBalance Decimal    @default(0) @map("advance_balance") @db.Decimal(14, 2)
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
 
@@ -546,6 +560,7 @@ model Collection {
   amount      Decimal  @db.Decimal(14, 2)
   pri         Decimal  @db.Decimal(14, 2)
   int         Decimal  @db.Decimal(14, 2)
+  kind        String   @default("REGULAR") // REGULAR | ADVANCE | FORECLOSURE
   enteredBy   String   @map("entered_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 

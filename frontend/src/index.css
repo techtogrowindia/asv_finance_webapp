@@ -146,6 +146,19 @@ a { color: var(--brand-700); text-decoration: none; }
 .side-ico { width: 20px; text-align: center; opacity: .9; }
 .side-foot { border-top: 1px solid rgba(255,255,255,.1); padding-top: 14px; font-size: 13px; color: #9dbbb3; }
 
+/* Collapsible nav group */
+.side-group { display: flex; flex-direction: column; }
+.side-group-head { border: none; background: none; width: 100%; text-align: left; font: inherit; }
+.side-group-head.active-parent { color: #fff; }
+.side-chevron { margin-left: auto; font-size: 11px; transition: transform .15s; opacity: .8; }
+.side-chevron.open { transform: rotate(90deg); }
+.side-sub { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px; }
+.side-sublink {
+  padding: 9px 14px 9px 46px; border-radius: var(--radius-sm); color: #a7c4bd; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.side-sublink:hover { background: rgba(255,255,255,.06); color: #fff; }
+.side-sublink.active { background: var(--brand-600); color: #fff; }
+
 /* Reports page: left vertical report-type menu + content pane */
 .report-layout { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; margin-top: 6px; }
 .report-menu {

@@ -23,6 +23,10 @@ import { ReportsPage as AdminReportsPage } from './pages/admin/ReportsPage';
 import { RolesPage } from './pages/admin/RolesPage';
 import { KycVerificationPage } from './pages/admin/KycVerificationPage';
 import { ClientTransferPage } from './pages/admin/ClientTransferPage';
+import { DemandCollectionPage } from './pages/collections/DemandCollectionPage';
+import { ArrearCollectionPage } from './pages/collections/ArrearCollectionPage';
+import { LoanAdvancePage } from './pages/collections/LoanAdvancePage';
+import { ForeclosurePage } from './pages/collections/ForeclosurePage';
 
 /** Wraps a page in the employee shell + auth guard (FDO only). */
 function EmployeeRoute({ children }: { children: React.ReactNode }) {
@@ -50,6 +54,10 @@ export default function App() {
         <Route path="/app/enroll" element={<EmployeeRoute><EnrollMemberPage /></EmployeeRoute>} />
         <Route path="/app/loans" element={<EmployeeRoute><LoanApplicationPage /></EmployeeRoute>} />
         <Route path="/app/collections" element={<EmployeeRoute><CollectionsPage /></EmployeeRoute>} />
+        <Route path="/app/collections/demand" element={<EmployeeRoute><DemandCollectionPage /></EmployeeRoute>} />
+        <Route path="/app/collections/arrears" element={<EmployeeRoute><ArrearCollectionPage /></EmployeeRoute>} />
+        <Route path="/app/collections/advance" element={<EmployeeRoute><LoanAdvancePage /></EmployeeRoute>} />
+        <Route path="/app/collections/foreclose" element={<EmployeeRoute><ForeclosurePage /></EmployeeRoute>} />
         <Route path="/app/reports" element={<EmployeeRoute><ReportsPage /></EmployeeRoute>} />
         <Route path="/app/loans/:loanId/ledger" element={<EmployeeRoute><LoanLedgerPage /></EmployeeRoute>} />
 
@@ -155,6 +163,12 @@ export default function App() {
             </RequireAuth>
           }
         />
+        {/* Collections — shared pages, admin portal (BM/HO). Permission-gated in nav. */}
+        <Route path="/admin/collections" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><CollectionsPage /></AdminLayout></RequireAuth>} />
+        <Route path="/admin/collections/demand" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><DemandCollectionPage /></AdminLayout></RequireAuth>} />
+        <Route path="/admin/collections/arrears" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><ArrearCollectionPage /></AdminLayout></RequireAuth>} />
+        <Route path="/admin/collections/advance" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><LoanAdvancePage /></AdminLayout></RequireAuth>} />
+        <Route path="/admin/collections/foreclose" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><ForeclosurePage /></AdminLayout></RequireAuth>} />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

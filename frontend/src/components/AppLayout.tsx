@@ -1,23 +1,26 @@
 import { ReactNode, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Logo } from './Logo';
-
-interface NavItem {
-  to: string;
-  label: string;
-  icon: string;
-  perm?: string[];
-}
+import { SideNav, SideNavItem } from './SideNav';
 
 /** Employee (Field Officer) portal shell. Nav is task-oriented, not a clone.
  *  `perm`: item shows if the user holds ANY of these keys (undefined = always). */
-const EMPLOYEE_NAV: NavItem[] = [
-  { to: '/app', label: 'Dashboard', icon: '▤' },
+const EMPLOYEE_NAV: SideNavItem[] = [
+  { to: '/app', label: 'Dashboard', icon: '▤', end: true },
   { to: '/app/clients', label: 'Members', icon: '☺', perm: ['member.view'] },
   { to: '/app/enroll', label: 'Enroll Member', icon: '＋', perm: ['member.create'] },
   { to: '/app/loans', label: 'Loans', icon: '₹', perm: ['loan.apply', 'loan.view'] },
-  { to: '/app/collections', label: 'Collections', icon: '✓', perm: ['collection.view'] },
+  {
+    label: 'Collections', icon: '✓', perm: ['collection.view'],
+    children: [
+      { to: '/app/collections', label: 'Field Collection', end: true, perm: ['collection.post'] },
+      { to: '/app/collections/demand', label: 'Demand Collection', perm: ['collection.post'] },
+      { to: '/app/collections/arrears', label: 'Arrear Collection', perm: ['collection.post'] },
+      { to: '/app/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
+      { to: '/app/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
+    ],
+  },
   { to: '/app/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
 ];
 
@@ -26,26 +29,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
-  const nav = EMPLOYEE_NAV.filter((item) => !item.perm || item.perm.some((p) => can(p)));
 
   return (
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <Logo light />
-        <nav className="side-nav">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/app'}
-              className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              <span className="side-ico">{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <SideNav items={EMPLOYEE_NAV} can={can} onNavigate={() => setMenuOpen(false)} />
         <div className="side-foot">Field Officer · {user?.code}</div>
       </aside>
 

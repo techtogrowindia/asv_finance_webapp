@@ -14,6 +14,7 @@ export class SettingsService {
       return {
         requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
         autoCloseEod: tenant.autoCloseEod,
+        foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
       };
     });
   }
@@ -25,11 +26,13 @@ export class SettingsService {
         data: {
           ...('requireLoanProductAtEnrollment' in dto ? { requireLoanProductAtEnrollment: dto.requireLoanProductAtEnrollment } : {}),
           ...('autoCloseEod' in dto ? { autoCloseEod: dto.autoCloseEod } : {}),
+          ...('foreclosureInterestPolicy' in dto ? { foreclosureInterestPolicy: dto.foreclosureInterestPolicy } : {}),
         },
       });
       return {
         requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
         autoCloseEod: tenant.autoCloseEod,
+        foreclosureInterestPolicy: tenant.foreclosureInterestPolicy,
       };
     });
   }

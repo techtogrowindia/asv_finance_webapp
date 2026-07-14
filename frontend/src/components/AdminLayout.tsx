@@ -1,16 +1,27 @@
 import { ReactNode, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Logo } from './Logo';
+import { SideNav, SideNavItem } from './SideNav';
 
 /** `perm`: nav item shows if the user holds ANY of these keys (undefined = always). */
-const ADMIN_NAV: { to: string; label: string; icon: string; perm?: string[] }[] = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: '▤' },
+const ADMIN_NAV: SideNavItem[] = [
+  { to: '/admin/dashboard', label: 'Dashboard', icon: '▤', end: true },
   { to: '/admin/employees', label: 'Employees', icon: '☺', perm: ['employee.manage'] },
   { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
   { to: '/admin/kyc-verification', label: 'KYC Verification', icon: '⚿', perm: ['member.verify'] },
   { to: '/admin/client-transfer', label: 'Client Transfer', icon: '⇄', perm: ['member.transfer'] },
+  {
+    label: 'Collections', icon: '₹', perm: ['collection.view'],
+    children: [
+      { to: '/admin/collections', label: 'Field Collection', end: true, perm: ['collection.post'] },
+      { to: '/admin/collections/demand', label: 'Demand Collection', perm: ['collection.post'] },
+      { to: '/admin/collections/arrears', label: 'Arrear Collection', perm: ['collection.post'] },
+      { to: '/admin/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
+      { to: '/admin/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
+    ],
+  },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
   { to: '/admin/roles', label: 'Roles', icon: '◈', perm: ['role.manage'] },
@@ -22,25 +33,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
-  const nav = ADMIN_NAV.filter((item) => !item.perm || item.perm.some((p) => can(p)));
 
   return (
     <div className="shell">
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <Logo light />
-        <nav className="side-nav">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}
-              onClick={() => setMenuOpen(false)}
-            >
-              <span className="side-ico">{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <SideNav items={ADMIN_NAV} can={can} onNavigate={() => setMenuOpen(false)} />
         <div className="side-foot">{user?.role} · {user?.code}</div>
       </aside>
 

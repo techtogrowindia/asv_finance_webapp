@@ -37,6 +37,8 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
     permissions: [
       { key: 'collection.view', label: 'View demand & collections' },
       { key: 'collection.post', label: 'Post collections' },
+      { key: 'collection.advance', label: 'Apply loan advance' },
+      { key: 'collection.foreclose', label: 'Foreclose (early-close) a loan' },
     ],
   },
   {

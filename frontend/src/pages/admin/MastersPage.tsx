@@ -70,18 +70,41 @@ export function MastersPage() {
   );
 }
 
+const FORECLOSURE_LABELS: Record<string, string> = {
+  FULL: 'Full — principal + all remaining interest',
+  PRINCIPAL_ONLY: 'Principal only — waive future interest',
+  INTEREST_TO_DATE: 'Principal + interest up to today only',
+};
+
 function SettingsTab() {
   const [requireLoanProductAtEnrollment, setRequireLoanProductAtEnrollment] = useState<boolean | null>(null);
   const [autoCloseEod, setAutoCloseEod] = useState<boolean | null>(null);
+  const [foreclosurePolicy, setForeclosurePolicy] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [catchingUp, setCatchingUp] = useState(false);
   const [catchUpMsg, setCatchUpMsg] = useState('');
 
   useEffect(() => {
     getSettings()
-      .then((s) => { setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment); setAutoCloseEod(s.autoCloseEod); })
+      .then((s) => {
+        setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment);
+        setAutoCloseEod(s.autoCloseEod);
+        setForeclosurePolicy(s.foreclosureInterestPolicy);
+      })
       .catch((e) => setError(e.message));
   }, []);
+
+  async function changeForeclosurePolicy(next: string) {
+    setError('');
+    const prev = foreclosurePolicy;
+    setForeclosurePolicy(next);
+    try {
+      await updateSettings({ foreclosureInterestPolicy: next as 'FULL' | 'PRINCIPAL_ONLY' | 'INTEREST_TO_DATE' });
+    } catch (e) {
+      setForeclosurePolicy(prev);
+      setError(e instanceof Error ? e.message : 'Save failed');
+    }
+  }
 
   async function toggleEnrollment() {
     if (requireLoanProductAtEnrollment === null) return;
@@ -181,6 +204,30 @@ function SettingsTab() {
           <div className="hint" style={{ marginTop: 4 }}>
             Closes every overdue day for all your branches right now, whether or not Automatic is on —
             useful the first time you turn this on, or if a branch has fallen behind.
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">Loan Foreclosure</div>
+        <div className="panel-body">
+          <div className="field" style={{ maxWidth: 480 }}>
+            <label>Interest charged on early closure</label>
+            <select
+              className="input"
+              value={foreclosurePolicy ?? ''}
+              disabled={foreclosurePolicy === null}
+              onChange={(e) => changeForeclosurePolicy(e.target.value)}
+            >
+              {Object.entries(FORECLOSURE_LABELS).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="hint" style={{ marginTop: 12 }}>
+            When a member closes a loan early, this decides how much of the remaining (upfront flat)
+            interest they still owe. The Foreclosure screen always shows the exact payoff for the
+            chosen policy before you confirm.
           </div>
         </div>
       </div>
