@@ -7,6 +7,7 @@ import { clientCenterScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
+import { DisburseLoanDto } from './dto/disburse-loan.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 
 @Injectable()
@@ -147,8 +148,15 @@ export class LoansService {
     });
   }
 
-  /** Approve a pending application: creates the Loan + full RepaymentSchedule. */
-  async disburse(user: AuthUser, applicationId: string) {
+  /**
+   * Approve a pending application: creates the Loan + full RepaymentSchedule.
+   * Disbursal date and due-start date both default to the branch's working
+   * date but can be overridden (e.g. backdating a disbursal that happened in
+   * the field a few days ago, or scheduling the first due for the center's
+   * next meeting rather than today) — never system now(), still bounded by
+   * the working date so nothing can be disbursed "in the future".
+   */
+  async disburse(user: AuthUser, applicationId: string, dto: DisburseLoanDto = {}) {
     return this.prisma.withTenant(user, async (tx) => {
       const application = await tx.loanApplication.findFirst({
         where: { id: applicationId, client: clientCenterScope(user) },
@@ -170,6 +178,15 @@ export class LoansService {
       const branch = await tx.branch.findUnique({ where: { id: application.client.center.branchId } });
       const workingDate = branch?.workingDate ?? new Date();
 
+      const disbursalDate = dto.disbursalDate ? new Date(dto.disbursalDate) : workingDate;
+      const dueStartDate = dto.dueStartDate ? new Date(dto.dueStartDate) : workingDate;
+      if (disbursalDate > workingDate) {
+        throw new BadRequestException("Disbursal date can't be after the branch's working date");
+      }
+      if (dueStartDate < disbursalDate) {
+        throw new BadRequestException("Due start date can't be before the disbursal date");
+      }
+
       const cycleNo = (await tx.loan.count({ where: { clientId: application.client.id } })) + 1;
       const loanAccount = `${application.client.clientCode}/${cycleNo}`;
 
@@ -181,7 +198,7 @@ export class LoansService {
         interestAmount,
         totalDues,
         daysBetween: application.product.frequency.daysBetween,
-        dueStartDate: workingDate,
+        dueStartDate,
       });
       const maturityDate = rows[rows.length - 1].dueDate;
 
@@ -197,8 +214,8 @@ export class LoansService {
           interestAmount,
           totalAmount: round2(loanAmount + interestAmount),
           totalDues,
-          disbursalDate: workingDate,
-          dueStartDate: workingDate,
+          disbursalDate,
+          dueStartDate,
           maturityDate,
           loanType: 'OPEN',
           schedule: {
@@ -226,10 +243,10 @@ export class LoansService {
         entityId: loan.id,
         action: 'DISBURSE',
         employeeId: user.employeeId,
-        after: { loanAccount, loanAmount, interestAmount, totalDues, disbursalDate: workingDate },
+        after: { loanAccount, loanAmount, interestAmount, totalDues, disbursalDate, dueStartDate },
       });
 
-      return { id: loan.id, loanAccount, disbursalDate: workingDate, maturityDate };
+      return { id: loan.id, loanAccount, disbursalDate, dueStartDate, maturityDate };
     });
   }
 

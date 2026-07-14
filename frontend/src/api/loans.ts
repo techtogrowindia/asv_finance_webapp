@@ -79,10 +79,10 @@ export interface LoanApplicationSummary {
 export const listLoanApplications = (status?: 'PENDING' | 'APPROVED' | 'REJECTED') =>
   api<LoanApplicationSummary[]>(`/loan-applications${status ? `?status=${status}` : ''}`);
 
-export const disburseApplication = (id: string) =>
-  api<{ id: string; loanAccount: string; disbursalDate: string; maturityDate: string }>(
+export const disburseApplication = (id: string, dates?: { disbursalDate?: string; dueStartDate?: string }) =>
+  api<{ id: string; loanAccount: string; disbursalDate: string; dueStartDate: string; maturityDate: string }>(
     `/loan-applications/${id}/disburse`,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify(dates ?? {}) },
   );
 
 export const rejectApplication = (id: string, reason?: string) =>

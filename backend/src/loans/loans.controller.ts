@@ -4,6 +4,7 @@ import { Roles } from '../common/auth/roles.decorator';
 import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
+import { DisburseLoanDto } from './dto/disburse-loan.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { LoansService } from './loans.service';
 
@@ -45,8 +46,12 @@ export class LoansController {
   @Roles('BM', 'HO')
   @RequirePermission('loan.approve')
   @Post('loan-applications/:id/disburse')
-  disburse(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.loans.disburse(user, id);
+  disburse(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DisburseLoanDto,
+  ) {
+    return this.loans.disburse(user, id, dto);
   }
 
   @Roles('BM', 'HO')
