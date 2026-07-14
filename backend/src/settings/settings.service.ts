@@ -11,7 +11,10 @@ export class SettingsService {
     return this.prisma.withTenant(user, async (tx) => {
       const tenant = await tx.tenant.findFirst({ where: { id: user.tenantId } });
       if (!tenant) throw new NotFoundException('Tenant not found');
-      return { requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment };
+      return {
+        requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
+        autoCloseEod: tenant.autoCloseEod,
+      };
     });
   }
 
@@ -19,9 +22,15 @@ export class SettingsService {
     return this.prisma.withTenant(user, async (tx) => {
       const tenant = await tx.tenant.update({
         where: { id: user.tenantId },
-        data: { requireLoanProductAtEnrollment: dto.requireLoanProductAtEnrollment },
+        data: {
+          ...('requireLoanProductAtEnrollment' in dto ? { requireLoanProductAtEnrollment: dto.requireLoanProductAtEnrollment } : {}),
+          ...('autoCloseEod' in dto ? { autoCloseEod: dto.autoCloseEod } : {}),
+        },
       });
-      return { requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment };
+      return {
+        requireLoanProductAtEnrollment: tenant.requireLoanProductAtEnrollment,
+        autoCloseEod: tenant.autoCloseEod,
+      };
     });
   }
 }

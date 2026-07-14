@@ -70,9 +70,14 @@ model Tenant {
   name      String
   code      String   @unique
   isActive  Boolean  @default(true) @map("is_active")
-  // Admin-configurable (Masters > Settings): whether the FDO must pick a loan
+  // Admin-configurable (Business Settings): whether the FDO must pick a loan
   // product while enrolling a member, or it stays optional.
   requireLoanProductAtEnrollment Boolean  @default(false) @map("require_loan_product_at_enrollment")
+  // When true, a daily cron closes each branch's overdue working days
+  // automatically (EOD closing is fully computed from ledger data — no
+  // manual cash entry — so this is safe to automate). When false (default),
+  // staff must close each day by hand on the End of Day page, as before.
+  autoCloseEod                   Boolean  @default(false) @map("auto_close_eod")
   createdAt                      DateTime @default(now()) @map("created_at")
   updatedAt                      DateTime @updatedAt @map("updated_at")
 

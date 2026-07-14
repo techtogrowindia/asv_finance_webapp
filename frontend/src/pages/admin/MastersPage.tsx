@@ -20,6 +20,7 @@ import {
   updatePurpose,
 } from '../../api/masters';
 import { getSettings, updateSettings } from '../../api/settings';
+import { catchUpEod } from '../../api/eod';
 
 type Tab = 'products' | 'frequencies' | 'purposes' | 'documentTypes' | 'settings';
 const TABS: { id: Tab; label: string }[] = [
@@ -71,13 +72,18 @@ export function MastersPage() {
 
 function SettingsTab() {
   const [requireLoanProductAtEnrollment, setRequireLoanProductAtEnrollment] = useState<boolean | null>(null);
+  const [autoCloseEod, setAutoCloseEod] = useState<boolean | null>(null);
   const [error, setError] = useState('');
+  const [catchingUp, setCatchingUp] = useState(false);
+  const [catchUpMsg, setCatchUpMsg] = useState('');
 
   useEffect(() => {
-    getSettings().then((s) => setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment)).catch((e) => setError(e.message));
+    getSettings()
+      .then((s) => { setRequireLoanProductAtEnrollment(s.requireLoanProductAtEnrollment); setAutoCloseEod(s.autoCloseEod); })
+      .catch((e) => setError(e.message));
   }, []);
 
-  async function toggle() {
+  async function toggleEnrollment() {
     if (requireLoanProductAtEnrollment === null) return;
     const next = !requireLoanProductAtEnrollment;
     setError('');
@@ -89,29 +95,96 @@ function SettingsTab() {
     }
   }
 
+  async function toggleAutoCloseEod() {
+    if (autoCloseEod === null) return;
+    const next = !autoCloseEod;
+    setError('');
+    try {
+      await updateSettings({ autoCloseEod: next });
+      setAutoCloseEod(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Save failed');
+    }
+  }
+
+  async function catchUpNow() {
+    setError('');
+    setCatchUpMsg('');
+    setCatchingUp(true);
+    try {
+      await catchUpEod();
+      setCatchUpMsg('Done — every branch is caught up to today.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Catch-up failed');
+    } finally {
+      setCatchingUp(false);
+    }
+  }
+
   return (
-    <div className="panel">
-      <div className="panel-head">Enrollment Settings</div>
-      <div className="panel-body">
-        {error && <div className="alert-error">{error}</div>}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <button
-            className={`toggle ${requireLoanProductAtEnrollment ? 'on' : ''}`}
-            title="Click to toggle whether a loan product and purpose must be picked at enrollment"
-            disabled={requireLoanProductAtEnrollment === null}
-            onClick={toggle}
-          >
-            <span className="knob" />
-            <span className="toggle-label">{requireLoanProductAtEnrollment ? 'Mandatory' : 'Optional'}</span>
-          </button>
-          <span style={{ color: 'var(--ink-700)' }}>Loan product &amp; purpose required while enrolling a member</span>
-        </div>
-        <div className="hint" style={{ marginTop: 12 }}>
-          When Mandatory, field officers must pick both a loan product and a purpose on the Enroll
-          Member form. When Optional, they may leave both blank and apply for a loan later.
+    <>
+      <div className="panel">
+        <div className="panel-head">Enrollment Settings</div>
+        <div className="panel-body">
+          {error && <div className="alert-error">{error}</div>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button
+              className={`toggle ${requireLoanProductAtEnrollment ? 'on' : ''}`}
+              title="Click to toggle whether a loan product and purpose must be picked at enrollment"
+              disabled={requireLoanProductAtEnrollment === null}
+              onClick={toggleEnrollment}
+            >
+              <span className="knob" />
+              <span className="toggle-label">{requireLoanProductAtEnrollment ? 'Mandatory' : 'Optional'}</span>
+            </button>
+            <span style={{ color: 'var(--ink-700)' }}>Loan product &amp; purpose required while enrolling a member</span>
+          </div>
+          <div className="hint" style={{ marginTop: 12 }}>
+            When Mandatory, field officers must pick both a loan product and a purpose on the Enroll
+            Member form. When Optional, they may leave both blank and apply for a loan later.
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="panel" style={{ marginTop: 18 }}>
+        <div className="panel-head">End of Day</div>
+        <div className="panel-body">
+          {catchUpMsg && (
+            <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7', marginBottom: 14 }}>
+              {catchUpMsg}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button
+              className={`toggle ${autoCloseEod ? 'on' : ''}`}
+              title="Click to toggle whether End of Day closes itself automatically each night"
+              disabled={autoCloseEod === null}
+              onClick={toggleAutoCloseEod}
+            >
+              <span className="knob" />
+              <span className="toggle-label">{autoCloseEod ? 'Automatic' : 'Manual'}</span>
+            </button>
+            <span style={{ color: 'var(--ink-700)' }}>Close each branch's working day automatically every night</span>
+          </div>
+          <div className="hint" style={{ marginTop: 12 }}>
+            End of Day figures (opening balance, receipts, payments) are always computed from
+            collections and disbursements — nothing is typed in — so this is safe to automate. When
+            Automatic, a nightly job closes any overdue day for every branch, keeping "today" current
+            everywhere (loan disbursal dates, demand, reports). When Manual, staff close each day by
+            hand on the End of Day page, as before.
+          </div>
+          <div className="form-actions" style={{ marginTop: 16 }}>
+            <button className="btn btn-ghost" disabled={catchingUp} onClick={catchUpNow}>
+              {catchingUp ? <span className="spinner" /> : 'Catch up now'}
+            </button>
+          </div>
+          <div className="hint" style={{ marginTop: 4 }}>
+            Closes every overdue day for all your branches right now, whether or not Automatic is on —
+            useful the first time you turn this on, or if a branch has fallen behind.
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

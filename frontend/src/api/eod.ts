@@ -39,3 +39,6 @@ export const getEodHistory = (branchId?: string) =>
 
 export const closeEod = (branchId?: string) =>
   api<EodCloseResult>('/eod/close', { method: 'POST', body: JSON.stringify({ branchId }) });
+
+/** Closes every overdue day for the caller's tenant right now (independent of the auto-close setting). */
+export const catchUpEod = () => api<{ done: boolean }>('/eod/catch-up', { method: 'POST' });
