@@ -202,6 +202,21 @@ export interface ClosureRow {
   closedDate: string | null;
 }
 
+export interface LoanApplicationReportRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  memberName: string;
+  loanAccount: string | null;
+  product: string;
+  purpose: string;
+  requestedAmount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  appliedDate: string;
+  fdoName: string | null;
+}
+
 const qs = (from: string, to: string) => `?from=${from}&to=${to}`;
 
 export const getZeroCollection = (from: string, to: string) =>
@@ -233,3 +248,5 @@ export const getCollectionRegister = (from: string, to: string) =>
   api<CollectionRegisterRow[]>(`/reports/collection-register${qs(from, to)}`);
 export const getLoanClosures = (from: string, to: string) =>
   api<ClosureRow[]>(`/reports/loan-closures${qs(from, to)}`);
+export const getLoanApplicationsReport = (from: string, to: string, status?: string) =>
+  api<LoanApplicationReportRow[]>(`/reports/loan-applications${qs(from, to)}${status ? `&status=${status}` : ''}`);

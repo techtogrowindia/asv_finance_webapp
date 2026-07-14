@@ -73,6 +73,7 @@ export interface LoanApplicationSummary {
   totalDues: number;
   purposeName: string;
   requestedAmount: string;
+  loanAccount: string | null;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   warnings: string[];
   notes: string | null;

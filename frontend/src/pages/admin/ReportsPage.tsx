@@ -16,6 +16,7 @@ import {
   EmployeePerformanceRow,
   ForeclosureReportRow,
   GroupWiseRow,
+  LoanApplicationReportRow,
   ParAgingRow,
   ZeroCollectionRow,
   getAdvanceCollection,
@@ -28,6 +29,7 @@ import {
   getEmployeePerformance,
   getForeclosures,
   getGroupWise,
+  getLoanApplicationsReport,
   getLoanClosures,
   getParAging,
   getZeroCollection,
@@ -35,7 +37,7 @@ import {
 import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
 import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
+type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
 const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
@@ -46,6 +48,7 @@ const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'group', label: 'Group Wise', perm: 'report.portfolio' },
   { id: 'client', label: 'Client Wise', perm: 'report.portfolio' },
   { id: 'employee', label: 'Employee Performance', perm: 'report.portfolio' },
+  { id: 'applications', label: 'Loan Applications', perm: 'report.portfolio' },
   { id: 'disbursement', label: 'Disbursement Register', perm: 'report.portfolio' },
   { id: 'par', label: 'PAR / Overdue Aging', perm: 'report.portfolio' },
   { id: 'foreclosure', label: 'Foreclosure', perm: 'report.portfolio' },
@@ -64,11 +67,11 @@ export function ReportsPage() {
 
   return (
     <AdminLayout>
-      <h1 className="page-title">Reports</h1>
-      <p className="page-sub">Portfolio summaries and daily monitoring — filter by any period and export to CSV or Excel.</p>
+      <h1 className="page-title no-print">Reports</h1>
+      <p className="page-sub no-print">Portfolio summaries and daily monitoring — filter by any period and export to CSV or Excel.</p>
 
       <div className="report-layout">
-        <nav className="report-menu">
+        <nav className="report-menu no-print">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -90,6 +93,7 @@ export function ReportsPage() {
           {tab === 'register' && <CollectionRegisterTab />}
           {tab === 'client' && <ClientWiseTab />}
           {tab === 'employee' && <EmployeePerformanceTab />}
+          {tab === 'applications' && <LoanApplicationsReportTab />}
           {tab === 'disbursement' && <DisbursementTab />}
           {tab === 'par' && <ParAgingTab />}
           {tab === 'foreclosure' && <ForeclosureTab />}
@@ -666,6 +670,76 @@ function EmployeePerformanceTab() {
 }
 
 // ---------------------------------------------------------------------------
+
+function LoanApplicationsReportTab() {
+  const filter = useDateFilter('month');
+  const [status, setStatus] = useState('');
+  const [rows, setRows] = useState<LoanApplicationReportRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getLoanApplicationsReport(filter.from, filter.to, status || undefined)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Loan applications submitted in this window (all branches &amp; centers in scope)</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('loan-applications.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('loan-applications.xlsx', asRows())}
+        >
+          <div className="field">
+            <label>Status</label>
+            <select className="input" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </div>
+        </DateFilterBar>
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Product</th>
+                  <th>Purpose</th><th>Amount</th><th>Applied</th><th>Status</th><th>FDO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount ?? '—'}</td>
+                    <td>{r.product}</td>
+                    <td>{r.purpose}</td>
+                    <td>{inr(r.requestedAmount)}</td>
+                    <td>{date(r.appliedDate)}</td>
+                    <td><span className={`badge ${r.status === 'APPROVED' ? 'active' : r.status === 'REJECTED' ? 'closed' : 'pending'}`}>{r.status}</span></td>
+                    <td>{r.fdoName ?? '—'}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={10} className="empty">No applications in this window.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function DisbursementTab() {
   const filter = useDateFilter('month');

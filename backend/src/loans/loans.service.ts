@@ -187,6 +187,7 @@ export class LoansService {
           },
           product: { select: { name: true, loanAmount: true, totalDues: true } },
           purpose: { select: { name: true } },
+          loan: { select: { loanAccount: true } },
         },
       });
       return applications.map((a) => ({
@@ -201,6 +202,7 @@ export class LoansService {
         totalDues: a.product.totalDues,
         purposeName: a.purpose.name,
         requestedAmount: a.requestedAmount,
+        loanAccount: a.loan?.loanAccount ?? null,
         status: a.status,
         warnings: (a.warnings as string[] | null) ?? [],
         notes: a.notes,

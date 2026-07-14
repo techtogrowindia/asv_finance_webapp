@@ -130,4 +130,17 @@ export class ReportsController {
     const [f, t] = parseRange(from, to);
     return this.reports.closureReport(user, f, t);
   }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
+  @Get('loan-applications')
+  loanApplications(
+    @CurrentUser() user: AuthUser,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED',
+  ) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.loanApplicationsReport(user, f, t, status);
+  }
 }

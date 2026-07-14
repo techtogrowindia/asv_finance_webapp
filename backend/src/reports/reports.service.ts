@@ -683,4 +683,49 @@ export class ReportsService {
         });
     });
   }
+
+  /** Loan applications submitted within [from, to] across all in-scope branches
+   *  & centers (BM: own branch, HO: whole tenant), with the disbursed loan a/c. */
+  async loanApplicationsReport(user: AuthUser, from: Date, to: Date, status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
+    return this.prisma.withTenant(user, async (tx) => {
+      const apps = await tx.loanApplication.findMany({
+        where: {
+          createdAt: { gte: from, lte: to },
+          ...(status ? { status } : {}),
+          client: { center: centerScope(user) },
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          client: {
+            select: {
+              name: true,
+              memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true } }, fdo: { select: { name: true } } } },
+            },
+          },
+          product: { select: { name: true } },
+          purpose: { select: { name: true } },
+          loan: { select: { loanAccount: true } },
+        },
+      });
+      return apps.map((a) => {
+        const c = a.client;
+        return {
+          branchCode: c.center.branch.code,
+          centerCode: c.center.code,
+          centerName: c.center.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          memberName: c.name,
+          loanAccount: a.loan?.loanAccount ?? null,
+          product: a.product.name,
+          purpose: a.purpose.name,
+          requestedAmount: round2(Number(a.requestedAmount)),
+          status: a.status,
+          appliedDate: a.createdAt,
+          fdoName: c.center.fdo?.name ?? null,
+        };
+      });
+    });
+  }
 }

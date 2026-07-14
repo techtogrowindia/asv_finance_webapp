@@ -19,10 +19,10 @@ export function ReportsPage() {
 
   return (
     <>
-      <h1 className="page-title">Reports</h1>
-      <p className="page-sub">Demand sheet and loan ledger — printable.</p>
+      <h1 className="page-title no-print">Reports</h1>
+      <p className="page-sub no-print">Demand sheet and loan ledger — printable.</p>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+      <div className="no-print" style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
         <button className={`btn ${tab === 'demand' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('demand')}>
           Demand Sheet
         </button>
@@ -142,7 +142,7 @@ function LoanApplicationsTab() {
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
             <thead>
-              <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Product</th><th>Amount</th><th>Applied</th><th>Status</th></tr>
+              <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Loan A/c</th><th>Product</th><th>Amount</th><th>Applied</th><th>Status</th></tr>
             </thead>
             <tbody>
               {rows?.map((a) => (
@@ -150,13 +150,14 @@ function LoanApplicationsTab() {
                   <td className="mono">{a.displayId}</td>
                   <td>{a.clientName}</td>
                   <td>{a.centerName}</td>
+                  <td className="mono">{a.loanAccount ?? '—'}</td>
                   <td>{a.productName}</td>
                   <td>{inr(a.loanAmount)}</td>
                   <td>{date(a.createdAt)}</td>
                   <td><span className={`badge ${a.status === 'APPROVED' ? 'active' : a.status === 'REJECTED' ? 'closed' : 'pending'}`}>{a.status}</span></td>
                 </tr>
               ))}
-              {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No loan applications.</td></tr>}
+              {rows && rows.length === 0 && <tr><td colSpan={8} className="empty">No loan applications.</td></tr>}
             </tbody>
           </table>
         </div>
