@@ -37,16 +37,13 @@ import {
 import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
 import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
+type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
 const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
   { id: 'advance', label: 'Advance Collection', perm: 'report.monitoring' },
   { id: 'register', label: 'Collection Register', perm: 'report.monitoring' },
-  { id: 'branch', label: 'Branch Wise', perm: 'report.portfolio' },
-  { id: 'center', label: 'Center Wise', perm: 'report.portfolio' },
-  { id: 'group', label: 'Group Wise', perm: 'report.portfolio' },
-  { id: 'client', label: 'Client Wise', perm: 'report.portfolio' },
+  { id: 'portfolio', label: 'Portfolio Summary', perm: 'report.portfolio' },
   { id: 'employee', label: 'Employee Performance', perm: 'report.portfolio' },
   { id: 'applications', label: 'Loan Applications', perm: 'report.portfolio' },
   { id: 'disbursement', label: 'Disbursement Register', perm: 'report.portfolio' },
@@ -87,11 +84,8 @@ export function ReportsPage() {
           {tab === 'zero' && <ZeroCollectionTab />}
           {tab === 'followup' && <CollectionFollowupTab />}
           {tab === 'advance' && <AdvanceCollectionTab />}
-          {tab === 'branch' && <BranchWiseTab />}
-          {tab === 'center' && <CenterWiseTab />}
-          {tab === 'group' && <GroupWiseTab />}
           {tab === 'register' && <CollectionRegisterTab />}
-          {tab === 'client' && <ClientWiseTab />}
+          {tab === 'portfolio' && <PortfolioSummaryTab />}
           {tab === 'employee' && <EmployeePerformanceTab />}
           {tab === 'applications' && <LoanApplicationsReportTab />}
           {tab === 'disbursement' && <DisbursementTab />}
@@ -362,248 +356,199 @@ function AdvanceCollectionTab() {
 // Portfolio summaries: disbursement/collection within the window; outstanding
 // and arrear as of the window's end date.
 
-function BranchWiseTab() {
+type PortfolioLevel = 'branch' | 'center' | 'group' | 'client';
+
+/** Branch/Center/Group/Client Wise combined behind one level dropdown — same
+ *  date filter and export, just a different aggregation grain and columns. */
+function PortfolioSummaryTab() {
   const filter = useDateFilter('month');
-  const [rows, setRows] = useState<BranchWiseRow[] | null>(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function show() {
-    setError(''); setBusy(true);
-    try { setRows(await getBranchWise(filter.from, filter.to)); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setBusy(false); }
-  }
-
-  useEffect(() => { show(); }, []);
-  const asRows = () => rows as unknown as Record<string, unknown>[];
-
-  return (
-    <div className="panel">
-      <div className="panel-head">Portfolio summary per branch</div>
-      <div className="panel-body">
-        <DateFilterBar
-          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
-          onCsv={() => rows && downloadCsv('branch-wise.csv', asRows())}
-          onXlsx={() => rows && downloadXlsx('branch-wise.xlsx', asRows())}
-        />
-        {error && <div className="alert-error">{error}</div>}
-        {rows && (
-          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Branch</th><th>Centers</th><th>Clients</th><th>Open Loans</th>
-                  <th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.branchCode} — {r.branchName}</td>
-                    <td>{r.centers}</td>
-                    <td>{r.clients}</td>
-                    <td>{r.openLoans}</td>
-                    <td>{inr(r.loanDisbursement)}</td>
-                    <td>{inr(r.portfolioOutstanding)}</td>
-                    <td>{inr(r.totalCollected)}</td>
-                    <td>{inr(r.arrear)}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && <tr><td colSpan={8} className="empty">No branches found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CenterWiseTab() {
-  const filter = useDateFilter('month');
-  const [rows, setRows] = useState<CenterWiseRow[] | null>(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function show() {
-    setError(''); setBusy(true);
-    try { setRows(await getCenterWise(filter.from, filter.to)); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setBusy(false); }
-  }
-
-  useEffect(() => { show(); }, []);
-  const asRows = () => rows as unknown as Record<string, unknown>[];
-
-  return (
-    <div className="panel">
-      <div className="panel-head">Portfolio summary per center</div>
-      <div className="panel-body">
-        <DateFilterBar
-          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
-          onCsv={() => rows && downloadCsv('center-wise.csv', asRows())}
-          onXlsx={() => rows && downloadXlsx('center-wise.xlsx', asRows())}
-        />
-        {error && <div className="alert-error">{error}</div>}
-        {rows && (
-          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Branch</th><th>Center</th><th>FDO</th><th>Groups</th><th>Clients</th>
-                  <th>Open Loans</th><th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.branchCode}</td>
-                    <td>{r.centerCode} — {r.centerName}</td>
-                    <td>{r.fdoName ?? '—'}</td>
-                    <td>{r.groups}</td>
-                    <td>{r.clients}</td>
-                    <td>{r.openLoans}</td>
-                    <td>{inr(r.loanDisbursement)}</td>
-                    <td>{inr(r.portfolioOutstanding)}</td>
-                    <td>{inr(r.totalCollected)}</td>
-                    <td>{inr(r.arrear)}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && <tr><td colSpan={10} className="empty">No centers found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function GroupWiseTab() {
-  const filter = useDateFilter('month');
-  const [rows, setRows] = useState<GroupWiseRow[] | null>(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function show() {
-    setError(''); setBusy(true);
-    try { setRows(await getGroupWise(filter.from, filter.to)); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setBusy(false); }
-  }
-
-  useEffect(() => { show(); }, []);
-  const asRows = () => rows as unknown as Record<string, unknown>[];
-
-  return (
-    <div className="panel">
-      <div className="panel-head">Portfolio summary per group</div>
-      <div className="panel-body">
-        <DateFilterBar
-          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
-          onCsv={() => rows && downloadCsv('group-wise.csv', asRows())}
-          onXlsx={() => rows && downloadXlsx('group-wise.xlsx', asRows())}
-        />
-        {error && <div className="alert-error">{error}</div>}
-        {rows && (
-          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Center</th><th>Group</th><th>Members</th><th>Open Loans</th>
-                  <th>Disbursement</th><th>Portfolio OS</th><th>Arrear</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.centerCode} — {r.centerName}</td>
-                    <td>Group {r.groupNo}</td>
-                    <td>{r.members}</td>
-                    <td>{r.openLoans}</td>
-                    <td>{inr(r.loanDisbursement)}</td>
-                    <td>{inr(r.portfolioOutstanding)}</td>
-                    <td>{inr(r.arrear)}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && <tr><td colSpan={7} className="empty">No groups found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ClientWiseTab() {
-  const filter = useDateFilter('month');
+  const [level, setLevel] = useState<PortfolioLevel>('branch');
   const [q, setQ] = useState('');
-  const [rows, setRows] = useState<ClientWiseRow[] | null>(null);
+  const [branchRows, setBranchRows] = useState<BranchWiseRow[] | null>(null);
+  const [centerRows, setCenterRows] = useState<CenterWiseRow[] | null>(null);
+  const [groupRows, setGroupRows] = useState<GroupWiseRow[] | null>(null);
+  const [clientRows, setClientRows] = useState<ClientWiseRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getClientWise(filter.from, filter.to, q || undefined)); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
-    finally { setBusy(false); }
+    try {
+      if (level === 'branch') setBranchRows(await getBranchWise(filter.from, filter.to));
+      else if (level === 'center') setCenterRows(await getCenterWise(filter.from, filter.to));
+      else if (level === 'group') setGroupRows(await getGroupWise(filter.from, filter.to));
+      else setClientRows(await getClientWise(filter.from, filter.to, q || undefined));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setBusy(false);
+    }
   }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, [level]);
 
-  useEffect(() => { show(); }, []);
+  const rows = level === 'branch' ? branchRows : level === 'center' ? centerRows : level === 'group' ? groupRows : clientRows;
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const file = `portfolio-${level}-wise`;
 
   return (
     <div className="panel">
-      <div className="panel-head">Loan-wise client portfolio (search by name, client ID, or loan account)</div>
+      <div className="panel-head">Portfolio summary — pick a level to aggregate by</div>
       <div className="panel-body">
         <DateFilterBar
           filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
-          onCsv={() => rows && downloadCsv('client-wise.csv', asRows())}
-          onXlsx={() => rows && downloadXlsx('client-wise.xlsx', asRows())}
+          onCsv={() => rows && downloadCsv(`${file}.csv`, asRows())}
+          onXlsx={() => rows && downloadXlsx(`${file}.xlsx`, asRows())}
         >
           <div className="field">
-            <label>Search</label>
-            <input
-              type="text" className="input" placeholder="Member name, client ID, or loan A/c"
-              value={q} onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && show()}
-            />
+            <label>Level</label>
+            <select className="input" value={level} onChange={(e) => setLevel(e.target.value as PortfolioLevel)}>
+              <option value="branch">Branch Wise</option>
+              <option value="center">Center Wise</option>
+              <option value="group">Group Wise</option>
+              <option value="client">Client Wise</option>
+            </select>
           </div>
+          {level === 'client' && (
+            <div className="field">
+              <label>Search</label>
+              <input
+                type="text" className="input" placeholder="Member name, client ID, or loan A/c"
+                value={q} onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && show()}
+              />
+            </div>
+          )}
         </DateFilterBar>
         {error && <div className="alert-error">{error}</div>}
-        {rows && (
-          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
-                  <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.centerCode} — {r.centerName}</td>
-                    <td className="mono">{r.displayId}</td>
-                    <td>{r.memberName}</td>
-                    <td className="mono">{r.loanAccount}</td>
-                    <td>{date(r.disbursalDate)}</td>
-                    <td>{inr(r.loanAmount)}</td>
-                    <td>{r.totalDues}</td>
-                    <td>{inr(r.portfolioOutstanding)}</td>
-                    <td>{inr(r.arrear)}</td>
-                    <td>{inr(r.collected)}</td>
-                    <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
-                  </tr>
-                ))}
-                {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {level === 'branch' && branchRows && <BranchWiseTable rows={branchRows} />}
+        {level === 'center' && centerRows && <CenterWiseTable rows={centerRows} />}
+        {level === 'group' && groupRows && <GroupWiseTable rows={groupRows} />}
+        {level === 'client' && clientRows && <ClientWiseTable rows={clientRows} />}
       </div>
+    </div>
+  );
+}
+
+function BranchWiseTable({ rows }: { rows: BranchWiseRow[] }) {
+  return (
+    <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Branch</th><th>Centers</th><th>Clients</th><th>Open Loans</th>
+            <th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.branchCode} — {r.branchName}</td>
+              <td>{r.centers}</td>
+              <td>{r.clients}</td>
+              <td>{r.openLoans}</td>
+              <td>{inr(r.loanDisbursement)}</td>
+              <td>{inr(r.portfolioOutstanding)}</td>
+              <td>{inr(r.totalCollected)}</td>
+              <td>{inr(r.arrear)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={8} className="empty">No branches found.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CenterWiseTable({ rows }: { rows: CenterWiseRow[] }) {
+  return (
+    <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Branch</th><th>Center</th><th>FDO</th><th>Groups</th><th>Clients</th>
+            <th>Open Loans</th><th>Disbursement</th><th>Portfolio OS</th><th>Collected</th><th>Arrear</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.branchCode}</td>
+              <td>{r.centerCode} — {r.centerName}</td>
+              <td>{r.fdoName ?? '—'}</td>
+              <td>{r.groups}</td>
+              <td>{r.clients}</td>
+              <td>{r.openLoans}</td>
+              <td>{inr(r.loanDisbursement)}</td>
+              <td>{inr(r.portfolioOutstanding)}</td>
+              <td>{inr(r.totalCollected)}</td>
+              <td>{inr(r.arrear)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={10} className="empty">No centers found.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GroupWiseTable({ rows }: { rows: GroupWiseRow[] }) {
+  return (
+    <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Center</th><th>Group</th><th>Members</th><th>Open Loans</th>
+            <th>Disbursement</th><th>Portfolio OS</th><th>Arrear</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.centerCode} — {r.centerName}</td>
+              <td>Group {r.groupNo}</td>
+              <td>{r.members}</td>
+              <td>{r.openLoans}</td>
+              <td>{inr(r.loanDisbursement)}</td>
+              <td>{inr(r.portfolioOutstanding)}</td>
+              <td>{inr(r.arrear)}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={7} className="empty">No groups found.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClientWiseTable({ rows }: { rows: ClientWiseRow[] }) {
+  return (
+    <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
+            <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.centerCode} — {r.centerName}</td>
+              <td className="mono">{r.displayId}</td>
+              <td>{r.memberName}</td>
+              <td className="mono">{r.loanAccount}</td>
+              <td>{date(r.disbursalDate)}</td>
+              <td>{inr(r.loanAmount)}</td>
+              <td>{r.totalDues}</td>
+              <td>{inr(r.portfolioOutstanding)}</td>
+              <td>{inr(r.arrear)}</td>
+              <td>{inr(r.collected)}</td>
+              <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }
