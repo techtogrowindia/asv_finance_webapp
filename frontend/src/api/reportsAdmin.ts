@@ -142,6 +142,66 @@ export interface ForeclosureReportRow {
   policy: string;
 }
 
+export interface DisbursementRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  memberName: string;
+  loanAccount: string;
+  cycleNo: number;
+  product: string;
+  disbursalDate: string;
+  loanAmount: number;
+  interestAmount: number;
+  totalAmount: number;
+  totalDues: number;
+  fdoName: string | null;
+}
+
+export interface ParAgingRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  memberName: string;
+  loanAccount: string;
+  loanOS: number;
+  overdue: number;
+  daysOverdue: number;
+  bucket: string;
+  fdoName: string | null;
+}
+
+export interface CollectionRegisterRow {
+  date: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  memberName: string;
+  loanAccount: string;
+  entryType: 'Loan' | 'Savings';
+  kind: string;
+  principal: number;
+  interest: number;
+  amount: number;
+}
+
+export interface ClosureRow {
+  branchCode: string;
+  centerCode: string;
+  centerName: string;
+  displayId: string;
+  memberName: string;
+  loanAccount: string;
+  cycleNo: number;
+  disbursalDate: string;
+  loanAmount: number;
+  totalAmount: number;
+  totalRepaid: number;
+  closedDate: string | null;
+}
+
 const qs = (from: string, to: string) => `?from=${from}&to=${to}`;
 
 export const getZeroCollection = (from: string, to: string) =>
@@ -165,3 +225,11 @@ export const getEmployeePerformance = (from: string, to: string) =>
   api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to)}`);
 export const getForeclosures = (from: string, to: string) =>
   api<ForeclosureReportRow[]>(`/reports/foreclosures${qs(from, to)}`);
+export const getDisbursementRegister = (from: string, to: string) =>
+  api<DisbursementRow[]>(`/reports/disbursement-register${qs(from, to)}`);
+export const getParAging = (from: string, to: string) =>
+  api<ParAgingRow[]>(`/reports/par-aging${qs(from, to)}`);
+export const getCollectionRegister = (from: string, to: string) =>
+  api<CollectionRegisterRow[]>(`/reports/collection-register${qs(from, to)}`);
+export const getLoanClosures = (from: string, to: string) =>
+  api<ClosureRow[]>(`/reports/loan-closures${qs(from, to)}`);

@@ -512,4 +512,175 @@ export class ReportsService {
         });
     });
   }
+
+  /** Loans disbursed within [from, to] — disbursement register. */
+  async disbursementRegister(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await tx.loan.findMany({
+        where: { disbursalDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        orderBy: { disbursalDate: 'desc' },
+        include: LOAN_INCLUDE,
+      });
+      return loans.map((l) => {
+        const c = l.client;
+        return {
+          branchCode: c.center.branch.code,
+          centerCode: c.center.code,
+          centerName: c.center.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          memberName: c.name,
+          loanAccount: l.loanAccount,
+          cycleNo: l.cycleNo,
+          product: l.product.name,
+          disbursalDate: l.disbursalDate,
+          loanAmount: round2(Number(l.loanAmount)),
+          interestAmount: round2(Number(l.interestAmount)),
+          totalAmount: round2(Number(l.totalAmount)),
+          totalDues: l.totalDues,
+          fdoName: c.center.fdo?.name ?? null,
+        };
+      });
+    });
+  }
+
+  /** Portfolio-at-risk: open loans overdue as of the window end (`to`), bucketed
+   *  by how long the oldest unpaid installment has been overdue (1–7/8–30/31–90/90+). */
+  async parAging(user: AuthUser, _from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await this.portfolioLoans(tx, user);
+      const rows: unknown[] = [];
+      for (const l of loans) {
+        if (l.loanType !== 'OPEN') continue;
+        const unpaid = l.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
+        const overdue = unpaid.filter((s) => s.dueDate <= to);
+        if (overdue.length === 0) continue;
+
+        const arrear = overdue.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
+        const loanOS = unpaid.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
+        const oldest = overdue.reduce((a, b) => (a.dueDate < b.dueDate ? a : b));
+        const daysOverdue = Math.floor((to.getTime() - oldest.dueDate.getTime()) / 86_400_000);
+        const bucket = daysOverdue <= 7 ? '1–7' : daysOverdue <= 30 ? '8–30' : daysOverdue <= 90 ? '31–90' : '90+';
+        const c = l.client;
+        rows.push({
+          branchCode: c.center.branch.code,
+          centerCode: c.center.code,
+          centerName: c.center.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          memberName: c.name,
+          loanAccount: l.loanAccount,
+          loanOS: round2(loanOS),
+          overdue: round2(arrear),
+          daysOverdue,
+          bucket,
+          fdoName: c.center.fdo?.name ?? null,
+        });
+      }
+      (rows as { daysOverdue: number }[]).sort((a, b) => b.daysOverdue - a.daysOverdue);
+      return rows;
+    });
+  }
+
+  /** Day-book: every collection posting within [from, to], loan receipts and
+   *  savings deposits/refunds interleaved, newest first. */
+  async collectionRegister(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const clientSel = {
+        name: true,
+        memberNo: true,
+        group: { select: { groupNo: true } },
+        center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+      } as const;
+
+      const [collections, savings] = await Promise.all([
+        tx.collection.findMany({
+          where: { collectedOn: { gte: from, lte: to }, loan: { client: { center: centerScope(user) } } },
+          include: { loan: { select: { loanAccount: true, client: { select: clientSel } } } },
+        }),
+        tx.savingsTxn.findMany({
+          where: { collectedOn: { gte: from, lte: to }, client: { center: centerScope(user) } },
+          include: { client: { select: clientSel } },
+        }),
+      ]);
+
+      const disp = (c: { center: { code: string; name: string; branch: { code: string } }; group: { groupNo: number }; memberNo: number }) =>
+        `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`;
+
+      const rows = [
+        ...collections.map((col) => {
+          const c = col.loan.client;
+          return {
+            date: col.collectedOn,
+            centerCode: c.center.code,
+            centerName: c.center.name,
+            displayId: disp(c),
+            memberName: c.name,
+            loanAccount: col.loan.loanAccount,
+            entryType: 'Loan',
+            kind: col.kind,
+            principal: round2(Number(col.pri)),
+            interest: round2(Number(col.int)),
+            amount: round2(Number(col.amount)),
+          };
+        }),
+        ...savings.map((s) => {
+          const c = s.client;
+          return {
+            date: s.collectedOn,
+            centerCode: c.center.code,
+            centerName: c.center.name,
+            displayId: disp(c),
+            memberName: c.name,
+            loanAccount: '—',
+            entryType: 'Savings',
+            kind: s.kind,
+            principal: 0,
+            interest: 0,
+            amount: round2(Number(s.amount)),
+          };
+        }),
+      ];
+      rows.sort((a, b) => b.date.getTime() - a.date.getTime());
+      return rows;
+    });
+  }
+
+  /** Normally-closed loans (fully repaid, not foreclosed) closed within [from, to]. */
+  async closureReport(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await tx.loan.findMany({
+        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        orderBy: { closedDate: 'desc' },
+        include: LOAN_INCLUDE,
+      });
+      if (loans.length === 0) return [];
+
+      // Exclude foreclosed loans (they have a FORECLOSE audit) — this is normal closures.
+      const audits = await tx.auditLog.findMany({
+        where: { entity: 'Loan', action: 'FORECLOSE', entityId: { in: loans.map((l) => l.id) } },
+        select: { entityId: true },
+      });
+      const foreclosed = new Set(audits.map((a) => a.entityId));
+
+      return loans
+        .filter((l) => !foreclosed.has(l.id))
+        .map((l) => {
+          const c = l.client;
+          const totalRepaid = l.schedule.reduce((sum, s) => sum + Number(s.collAmt), 0);
+          return {
+            branchCode: c.center.branch.code,
+            centerCode: c.center.code,
+            centerName: c.center.name,
+            displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+            memberName: c.name,
+            loanAccount: l.loanAccount,
+            cycleNo: l.cycleNo,
+            disbursalDate: l.disbursalDate,
+            loanAmount: round2(Number(l.loanAmount)),
+            totalAmount: round2(Number(l.totalAmount)),
+            totalRepaid: round2(totalRepaid),
+            closedDate: l.closedDate,
+          };
+        });
+    });
+  }
 }

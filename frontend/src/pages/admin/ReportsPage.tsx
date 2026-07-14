@@ -10,34 +10,46 @@ import {
   CenterWiseRow,
   ClientWiseRow,
   CollectionFollowupRow,
+  ClosureRow,
+  CollectionRegisterRow,
+  DisbursementRow,
   EmployeePerformanceRow,
   ForeclosureReportRow,
   GroupWiseRow,
+  ParAgingRow,
   ZeroCollectionRow,
   getAdvanceCollection,
   getBranchWise,
   getCenterWise,
   getClientWise,
   getCollectionFollowup,
+  getCollectionRegister,
+  getDisbursementRegister,
   getEmployeePerformance,
   getForeclosures,
   getGroupWise,
+  getLoanClosures,
+  getParAging,
   getZeroCollection,
 } from '../../api/reportsAdmin';
 import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
 import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'zero' | 'followup' | 'advance' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'foreclosure' | 'savings';
+type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'branch' | 'center' | 'group' | 'client' | 'employee' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
 const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
   { id: 'advance', label: 'Advance Collection', perm: 'report.monitoring' },
+  { id: 'register', label: 'Collection Register', perm: 'report.monitoring' },
   { id: 'branch', label: 'Branch Wise', perm: 'report.portfolio' },
   { id: 'center', label: 'Center Wise', perm: 'report.portfolio' },
   { id: 'group', label: 'Group Wise', perm: 'report.portfolio' },
   { id: 'client', label: 'Client Wise', perm: 'report.portfolio' },
   { id: 'employee', label: 'Employee Performance', perm: 'report.portfolio' },
+  { id: 'disbursement', label: 'Disbursement Register', perm: 'report.portfolio' },
+  { id: 'par', label: 'PAR / Overdue Aging', perm: 'report.portfolio' },
   { id: 'foreclosure', label: 'Foreclosure', perm: 'report.portfolio' },
+  { id: 'closure', label: 'Loan Closures', perm: 'report.portfolio' },
   { id: 'savings', label: 'Savings', perm: 'report.portfolio' },
 ];
 
@@ -75,9 +87,13 @@ export function ReportsPage() {
           {tab === 'branch' && <BranchWiseTab />}
           {tab === 'center' && <CenterWiseTab />}
           {tab === 'group' && <GroupWiseTab />}
+          {tab === 'register' && <CollectionRegisterTab />}
           {tab === 'client' && <ClientWiseTab />}
           {tab === 'employee' && <EmployeePerformanceTab />}
+          {tab === 'disbursement' && <DisbursementTab />}
+          {tab === 'par' && <ParAgingTab />}
           {tab === 'foreclosure' && <ForeclosureTab />}
+          {tab === 'closure' && <ClosureTab />}
           {tab === 'savings' && <SavingsTab />}
         </div>
       </div>
@@ -650,6 +666,248 @@ function EmployeePerformanceTab() {
 }
 
 // ---------------------------------------------------------------------------
+
+function DisbursementTab() {
+  const filter = useDateFilter('month');
+  const [rows, setRows] = useState<DisbursementRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getDisbursementRegister(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Loans disbursed in this window</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('disbursement-register.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('disbursement-register.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th><th>Product</th>
+                  <th>Disb. Date</th><th>Loan Amt</th><th>Interest</th><th>Total</th><th>Dues</th><th>FDO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{r.cycleNo}</td>
+                    <td>{r.product}</td>
+                    <td>{date(r.disbursalDate)}</td>
+                    <td>{inr(r.loanAmount)}</td>
+                    <td>{inr(r.interestAmount)}</td>
+                    <td>{inr(r.totalAmount)}</td>
+                    <td>{r.totalDues}</td>
+                    <td>{r.fdoName ?? '—'}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={12} className="empty">No disbursements in this window.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ParAgingTab() {
+  const filter = useDateFilter('today');
+  const [rows, setRows] = useState<ParAgingRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getParAging(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+  const bucketClass = (b: string) => (b === '90+' ? 'closed' : b === '31–90' ? 'pending' : 'active');
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Portfolio at risk — overdue as of the "Till date", bucketed by days overdue</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('par-aging.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('par-aging.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
+                  <th>Loan OS</th><th>Overdue</th><th>Days Overdue</th><th>Bucket</th><th>FDO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{inr(r.loanOS)}</td>
+                    <td>{inr(r.overdue)}</td>
+                    <td>{r.daysOverdue}</td>
+                    <td><span className={`badge ${bucketClass(r.bucket)}`}>{r.bucket}</span></td>
+                    <td>{r.fdoName ?? '—'}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={9} className="empty">No overdue loans as of this date.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CollectionRegisterTab() {
+  const filter = useDateFilter('today');
+  const [rows, setRows] = useState<CollectionRegisterRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getCollectionRegister(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+  const total = rows?.reduce((s, r) => s + r.amount, 0) ?? 0;
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Day-book — every receipt (loan collections &amp; savings) in this window</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('collection-register.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('collection-register.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
+                  <th>Type</th><th>Kind</th><th>Principal</th><th>Interest</th><th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{date(r.date)}</td>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{r.entryType}</td>
+                    <td>{r.kind}</td>
+                    <td>{inr(r.principal)}</td>
+                    <td>{inr(r.interest)}</td>
+                    <td>{inr(r.amount)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={10} className="empty">No receipts in this window.</td></tr>}
+                {rows.length > 0 && (
+                  <tr><td colSpan={9} style={{ textAlign: 'right', fontWeight: 700 }}>Total received</td><td style={{ fontWeight: 700 }}>{inr(total)}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ClosureTab() {
+  const filter = useDateFilter('year');
+  const [rows, setRows] = useState<ClosureRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getLoanClosures(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Loans fully repaid &amp; closed in this window (foreclosures are a separate tab)</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('loan-closures.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('loan-closures.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th>
+                  <th>Disb. Date</th><th>Loan Amt</th><th>Total</th><th>Repaid</th><th>Closed On</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td>{r.cycleNo}</td>
+                    <td>{date(r.disbursalDate)}</td>
+                    <td>{inr(r.loanAmount)}</td>
+                    <td>{inr(r.totalAmount)}</td>
+                    <td>{inr(r.totalRepaid)}</td>
+                    <td>{date(r.closedDate)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={10} className="empty">No loans closed in this window.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ForeclosureTab() {
   const filter = useDateFilter('year');

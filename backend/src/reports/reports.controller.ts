@@ -98,4 +98,36 @@ export class ReportsController {
     const [f, t] = parseRange(from, to);
     return this.reports.foreclosureReport(user, f, t);
   }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
+  @Get('disbursement-register')
+  disbursementRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.disbursementRegister(user, f, t);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
+  @Get('par-aging')
+  parAging(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.parAging(user, f, t);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.monitoring')
+  @Get('collection-register')
+  collectionRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.collectionRegister(user, f, t);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.portfolio')
+  @Get('loan-closures')
+  loanClosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.closureReport(user, f, t);
+  }
 }
