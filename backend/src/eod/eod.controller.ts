@@ -40,7 +40,7 @@ export class EodController {
   @RequirePermission('eod.close')
   @Post('catch-up')
   async catchUp(@CurrentUser() user: AuthUser) {
-    await this.autoClose.catchUpNow(user.tenantId);
+    await this.autoClose.catchUpNow(user);
     return { done: true };
   }
 }

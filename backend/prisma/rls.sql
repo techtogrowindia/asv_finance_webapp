@@ -72,3 +72,24 @@ $$;
 
 REVOKE ALL ON FUNCTION auth_login_lookup(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION auth_login_lookup(text) TO asvfinance_app;
+
+-- ---- EOD auto-close bootstrap -----------------------------------------------
+-- The nightly auto-close job runs without an authenticated request (no JWT), so
+-- it needs to discover which tenants/branches are due across tenant boundaries
+-- before any RLS context can be set — same problem as login, same fix pattern
+-- (SECURITY DEFINER, owner-only, returns just the ids). The actual closing still
+-- runs through normal withTenant() calls per branch, one at a time.
+CREATE OR REPLACE FUNCTION eod_autoclose_candidates()
+RETURNS TABLE (tenant_id uuid, branch_id uuid)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT b.tenant_id, b.id
+  FROM branch b
+  JOIN tenant t ON t.id = b.tenant_id
+  WHERE t.auto_close_eod = true AND t.is_active = true AND b.is_active = true;
+$$;
+
+REVOKE ALL ON FUNCTION eod_autoclose_candidates() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION eod_autoclose_candidates() TO asvfinance_app;
