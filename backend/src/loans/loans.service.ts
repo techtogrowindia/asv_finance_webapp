@@ -109,11 +109,28 @@ export class LoansService {
           requestedAmount: product.loanAmount,
           status: 'PENDING',
           warnings: warnings as unknown as Prisma.InputJsonValue,
+          notes: dto.notes?.trim() || null,
           createdBy: user.employeeId,
         },
       });
 
       return { id: application.id, status: application.status, warnings, requestedAmount: product.loanAmount };
+    });
+  }
+
+  /** Update the "why is this pending" note — FDO (applicant) or BM/HO (reviewer) may add context. */
+  async updateNotes(user: AuthUser, applicationId: string, notes: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const application = await tx.loanApplication.findFirst({
+        where: { id: applicationId, client: clientCenterScope(user) },
+      });
+      if (!application) throw new NotFoundException('Loan application not found');
+
+      const updated = await tx.loanApplication.update({
+        where: { id: applicationId },
+        data: { notes: notes.trim() || null },
+      });
+      return { id: updated.id, notes: updated.notes };
     });
   }
 
@@ -143,6 +160,7 @@ export class LoansService {
         requestedAmount: a.requestedAmount,
         status: a.status,
         warnings: (a.warnings as string[] | null) ?? [],
+        notes: a.notes,
         createdAt: a.createdAt,
       }));
     });

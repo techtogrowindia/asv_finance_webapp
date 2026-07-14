@@ -33,6 +33,7 @@ export function LoanApplicationPage() {
   const [frequencyId, setFrequencyId] = useState('');
   const [productId, setProductId] = useState('');
   const [purposeId, setPurposeId] = useState('');
+  const [notes, setNotes] = useState('');
 
   const [client, setClient] = useState<MemberDetail | null>(null);
   const [existingLoans, setExistingLoans] = useState<ExistingLoan[] | null>(null);
@@ -87,7 +88,7 @@ export function LoanApplicationPage() {
     setSuccess('');
     setBusy(true);
     try {
-      await createLoanApplication({ clientId, productId, purposeId });
+      await createLoanApplication({ clientId, productId, purposeId, notes: notes.trim() || undefined });
       setSuccess('Loan application submitted for verification.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not submit application');
@@ -147,6 +148,17 @@ export function LoanApplicationPage() {
               placeholder="Type to search…"
             />
           </Field>
+        </div>
+        <div className="field" style={{ marginTop: 4 }}>
+          <label>Notes (optional)</label>
+          <textarea
+            className="input"
+            rows={2}
+            maxLength={500}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Why is this application pending, or anything the reviewer should know…"
+          />
         </div>
         <div className="hint">
           Sanctioned Amount:{' '}

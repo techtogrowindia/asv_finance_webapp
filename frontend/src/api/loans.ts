@@ -53,7 +53,7 @@ export const listExistingLoans = (clientId: string) => api<ExistingLoan[]>(`/cli
 export const getEligibility = (clientId: string, productId: string) =>
   api<Eligibility>(`/loan-applications/eligibility?clientId=${clientId}&productId=${productId}`);
 
-export const createLoanApplication = (body: { clientId: string; productId: string; purposeId: string }) =>
+export const createLoanApplication = (body: { clientId: string; productId: string; purposeId: string; notes?: string }) =>
   api<{ id: string; status: string; warnings: string[]; requestedAmount: string }>('/loan-applications', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -73,11 +73,18 @@ export interface LoanApplicationSummary {
   requestedAmount: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   warnings: string[];
+  notes: string | null;
   createdAt: string;
 }
 
 export const listLoanApplications = (status?: 'PENDING' | 'APPROVED' | 'REJECTED') =>
   api<LoanApplicationSummary[]>(`/loan-applications${status ? `?status=${status}` : ''}`);
+
+export const updateApplicationNotes = (id: string, notes: string) =>
+  api<{ id: string; notes: string | null }>(`/loan-applications/${id}/notes`, {
+    method: 'PATCH',
+    body: JSON.stringify({ notes }),
+  });
 
 export const disburseApplication = (id: string, dates?: { disbursalDate?: string; dueStartDate?: string }) =>
   api<{ id: string; loanAccount: string; disbursalDate: string; dueStartDate: string; maturityDate: string }>(

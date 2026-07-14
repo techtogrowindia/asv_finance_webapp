@@ -457,6 +457,10 @@ model LoanApplication {
   sanctionedAmount Decimal?              @map("sanctioned_amount") @db.Decimal(14, 2)
   status           LoanApplicationStatus @default(PENDING)
   warnings         Json? // eligibility warnings captured at submission time
+  // Free-text context for why this is pending — set by the FDO at application
+  // time and/or updated by BM/HO while reviewing (e.g. "waiting on updated
+  // Aadhaar", "center meeting next Tuesday"). Not an audit trail, just a note.
+  notes            String?
   createdBy        String?               @map("created_by") @db.Uuid
   createdAt        DateTime              @default(now()) @map("created_at")
   updatedAt        DateTime              @updatedAt @map("updated_at")

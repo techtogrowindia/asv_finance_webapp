@@ -7,6 +7,7 @@ import {
   LoanApplicationSummary,
   listLoanApplications,
   rejectApplication,
+  updateApplicationNotes,
 } from '../../api/loans';
 
 const inr = (v: string | number) =>
@@ -27,6 +28,8 @@ export function LoanVerificationPage() {
   const confirm = useConfirm();
   const [rows, setRows] = useState<LoanApplicationSummary[] | null>(null);
   const [dates, setDates] = useState<Record<string, DisburseDates>>({});
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -43,6 +46,24 @@ export function LoanVerificationPage() {
   }
   function setDate(a: LoanApplicationSummary, field: keyof DisburseDates, value: string) {
     setDates((prev) => ({ ...prev, [a.id]: { ...getDates(a), [field]: value } }));
+  }
+
+  function getNote(a: LoanApplicationSummary): string {
+    return a.id in noteDrafts ? noteDrafts[a.id] : a.notes ?? '';
+  }
+
+  async function saveNote(a: LoanApplicationSummary) {
+    const value = getNote(a);
+    setError('');
+    setSavingNoteId(a.id);
+    try {
+      await updateApplicationNotes(a.id, value);
+      setRows((prev) => prev?.map((r) => (r.id === a.id ? { ...r, notes: value.trim() || null } : r)) ?? prev);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save note');
+    } finally {
+      setSavingNoteId(null);
+    }
   }
 
   async function onDisburse(a: LoanApplicationSummary) {
@@ -124,6 +145,27 @@ export function LoanVerificationPage() {
                   <ul>{a.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
                 </div>
               )}
+
+              <div className="field" style={{ marginBottom: 18 }}>
+                <label>Notes — why is this pending?</label>
+                <textarea
+                  className="input"
+                  rows={2}
+                  maxLength={500}
+                  value={getNote(a)}
+                  onChange={(e) => setNoteDrafts((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                  placeholder="e.g. waiting for updated Aadhaar, center meeting next Tuesday…"
+                />
+                <div className="form-actions" style={{ marginTop: 8 }}>
+                  <button
+                    className="btn btn-ghost"
+                    disabled={savingNoteId === a.id || getNote(a) === (a.notes ?? '')}
+                    onClick={() => saveNote(a)}
+                  >
+                    {savingNoteId === a.id ? <span className="spinner" /> : 'Save note'}
+                  </button>
+                </div>
+              </div>
 
               <div className="form-grid" style={{ maxWidth: 420, marginBottom: 4 }}>
                 <div className="field">
