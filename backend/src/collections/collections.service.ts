@@ -205,6 +205,8 @@ export class CollectionsService {
       const loan = await this.getScopedOpenLoan(tx, user, dto.loanId);
       const workingDate = await this.resolveWorkingDate(tx, loan.client.center.branchId);
 
+      // A regular collection settles only what's due up to today; anything more
+      // is banked as advance (apply it later on the Loan Advance screen).
       const { applied, remaining, loanClosed } = await this.applyFifo(
         tx,
         user,
@@ -212,7 +214,7 @@ export class CollectionsService {
         round2(dto.amount),
         'REGULAR',
         workingDate,
-        false,
+        true,
       );
 
       let advanceBanked = 0;
@@ -273,6 +275,7 @@ export class CollectionsService {
       if (advance <= 0) throw new BadRequestException('No advance balance to apply');
 
       const workingDate = await this.resolveWorkingDate(tx, loan.client.center.branchId);
+      // Advance is spent across ALL upcoming installments (not just today's demand).
       const { applied, remaining, loanClosed } = await this.applyFifo(tx, user, loan.id, advance, 'ADVANCE', workingDate, false);
 
       await tx.loan.update({ where: { id: loan.id }, data: { advanceBalance: remaining } });
@@ -376,7 +379,13 @@ export class CollectionsService {
 
   // ---- internals -----------------------------------------------------------
 
-  /** FIFO-apply `amount` across the loan's unpaid rows; optionally close when clear. */
+  /**
+   * FIFO-apply `amount` across the loan's unpaid rows, oldest first; closes the
+   * loan if everything is cleared. When `onlyDue`, only installments due on or
+   * before the working date are eligible (a regular collection settles today's
+   * demand; surplus is returned for the caller to bank as advance). When false,
+   * any pending installment can be paid (used when applying a banked advance).
+   */
   private async applyFifo(
     tx: Prisma.TransactionClient,
     user: AuthUser,
@@ -384,9 +393,9 @@ export class CollectionsService {
     amount: number,
     kind: 'REGULAR' | 'ADVANCE',
     workingDate: Date,
-    _isBulk: boolean,
+    onlyDue: boolean,
   ): Promise<{ applied: number; remaining: number; loanClosed: boolean }> {
-    const pending = await this.pendingRows(tx, loanId, undefined);
+    const pending = await this.pendingRows(tx, loanId, onlyDue ? workingDate : undefined);
     let remaining = round2(amount);
 
     for (const row of pending) {
@@ -436,10 +445,11 @@ export class CollectionsService {
     return { applied: round2(amount - remaining), remaining, loanClosed };
   }
 
-  /** Rows with an outstanding balance (collAmt < dueAmt), oldest first. */
-  private async pendingRows(tx: Prisma.TransactionClient, loanId: string, _asOf?: Date): Promise<ScheduleRow[]> {
+  /** Rows with an outstanding balance (collAmt < dueAmt), oldest first; if `asOf`
+   *  is given, only installments due on or before that date. */
+  private async pendingRows(tx: Prisma.TransactionClient, loanId: string, asOf?: Date): Promise<ScheduleRow[]> {
     const all = await tx.repaymentSchedule.findMany({ where: { loanId }, orderBy: { dueNo: 'asc' } });
-    return all.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
+    return all.filter((s) => Number(s.collAmt) < Number(s.dueAmt) && (!asOf || s.dueDate <= asOf));
   }
 
   /** Foreclosure math: per-row principal always due; interest depends on policy. */
