@@ -77,17 +77,50 @@ export interface LoanApplicationSummary {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   warnings: string[];
   notes: string | null;
+  approverNotes: string | null;
   createdAt: string;
 }
 
 export const listLoanApplications = (status?: 'PENDING' | 'APPROVED' | 'REJECTED') =>
   api<LoanApplicationSummary[]>(`/loan-applications${status ? `?status=${status}` : ''}`);
 
-export const updateApplicationNotes = (id: string, notes: string) =>
-  api<{ id: string; notes: string | null }>(`/loan-applications/${id}/notes`, {
+/** BM/HO reviewer note on the verification screen (separate from the FDO note). */
+export const updateApproverNotes = (id: string, notes: string) =>
+  api<{ id: string; approverNotes: string | null }>(`/loan-applications/${id}/approver-notes`, {
     method: 'PATCH',
     body: JSON.stringify({ notes }),
   });
+
+/** Edit a still-pending application (member/product/purpose/employee note). */
+export const updateLoanApplication = (
+  id: string,
+  body: { clientId: string; productId: string; purposeId: string; notes?: string },
+) =>
+  api<{ id: string; status: string; warnings: string[]; requestedAmount: string }>(`/loan-applications/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+
+export interface ClientApplication {
+  id: string;
+  productId: string;
+  productName: string;
+  purposeId: string;
+  purposeName: string;
+  requestedAmount: string;
+  notes: string | null;
+  approverNotes: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+}
+
+export const listClientApplications = (clientId: string) =>
+  api<ClientApplication[]>(`/clients/${clientId}/applications`);
+
+export const searchLoanByAccount = (account: string) =>
+  api<{ clientId: string; clientName: string; centerId: string; loanAccount: string }>(
+    `/loans/search?account=${encodeURIComponent(account)}`,
+  );
 
 export const disburseApplication = (id: string, dates?: { disbursalDate?: string; dueStartDate?: string }) =>
   api<{ id: string; loanAccount: string; disbursalDate: string; dueStartDate: string; maturityDate: string }>(

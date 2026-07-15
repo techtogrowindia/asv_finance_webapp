@@ -7,7 +7,7 @@ import {
   LoanApplicationSummary,
   listLoanApplications,
   rejectApplication,
-  updateApplicationNotes,
+  updateApproverNotes,
 } from '../../api/loans';
 
 const inr = (v: string | number) =>
@@ -50,7 +50,7 @@ export function LoanVerificationPage() {
   }
 
   function getNote(a: LoanApplicationSummary): string {
-    return a.id in noteDrafts ? noteDrafts[a.id] : a.notes ?? '';
+    return a.id in noteDrafts ? noteDrafts[a.id] : a.approverNotes ?? '';
   }
 
   async function saveNote(a: LoanApplicationSummary) {
@@ -58,8 +58,8 @@ export function LoanVerificationPage() {
     setError('');
     setSavingNoteId(a.id);
     try {
-      await updateApplicationNotes(a.id, value);
-      setRows((prev) => prev?.map((r) => (r.id === a.id ? { ...r, notes: value.trim() || null } : r)) ?? prev);
+      await updateApproverNotes(a.id, value);
+      setRows((prev) => prev?.map((r) => (r.id === a.id ? { ...r, approverNotes: value.trim() || null } : r)) ?? prev);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save note');
     } finally {
@@ -188,6 +188,13 @@ export function LoanVerificationPage() {
                 </div>
               )}
 
+              <div className="field" style={{ marginBottom: 14 }}>
+                <label>Employee Notes</label>
+                <div className="input" style={{ background: 'var(--canvas)', minHeight: 40, whiteSpace: 'pre-wrap' }}>
+                  {a.notes ? a.notes : <span style={{ color: 'var(--ink-500)' }}>No note from the field officer.</span>}
+                </div>
+              </div>
+
               <div className="field" style={{ marginBottom: 18 }}>
                 <label>Approver Notes</label>
                 <textarea
@@ -201,7 +208,7 @@ export function LoanVerificationPage() {
                 <div className="form-actions" style={{ marginTop: 8 }}>
                   <button
                     className="btn btn-ghost"
-                    disabled={savingNoteId === a.id || getNote(a) === (a.notes ?? '')}
+                    disabled={savingNoteId === a.id || getNote(a) === (a.approverNotes ?? '')}
                     onClick={() => saveNote(a)}
                   >
                     {savingNoteId === a.id ? <span className="spinner" /> : 'Save note'}

@@ -150,8 +150,9 @@ export class LoansService {
     });
   }
 
-  /** Update the "why is this pending" note — FDO (applicant) or BM/HO (reviewer) may add context. */
-  async updateNotes(user: AuthUser, applicationId: string, notes: string) {
+  /** Reviewer (BM/HO) note, added on the Loan Verification screen. Separate from
+   *  the FDO's employee note (edited via updateApplication). */
+  async updateApproverNotes(user: AuthUser, applicationId: string, approverNotes: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const application = await tx.loanApplication.findFirst({
         where: { id: applicationId, client: clientCenterScope(user) },
@@ -160,9 +161,98 @@ export class LoansService {
 
       const updated = await tx.loanApplication.update({
         where: { id: applicationId },
-        data: { notes: notes.trim() || null },
+        data: { approverNotes: approverNotes.trim() || null },
       });
-      return { id: updated.id, notes: updated.notes };
+      return { id: updated.id, approverNotes: updated.approverNotes };
+    });
+  }
+
+  /** Edit a still-pending application (mistaken submission): the FDO may change
+   *  member, product, purpose and the employee note. Re-runs eligibility and
+   *  re-syncs the requested amount from the (possibly new) product. Blocked once
+   *  the application has been approved or rejected. */
+  async updateApplication(user: AuthUser, applicationId: string, dto: CreateLoanApplicationDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const application = await tx.loanApplication.findFirst({
+        where: { id: applicationId, client: clientCenterScope(user) },
+      });
+      if (!application) throw new NotFoundException('Loan application not found');
+      if (application.status !== 'PENDING') {
+        throw new BadRequestException('Only a pending application can be edited');
+      }
+
+      const client = await tx.client.findFirst({
+        where: { id: dto.clientId, ...clientCenterScope(user) },
+        include: { coApplicant: true },
+      });
+      if (!client) throw new ForbiddenException('Member not in your assigned centers');
+
+      const product = await tx.loanProduct.findFirst({ where: { id: dto.productId, isActive: true } });
+      if (!product) throw new BadRequestException('Loan product not found');
+
+      const purpose = await tx.purpose.findFirst({ where: { id: dto.purposeId, isActive: true } });
+      if (!purpose) throw new BadRequestException('Purpose not found');
+
+      const warnings = await this.computeWarnings(tx, client, user.tenantId);
+
+      const updated = await tx.loanApplication.update({
+        where: { id: applicationId },
+        data: {
+          clientId: client.id,
+          productId: product.id,
+          purposeId: purpose.id,
+          requestedAmount: product.loanAmount,
+          warnings: warnings as unknown as Prisma.InputJsonValue,
+          notes: dto.notes?.trim() || null,
+        },
+      });
+      return { id: updated.id, status: updated.status, warnings, requestedAmount: product.loanAmount };
+    });
+  }
+
+  /** A member's loan applications (for the Loan Application screen: view/edit
+   *  pending ones). FDO-accessible, scoped to the caller's centers. */
+  async applicationsForClient(user: AuthUser, clientId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({ where: { id: clientId, ...clientCenterScope(user) } });
+      if (!client) throw new NotFoundException('Member not found');
+
+      const apps = await tx.loanApplication.findMany({
+        where: { clientId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          product: { select: { id: true, name: true, loanAmount: true } },
+          purpose: { select: { id: true, name: true } },
+        },
+      });
+      return apps.map((a) => ({
+        id: a.id,
+        productId: a.productId,
+        productName: a.product.name,
+        purposeId: a.purposeId,
+        purposeName: a.purpose.name,
+        requestedAmount: a.requestedAmount,
+        notes: a.notes,
+        approverNotes: a.approverNotes,
+        status: a.status,
+        createdAt: a.createdAt,
+      }));
+    });
+  }
+
+  /** Resolve a loan account number to its member (Loan Application screen search
+   *  box — jump straight to a member without the center→member cascade). */
+  async findLoanByAccount(user: AuthUser, account: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: {
+          loanAccount: { equals: account.trim(), mode: 'insensitive' },
+          client: clientCenterScope(user),
+        },
+        include: { client: { select: { id: true, name: true, centerId: true } } },
+      });
+      if (!loan) throw new NotFoundException('No loan found with that account number in your centers');
+      return { clientId: loan.client.id, clientName: loan.client.name, centerId: loan.client.centerId, loanAccount: loan.loanAccount };
     });
   }
 
@@ -206,6 +296,7 @@ export class LoansService {
         status: a.status,
         warnings: (a.warnings as string[] | null) ?? [],
         notes: a.notes,
+        approverNotes: a.approverNotes,
         createdAt: a.createdAt,
       }));
     });

@@ -36,6 +36,29 @@ export class LoansController {
     return this.loans.createApplication(user, dto);
   }
 
+  @Roles('FDO', 'BM')
+  @RequirePermission('loan.apply')
+  @Patch('loan-applications/:id')
+  updateApplication(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateLoanApplicationDto,
+  ) {
+    return this.loans.updateApplication(user, id, dto);
+  }
+
+  @RequirePermission('loan.apply', 'loan.view')
+  @Get('clients/:id/applications')
+  clientApplications(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.loans.applicationsForClient(user, id);
+  }
+
+  @RequirePermission('loan.view')
+  @Get('loans/search')
+  loanSearch(@CurrentUser() user: AuthUser, @Query('account') account: string) {
+    return this.loans.findLoanByAccount(user, account);
+  }
+
   // ---- Verification & Disbursement (BM/HO) ----
   // List is visible to FDOs too (scoped to their centers) for the employee
   // Reports view; disburse/reject below stay BM/HO.
@@ -68,15 +91,15 @@ export class LoansController {
     return this.loans.reject(user, id, dto);
   }
 
-  @Roles('FDO', 'BM', 'HO')
-  @RequirePermission('loan.apply', 'loan.approve')
-  @Patch('loan-applications/:id/notes')
-  updateNotes(
+  @Roles('BM', 'HO')
+  @RequirePermission('loan.approve')
+  @Patch('loan-applications/:id/approver-notes')
+  updateApproverNotes(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateApplicationNotesDto,
   ) {
-    return this.loans.updateNotes(user, id, dto.notes);
+    return this.loans.updateApproverNotes(user, id, dto.notes);
   }
 
   @RequirePermission('loan.view')

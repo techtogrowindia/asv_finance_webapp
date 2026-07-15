@@ -3,17 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { CenterLite, getMember, listCenters, listMembers, MemberDetail, MemberListItem } from '../api/members';
 import { SearchableSelect } from '../components/SearchableSelect';
 import {
+  ClientApplication,
   createLoanApplication,
   Eligibility,
   ExistingLoan,
   Frequency,
   getEligibility,
+  listClientApplications,
   listExistingLoans,
   listFrequencies,
   listLoanProducts,
   listPurposes,
   LoanProductLite,
   Purpose,
+  searchLoanByAccount,
+  updateLoanApplication,
 } from '../api/loans';
 
 const inr = (v: string | number) =>
@@ -34,9 +38,14 @@ export function LoanApplicationPage() {
   const [productId, setProductId] = useState('');
   const [purposeId, setPurposeId] = useState('');
   const [notes, setNotes] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [loanSearch, setLoanSearch] = useState('');
+  const [searching, setSearching] = useState(false);
 
   const [client, setClient] = useState<MemberDetail | null>(null);
   const [existingLoans, setExistingLoans] = useState<ExistingLoan[] | null>(null);
+  const [applications, setApplications] = useState<ClientApplication[] | null>(null);
   const [eligibility, setEligibility] = useState<Eligibility | null>(null);
 
   const [error, setError] = useState('');
@@ -62,11 +71,55 @@ export function LoanApplicationPage() {
     if (!clientId) {
       setClient(null);
       setExistingLoans(null);
+      setApplications(null);
       return;
     }
     getMember(clientId).then(setClient).catch((e) => setError(e.message));
     listExistingLoans(clientId).then(setExistingLoans).catch((e) => setError(e.message));
+    listClientApplications(clientId).then(setApplications).catch((e) => setError(e.message));
   }, [clientId]);
+
+  function refreshApplications() {
+    if (clientId) listClientApplications(clientId).then(setApplications).catch(() => {});
+  }
+
+  async function onSearchLoan() {
+    if (!loanSearch.trim()) return;
+    setError('');
+    setSuccess('');
+    setSearching(true);
+    try {
+      const res = await searchLoanByAccount(loanSearch.trim());
+      resetForm();
+      setCenterId(res.centerId);
+      setClientId(res.clientId);
+      setSuccess(`Loaded ${res.clientName} (loan ${res.loanAccount}).`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Loan not found');
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setFrequencyId('');
+    setProductId('');
+    setPurposeId('');
+    setNotes('');
+  }
+
+  function startEdit(a: ClientApplication) {
+    setEditingId(a.id);
+    const prod = products.find((p) => p.id === a.productId);
+    setFrequencyId(prod?.frequencyId ?? '');
+    setProductId(a.productId);
+    setPurposeId(a.purposeId);
+    setNotes(a.notes ?? '');
+    setError('');
+    setSuccess('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     if (!clientId || !productId) {
@@ -88,10 +141,18 @@ export function LoanApplicationPage() {
     setSuccess('');
     setBusy(true);
     try {
-      await createLoanApplication({ clientId, productId, purposeId, notes: notes.trim() || undefined });
-      setSuccess('Loan application submitted for verification.');
+      const body = { clientId, productId, purposeId, notes: notes.trim() || undefined };
+      if (editingId) {
+        await updateLoanApplication(editingId, body);
+        setSuccess('Loan application updated.');
+      } else {
+        await createLoanApplication(body);
+        setSuccess('Loan application submitted for verification.');
+      }
+      resetForm();
+      refreshApplications();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not submit application');
+      setError(err instanceof Error ? err.message : 'Could not save application');
     } finally {
       setBusy(false);
     }
@@ -100,10 +161,37 @@ export function LoanApplicationPage() {
   return (
     <>
       <h1 className="page-title">Loan Application</h1>
-      <p className="page-sub">Apply for a new loan on behalf of a member.</p>
+      <p className="page-sub">Apply for a new loan on behalf of a member, or search a loan account to jump to that member.</p>
+
+      <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+        <div className="field">
+          <label>Search by loan account number</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              className="input"
+              style={{ maxWidth: 320 }}
+              placeholder="e.g. PMF005502/1"
+              value={loanSearch}
+              onChange={(e) => setLoanSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onSearchLoan()}
+            />
+            <button className="btn btn-ghost" type="button" disabled={searching || !loanSearch.trim()} onClick={onSearchLoan}>
+              {searching ? <span className="spinner" /> : 'Search'}
+            </button>
+          </div>
+          <div className="hint" style={{ marginTop: 6 }}>Loads the member who holds that loan — their KYC, existing loans and applications.</div>
+        </div>
+      </div>
 
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+
+      {editingId && (
+        <div className="alert-error" style={{ background: '#fff7e6', color: '#8a6d00', borderColor: '#f0d98c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Editing a pending application — change any field and click <strong>Update</strong>.</span>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={resetForm}>Cancel edit</button>
+        </div>
+      )}
 
       <div className="form-card" style={{ maxWidth: 'none' }}>
         <div className="form-grid">
@@ -150,14 +238,14 @@ export function LoanApplicationPage() {
           </Field>
         </div>
         <div className="field" style={{ marginTop: 4 }}>
-          <label>Notes (optional)</label>
+          <label>Employee Notes (optional)</label>
           <textarea
             className="input"
             rows={2}
             maxLength={500}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Why is this application pending, or anything the reviewer should know…"
+            placeholder="Your note for the reviewer — e.g. petty-shop stock, second cycle…"
           />
         </div>
         <div className="hint">
@@ -232,6 +320,43 @@ export function LoanApplicationPage() {
         </div>
       )}
 
+      {applications && applications.length > 0 && (
+        <div className="panel" style={{ marginTop: 18 }}>
+          <div className="panel-head">Loan Applications</div>
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Applied</th><th>Product</th><th>Purpose</th><th>Amount</th>
+                  <th>Employee Note</th><th>Approver Note</th><th>Status</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {applications.map((a) => (
+                  <tr key={a.id}>
+                    <td>{date(a.createdAt)}</td>
+                    <td>{a.productName}</td>
+                    <td>{a.purposeName}</td>
+                    <td>{inr(a.requestedAmount)}</td>
+                    <td>{a.notes ?? '—'}</td>
+                    <td>{a.approverNotes ?? '—'}</td>
+                    <td><span className={`badge ${a.status === 'APPROVED' ? 'active' : a.status === 'REJECTED' ? 'closed' : 'pending'}`}>{a.status}</span></td>
+                    <td>
+                      {a.status === 'PENDING' ? (
+                        <button className="btn btn-primary btn-sm" onClick={() => startEdit(a)}>Edit</button>
+                      ) : (
+                        <span className="hint">Locked</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="hint" style={{ padding: '10px 14px' }}>Pending applications can be edited until the branch approves or rejects them.</div>
+        </div>
+      )}
+
       {selectedProduct && (
         <div className="panel" style={{ marginTop: 18 }}>
           <div className="panel-head">Product Details</div>
@@ -267,7 +392,7 @@ export function LoanApplicationPage() {
 
       <div className="form-actions">
         <button className="btn btn-primary" disabled={!clientId || !productId || !purposeId || busy} onClick={onSave}>
-          {busy ? <span className="spinner" /> : 'Save'}
+          {busy ? <span className="spinner" /> : editingId ? 'Update application' : 'Save'}
         </button>
         <button className="btn btn-ghost" type="button" onClick={() => navigate('/app')}>
           Cancel
