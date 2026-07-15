@@ -136,6 +136,7 @@ export class LoansService {
         data: {
           tenantId: user.tenantId,
           clientId: client.id,
+          appNo: await this.nextAppNo(tx, user.tenantId),
           productId: product.id,
           purposeId: purpose.id,
           requestedAmount: product.loanAmount,
@@ -146,8 +147,14 @@ export class LoansService {
         },
       });
 
-      return { id: application.id, status: application.status, warnings, requestedAmount: product.loanAmount };
+      return { id: application.id, appNo: application.appNo, status: application.status, warnings, requestedAmount: product.loanAmount };
     });
+  }
+
+  /** Next tenant-scoped application number, e.g. APP000123. */
+  private async nextAppNo(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
+    const n = (await tx.loanApplication.count({ where: { tenantId } })) + 1;
+    return `APP${String(n).padStart(6, '0')}`;
   }
 
   /** Reviewer (BM/HO) note, added on the Loan Verification screen. Separate from
@@ -177,8 +184,10 @@ export class LoansService {
         where: { id: applicationId, client: clientCenterScope(user) },
       });
       if (!application) throw new NotFoundException('Loan application not found');
-      if (application.status !== 'PENDING') {
-        throw new BadRequestException('Only a pending application can be edited');
+      // A pending application can be corrected; a rejected one can be edited and
+      // resubmitted (goes back to PENDING). An approved (disbursed) one is locked.
+      if (application.status === 'APPROVED') {
+        throw new BadRequestException('An approved application can no longer be edited');
       }
 
       const client = await tx.client.findFirst({
@@ -194,6 +203,7 @@ export class LoansService {
       if (!purpose) throw new BadRequestException('Purpose not found');
 
       const warnings = await this.computeWarnings(tx, client, user.tenantId);
+      const resubmitted = application.status === 'REJECTED';
 
       const updated = await tx.loanApplication.update({
         where: { id: applicationId },
@@ -204,9 +214,12 @@ export class LoansService {
           requestedAmount: product.loanAmount,
           warnings: warnings as unknown as Prisma.InputJsonValue,
           notes: dto.notes?.trim() || null,
+          // Editing a rejected application resubmits it for review; clear the
+          // reviewer's rejection note so the new reviewer starts fresh.
+          ...(resubmitted ? { status: 'PENDING' as const, approverNotes: null } : {}),
         },
       });
-      return { id: updated.id, status: updated.status, warnings, requestedAmount: product.loanAmount };
+      return { id: updated.id, appNo: updated.appNo, status: updated.status, resubmitted, warnings, requestedAmount: product.loanAmount };
     });
   }
 
@@ -227,6 +240,7 @@ export class LoansService {
       });
       return apps.map((a) => ({
         id: a.id,
+        appNo: a.appNo,
         productId: a.productId,
         productName: a.product.name,
         purposeId: a.purposeId,
@@ -237,6 +251,26 @@ export class LoansService {
         status: a.status,
         createdAt: a.createdAt,
       }));
+    });
+  }
+
+  /** Resolve an application number (e.g. APP000123) to its member + the
+   *  application id, so the Loan Application screen can open it for editing. */
+  async findApplicationByNo(user: AuthUser, appNo: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const app = await tx.loanApplication.findFirst({
+        where: { appNo: { equals: appNo.trim(), mode: 'insensitive' }, client: clientCenterScope(user) },
+        include: { client: { select: { id: true, name: true, centerId: true } } },
+      });
+      if (!app) throw new NotFoundException('Application not found');
+      return {
+        applicationId: app.id,
+        appNo: app.appNo,
+        clientId: app.client.id,
+        clientName: app.client.name,
+        centerId: app.client.centerId,
+        status: app.status,
+      };
     });
   }
 
@@ -282,6 +316,7 @@ export class LoansService {
       });
       return applications.map((a) => ({
         id: a.id,
+        appNo: a.appNo,
         clientId: a.client.id,
         clientCode: a.client.clientCode,
         clientName: a.client.name,

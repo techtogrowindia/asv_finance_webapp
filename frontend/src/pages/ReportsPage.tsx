@@ -7,9 +7,11 @@ import {
 } from '../api/collections';
 import { CenterLoanRow, getLedger, listLoansByCenter, LoanApplicationSummary, listLoanApplications, LoanLedger } from '../api/loans';
 import { CenterLite, listCenters } from '../api/members';
+import { SavingsLedgerRow, getSavingsLedger } from '../api/reportsAdmin';
+import { presetRange } from '../lib/dateFilter';
 import { LedgerView } from '../components/LedgerView';
 
-type Tab = 'demand' | 'ledger' | 'apps';
+type Tab = 'demand' | 'ledger' | 'apps' | 'savings';
 
 const inr = (v: string | number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -32,11 +34,15 @@ export function ReportsPage() {
         <button className={`btn ${tab === 'apps' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('apps')}>
           Loan Applications
         </button>
+        <button className={`btn ${tab === 'savings' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab('savings')}>
+          Savings Ledger
+        </button>
       </div>
 
       {tab === 'demand' && <DemandSheetTab />}
       {tab === 'ledger' && <LoanLedgerTab />}
       {tab === 'apps' && <LoanApplicationsTab />}
+      {tab === 'savings' && <SavingsLedgerTab />}
     </>
   );
 }
@@ -142,11 +148,12 @@ function LoanApplicationsTab() {
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
             <thead>
-              <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Loan A/c</th><th>Product</th><th>Amount</th><th>Applied</th><th>Status</th></tr>
+              <tr><th>App No</th><th>Client ID</th><th>Member</th><th>Center</th><th>Loan A/c</th><th>Product</th><th>Amount</th><th>Applied</th><th>Status</th></tr>
             </thead>
             <tbody>
               {rows?.map((a) => (
                 <tr key={a.id}>
+                  <td className="mono">{a.appNo ?? '—'}</td>
                   <td className="mono">{a.displayId}</td>
                   <td>{a.clientName}</td>
                   <td>{a.centerName}</td>
@@ -157,7 +164,7 @@ function LoanApplicationsTab() {
                   <td><span className={`badge ${a.status === 'APPROVED' ? 'active' : a.status === 'REJECTED' ? 'closed' : 'pending'}`}>{a.status}</span></td>
                 </tr>
               ))}
-              {rows && rows.length === 0 && <tr><td colSpan={8} className="empty">No loan applications.</td></tr>}
+              {rows && rows.length === 0 && <tr><td colSpan={9} className="empty">No loan applications.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -261,5 +268,69 @@ function LoanLedgerTab() {
         </div>
       )}
     </>
+  );
+}
+
+const savDate = (v: string) => new Date(v).toLocaleDateString('en-IN');
+
+function SavingsLedgerTab() {
+  const [from, setFrom] = useState(presetRange('month').from);
+  const [to, setTo] = useState(presetRange('month').to);
+  const [rows, setRows] = useState<SavingsLedgerRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getSavingsLedger(from, to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const totals = (rows ?? []).reduce((t, r) => ({ dep: t.dep + r.deposit, ref: t.ref + r.refund }), { dep: 0, ref: 0 });
+
+  return (
+    <div className="panel">
+      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span>Savings Ledger — deposits &amp; refunds</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+      </div>
+      <div className="panel-body">
+        <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+          <div className="form-grid">
+            <div className="field"><label>From date</label><input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+            <div className="field"><label>Till date</label><input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          </div>
+          <div className="form-actions" style={{ marginTop: 4 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={show}>{busy ? <span className="spinner" /> : 'Show'}</button>
+          </div>
+        </div>
+        {error && <div className="alert-error">{error}</div>}
+        <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+          <table className="data">
+            <thead>
+              <tr><th>Date</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Type</th><th>Deposit</th><th>Refund</th></tr>
+            </thead>
+            <tbody>
+              {rows?.map((r, i) => (
+                <tr key={i}>
+                  <td>{savDate(r.date)}</td>
+                  <td className="mono">{r.displayId}</td>
+                  <td>{r.memberName}</td>
+                  <td className="mono">{r.loanAccount}</td>
+                  <td><span className={`badge ${r.kind === 'DEPOSIT' ? 'active' : 'pending'}`}>{r.kind}</span></td>
+                  <td>{r.deposit ? inr(r.deposit) : '—'}</td>
+                  <td>{r.refund ? inr(r.refund) : '—'}</td>
+                </tr>
+              ))}
+              {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No savings activity in this window.</td></tr>}
+              {rows && rows.length > 0 && (
+                <tr style={{ fontWeight: 700 }}><td colSpan={5}>Total</td><td>{inr(totals.dep)}</td><td>{inr(totals.ref)}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }

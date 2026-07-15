@@ -19,6 +19,15 @@ function parseRange(from?: string, to?: string): [Date, Date] {
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
+  // Available in both portals (FDO sees their own centers) — a savings passbook.
+  @Roles('FDO', 'BM', 'HO')
+  @RequirePermission('report.monitoring')
+  @Get('savings-ledger')
+  savingsLedger(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+    const [f, t] = parseRange(from, to);
+    return this.reports.savingsLedger(user, f, t);
+  }
+
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('demand-register')

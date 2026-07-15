@@ -63,6 +63,7 @@ export const createLoanApplication = (body: { clientId: string; productId: strin
 
 export interface LoanApplicationSummary {
   id: string;
+  appNo: string | null;
   clientId: string;
   clientCode: string;
   clientName: string;
@@ -96,13 +97,14 @@ export const updateLoanApplication = (
   id: string,
   body: { clientId: string; productId: string; purposeId: string; notes?: string },
 ) =>
-  api<{ id: string; status: string; warnings: string[]; requestedAmount: string }>(`/loan-applications/${id}`, {
+  api<{ id: string; appNo: string | null; status: string; resubmitted: boolean; warnings: string[]; requestedAmount: string }>(`/loan-applications/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
   });
 
 export interface ClientApplication {
   id: string;
+  appNo: string | null;
   productId: string;
   productName: string;
   purposeId: string;
@@ -120,6 +122,12 @@ export const listClientApplications = (clientId: string) =>
 export const searchLoanByAccount = (account: string) =>
   api<{ clientId: string; clientName: string; centerId: string; loanAccount: string }>(
     `/loans/search?account=${encodeURIComponent(account)}`,
+  );
+
+/** Resolve an application number (APP…) to its member + application id. */
+export const searchApplicationByNo = (appNo: string) =>
+  api<{ applicationId: string; appNo: string | null; clientId: string; clientName: string; centerId: string; status: 'PENDING' | 'APPROVED' | 'REJECTED' }>(
+    `/loan-applications/search?appNo=${encodeURIComponent(appNo)}`,
   );
 
 export const disburseApplication = (id: string, dates?: { disbursalDate?: string; dueStartDate?: string }) =>

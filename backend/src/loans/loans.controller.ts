@@ -59,6 +59,12 @@ export class LoansController {
     return this.loans.findLoanByAccount(user, account);
   }
 
+  @RequirePermission('loan.apply', 'loan.view')
+  @Get('loan-applications/search')
+  applicationSearch(@CurrentUser() user: AuthUser, @Query('appNo') appNo: string) {
+    return this.loans.findApplicationByNo(user, appNo);
+  }
+
   // ---- Verification & Disbursement (BM/HO) ----
   // List is visible to FDOs too (scoped to their centers) for the employee
   // Reports view; disburse/reject below stay BM/HO.

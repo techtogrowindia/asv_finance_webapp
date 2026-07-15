@@ -787,6 +787,7 @@ export class ReportsService {
       return apps.map((a) => {
         const c = a.client;
         return {
+          appNo: a.appNo,
           branchCode: c.center.branch.code,
           centerCode: c.center.code,
           centerName: c.center.name,
@@ -799,6 +800,49 @@ export class ReportsService {
           status: a.status,
           appliedDate: a.createdAt,
           fdoName: c.center.fdo?.name ?? null,
+        };
+      });
+    });
+  }
+
+  /** Savings passbook: every savings deposit and refund within [from, to],
+   *  newest first, with the member, loan account and running direction. */
+  async savingsLedger(user: AuthUser, from: Date, to: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const txns = await tx.savingsTxn.findMany({
+        where: { collectedOn: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        orderBy: [{ collectedOn: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          client: {
+            select: {
+              name: true, memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+
+      // SavingsTxn only carries loanId (no relation) — resolve the accounts.
+      const loanIds = [...new Set(txns.map((t) => t.loanId).filter((id): id is string => !!id))];
+      const loans = loanIds.length
+        ? await tx.loan.findMany({ where: { id: { in: loanIds } }, select: { id: true, loanAccount: true } })
+        : [];
+      const acct = new Map(loans.map((l) => [l.id, l.loanAccount]));
+
+      return txns.map((t) => {
+        const c = t.client;
+        return {
+          date: t.collectedOn,
+          branchCode: c.center.branch.code,
+          centerCode: c.center.code,
+          centerName: c.center.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          memberName: c.name,
+          loanAccount: (t.loanId && acct.get(t.loanId)) || '—',
+          kind: t.kind,
+          deposit: t.kind === 'DEPOSIT' ? round2(Number(t.amount)) : 0,
+          refund: t.kind === 'REFUND' ? round2(Number(t.amount)) : 0,
         };
       });
     });

@@ -16,6 +16,7 @@ import {
   listPurposes,
   LoanProductLite,
   Purpose,
+  searchApplicationByNo,
   searchLoanByAccount,
   updateLoanApplication,
 } from '../api/loans';
@@ -42,6 +43,7 @@ export function LoanApplicationPage() {
 
   const [loanSearch, setLoanSearch] = useState('');
   const [searching, setSearching] = useState(false);
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
 
   const [client, setClient] = useState<MemberDetail | null>(null);
   const [existingLoans, setExistingLoans] = useState<ExistingLoan[] | null>(null);
@@ -84,40 +86,63 @@ export function LoanApplicationPage() {
   }
 
   async function onSearchLoan() {
-    if (!loanSearch.trim()) return;
+    const q = loanSearch.trim();
+    if (!q) return;
     setError('');
     setSuccess('');
     setSearching(true);
     try {
-      const res = await searchLoanByAccount(loanSearch.trim());
-      resetForm();
-      setCenterId(res.centerId);
-      setClientId(res.clientId);
-      setSuccess(`Loaded ${res.clientName} (loan ${res.loanAccount}).`);
+      if (/^app/i.test(q)) {
+        // Application number → load the member and open that application to edit.
+        const res = await searchApplicationByNo(q);
+        resetForm();
+        setCenterId(res.centerId);
+        setClientId(res.clientId);
+        setPendingEditId(res.applicationId);
+        setSuccess(`Found application ${res.appNo} for ${res.clientName} (${res.status}). Opening to edit…`);
+      } else {
+        const res = await searchLoanByAccount(q);
+        resetForm();
+        setCenterId(res.centerId);
+        setClientId(res.clientId);
+        setSuccess(`Loaded ${res.clientName} (loan ${res.loanAccount}).`);
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Loan not found');
+      setError(e instanceof Error ? e.message : 'Not found');
     } finally {
       setSearching(false);
     }
   }
 
+  // Once a searched member's applications have loaded, open the requested one to edit.
+  useEffect(() => {
+    if (!pendingEditId || !applications || products.length === 0) return;
+    const app = applications.find((a) => a.id === pendingEditId);
+    if (app) startEdit(app);
+    setPendingEditId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingEditId, applications, products]);
+
   function resetForm() {
     setEditingId(null);
+    setEditingApp(null);
     setFrequencyId('');
     setProductId('');
     setPurposeId('');
     setNotes('');
   }
 
+  const [editingApp, setEditingApp] = useState<ClientApplication | null>(null);
+
   function startEdit(a: ClientApplication) {
     setEditingId(a.id);
+    setEditingApp(a);
     const prod = products.find((p) => p.id === a.productId);
     setFrequencyId(prod?.frequencyId ?? '');
     setProductId(a.productId);
     setPurposeId(a.purposeId);
     setNotes(a.notes ?? '');
     setError('');
-    setSuccess('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -143,8 +168,8 @@ export function LoanApplicationPage() {
     try {
       const body = { clientId, productId, purposeId, notes: notes.trim() || undefined };
       if (editingId) {
-        await updateLoanApplication(editingId, body);
-        setSuccess('Loan application updated.');
+        const res = await updateLoanApplication(editingId, body);
+        setSuccess(res.resubmitted ? 'Application corrected and resubmitted for review.' : 'Loan application updated.');
       } else {
         await createLoanApplication(body);
         setSuccess('Loan application submitted for verification.');
@@ -165,12 +190,12 @@ export function LoanApplicationPage() {
 
       <div className="form-card" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
         <div className="field">
-          <label>Search by loan account number</label>
+          <label>Search by loan account or application number</label>
           <div style={{ display: 'flex', gap: 10 }}>
             <input
               className="input"
               style={{ maxWidth: 320 }}
-              placeholder="e.g. PMF005502/1"
+              placeholder="e.g. PMF005502/1 or APP000123"
               value={loanSearch}
               onChange={(e) => setLoanSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onSearchLoan()}
@@ -179,17 +204,27 @@ export function LoanApplicationPage() {
               {searching ? <span className="spinner" /> : 'Search'}
             </button>
           </div>
-          <div className="hint" style={{ marginTop: 6 }}>Loads the member who holds that loan — their KYC, existing loans and applications.</div>
+          <div className="hint" style={{ marginTop: 6 }}>A loan account loads that member; an application number (APP…) opens the application to edit.</div>
         </div>
       </div>
 
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
 
-      {editingId && (
-        <div className="alert-error" style={{ background: '#fff7e6', color: '#8a6d00', borderColor: '#f0d98c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Editing a pending application — change any field and click <strong>Update</strong>.</span>
-          <button className="btn btn-ghost btn-sm" type="button" onClick={resetForm}>Cancel edit</button>
+      {editingId && editingApp && (
+        <div className="alert-error" style={{ background: '#fff7e6', color: '#8a6d00', borderColor: '#f0d98c' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>
+              Editing application <strong>{editingApp.appNo ?? ''}</strong>
+              {editingApp.status === 'REJECTED'
+                ? <> — it was <strong>rejected</strong>. Fix it and click <strong>Resubmit</strong> to send it back for review.</>
+                : <> — change any field and click <strong>Update</strong>.</>}
+            </span>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={resetForm}>Cancel edit</button>
+          </div>
+          {editingApp.status === 'REJECTED' && editingApp.approverNotes && (
+            <div style={{ marginTop: 8 }}>Reviewer's note: <em>{editingApp.approverNotes}</em></div>
+          )}
         </div>
       )}
 
@@ -327,13 +362,14 @@ export function LoanApplicationPage() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Applied</th><th>Product</th><th>Purpose</th><th>Amount</th>
+                  <th>App No</th><th>Applied</th><th>Product</th><th>Purpose</th><th>Amount</th>
                   <th>Employee Note</th><th>Approver Note</th><th>Status</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {applications.map((a) => (
                   <tr key={a.id}>
+                    <td className="mono">{a.appNo ?? '—'}</td>
                     <td>{date(a.createdAt)}</td>
                     <td>{a.productName}</td>
                     <td>{a.purposeName}</td>
@@ -344,6 +380,8 @@ export function LoanApplicationPage() {
                     <td>
                       {a.status === 'PENDING' ? (
                         <button className="btn btn-primary btn-sm" onClick={() => startEdit(a)}>Edit</button>
+                      ) : a.status === 'REJECTED' ? (
+                        <button className="btn btn-primary btn-sm" onClick={() => startEdit(a)}>Edit &amp; resubmit</button>
                       ) : (
                         <span className="hint">Locked</span>
                       )}
@@ -353,7 +391,7 @@ export function LoanApplicationPage() {
               </tbody>
             </table>
           </div>
-          <div className="hint" style={{ padding: '10px 14px' }}>Pending applications can be edited until the branch approves or rejects them.</div>
+          <div className="hint" style={{ padding: '10px 14px' }}>Pending applications can be edited; a rejected application can be corrected and resubmitted. Approved (disbursed) ones are locked.</div>
         </div>
       )}
 

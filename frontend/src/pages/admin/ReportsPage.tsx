@@ -20,8 +20,10 @@ import {
   GroupWiseRow,
   LoanApplicationReportRow,
   ParAgingRow,
+  SavingsLedgerRow,
   ZeroCollectionRow,
   getAdvanceCollection,
+  getSavingsLedger,
   getBranchWise,
   getCenterWise,
   getClientWise,
@@ -37,12 +39,16 @@ import {
   getParAging,
   getZeroCollection,
 } from '../../api/reportsAdmin';
+import { CenterLoanRow, LoanLedger, getLedger, listLoansByCenter } from '../../api/loans';
+import { CenterLite, listCenters } from '../../api/members';
+import { LedgerView } from '../../components/LedgerView';
 import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
 import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'demand' | 'zero' | 'followup' | 'advance' | 'register' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
+type Tab = 'demand' | 'zero' | 'followup' | 'advance' | 'register' | 'ledger' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings' | 'savingsledger';
 const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'demand', label: 'Demand Register', perm: 'report.monitoring' },
+  { id: 'ledger', label: 'Loan Ledger', perm: 'report.portfolio' },
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
   { id: 'advance', label: 'Advance Collection', perm: 'report.monitoring' },
@@ -54,7 +60,8 @@ const TABS: { id: Tab; label: string; perm: string }[] = [
   { id: 'par', label: 'PAR / Overdue Aging', perm: 'report.portfolio' },
   { id: 'foreclosure', label: 'Foreclosure', perm: 'report.portfolio' },
   { id: 'closure', label: 'Loan Closures', perm: 'report.portfolio' },
-  { id: 'savings', label: 'Savings', perm: 'report.portfolio' },
+  { id: 'savings', label: 'Savings Balances', perm: 'report.portfolio' },
+  { id: 'savingsledger', label: 'Savings Ledger', perm: 'report.monitoring' },
 ];
 
 const inr = (v: string | number) =>
@@ -86,6 +93,8 @@ export function ReportsPage() {
 
         <div className="report-content">
           {tab === 'demand' && <DemandRegisterTab />}
+          {tab === 'ledger' && <LoanLedgerTab />}
+          {tab === 'savingsledger' && <SavingsLedgerTab />}
           {tab === 'zero' && <ZeroCollectionTab />}
           {tab === 'followup' && <CollectionFollowupTab />}
           {tab === 'advance' && <AdvanceCollectionTab />}
@@ -798,13 +807,14 @@ function LoanApplicationsReportTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Product</th>
+                  <th>App No</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Product</th>
                   <th>Purpose</th><th>Amount</th><th>Applied</th><th>Status</th><th>FDO</th>
                 </tr>
               </thead>
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td className="mono">{r.appNo ?? '—'}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -817,7 +827,7 @@ function LoanApplicationsReportTab() {
                     <td>{r.fdoName ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={10} className="empty">No applications in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No applications in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1255,4 +1265,162 @@ function SavingsTab() {
 
 function Item({ k, v }: { k: string; v: string }) {
   return <div className="detail-item"><div className="k">{k}</div><div className="v">{v}</div></div>;
+}
+
+// ---------------------------------------------------------------------------
+// Savings Ledger — the savings passbook (deposits & refunds) over a window.
+
+function SavingsLedgerTab() {
+  const filter = useDateFilter('month');
+  const [rows, setRows] = useState<SavingsLedgerRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getSavingsLedger(filter.from, filter.to)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
+  const totals = (rows ?? []).reduce((t, r) => ({ dep: t.dep + r.deposit, ref: t.ref + r.refund }), { dep: 0, ref: 0 });
+
+  return (
+    <div className="panel">
+      <div className="panel-head">Savings passbook — deposits collected and refunds paid in this window</div>
+      <div className="panel-body">
+        <DateFilterBar
+          filter={filter} onShow={show} busy={busy} hasRows={!!rows?.length}
+          onCsv={() => rows && downloadCsv('savings-ledger.csv', asRows())}
+          onXlsx={() => rows && downloadXlsx('savings-ledger.xlsx', asRows())}
+        />
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <>
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Date</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
+                  <th>Type</th><th>Deposit</th><th>Refund</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(p.pageRows ?? []).map((r, i) => (
+                  <tr key={i}>
+                    <td>{date(r.date)}</td>
+                    <td>{r.centerCode} — {r.centerName}</td>
+                    <td className="mono">{r.displayId}</td>
+                    <td>{r.memberName}</td>
+                    <td className="mono">{r.loanAccount}</td>
+                    <td><span className={`badge ${r.kind === 'DEPOSIT' ? 'active' : 'pending'}`}>{r.kind}</span></td>
+                    <td>{r.deposit ? inr(r.deposit) : '—'}</td>
+                    <td>{r.refund ? inr(r.refund) : '—'}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && <tr><td colSpan={8} className="empty">No savings activity in this window.</td></tr>}
+                {rows.length > 0 && (
+                  <tr style={{ fontWeight: 700 }}>
+                    <td colSpan={6}>Total</td><td>{inr(totals.dep)}</td><td>{inr(totals.ref)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <Pager p={p} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Loan Ledger — pick a center + type, list its loans, open a full ledger
+// (mirrors the employee portal's Client Loan Schedule).
+
+function LoanLedgerTab() {
+  const [centers, setCenters] = useState<CenterLite[]>([]);
+  const [centerId, setCenterId] = useState('');
+  const [type, setType] = useState<'OPEN' | 'CLOSED' | 'ALL'>('OPEN');
+  const [loans, setLoans] = useState<CenterLoanRow[] | null>(null);
+  const [ledger, setLedger] = useState<LoanLedger | null>(null);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    setLedger(null);
+    if (!centerId) { setLoans(null); return; }
+    setError('');
+    listLoansByCenter(centerId, type).then(setLoans).catch((e) => setError(e.message));
+  }, [centerId, type]);
+
+  function viewLedger(loanId: string) {
+    setError(''); setLoadingLedger(true);
+    getLedger(loanId).then(setLedger).catch((e) => setError(e.message)).finally(() => setLoadingLedger(false));
+  }
+
+  if (ledger) {
+    return (
+      <>
+        <div className="no-print" style={{ marginBottom: 14 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLedger(null)}>← Back to loan list</button>
+        </div>
+        <LedgerView ledger={ledger} />
+      </>
+    );
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-head no-print">Client Loan Schedule — pick a center to list its loans, then view a ledger</div>
+      <div className="panel-body">
+        {error && <div className="alert-error">{error}</div>}
+        <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+          <div className="form-grid">
+            <div className="field">
+              <label>Center</label>
+              <select className="input" value={centerId} onChange={(e) => setCenterId(e.target.value)}>
+                <option value="">Select center</option>
+                {centers.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Loan Type</label>
+              <select className="input" value={type} onChange={(e) => setType(e.target.value as 'OPEN' | 'CLOSED' | 'ALL')}>
+                <option value="OPEN">Open</option>
+                <option value="CLOSED">Closed</option>
+                <option value="ALL">All</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        {centerId && loans && (
+          <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+            <table className="data">
+              <thead>
+                <tr><th>Client ID</th><th>Client Name</th><th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th></th></tr>
+              </thead>
+              <tbody>
+                {loans.map((l) => (
+                  <tr key={l.id}>
+                    <td className="mono">{l.displayId}</td>
+                    <td>{l.clientName}</td>
+                    <td className="mono">{l.loanAccount}</td>
+                    <td>{date(l.disbursalDate)}</td>
+                    <td>{inr(l.loanAmount)}</td>
+                    <td><button className="btn btn-primary btn-sm" disabled={loadingLedger} onClick={() => viewLedger(l.id)}>View ledger</button></td>
+                  </tr>
+                ))}
+                {loans.length === 0 && <tr><td colSpan={6} className="empty">No {type === 'ALL' ? '' : type.toLowerCase() + ' '}loans in this center.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

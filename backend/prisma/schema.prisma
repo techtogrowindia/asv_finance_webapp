@@ -473,6 +473,9 @@ model LoanApplication {
   id               String                @id @default(uuid()) @db.Uuid
   tenantId         String                @map("tenant_id") @db.Uuid
   clientId         String                @map("client_id") @db.Uuid
+  // Human-readable application number (e.g. APP000123), assigned at creation so
+  // an application can be searched and opened before it's ever disbursed.
+  appNo            String?               @map("app_no")
   productId        String                @map("product_id") @db.Uuid
   purposeId        String                @map("purpose_id") @db.Uuid
   requestedAmount  Decimal               @map("requested_amount") @db.Decimal(14, 2)
@@ -495,6 +498,7 @@ model LoanApplication {
   purpose Purpose     @relation(fields: [purposeId], references: [id])
   loan    Loan?
 
+  @@unique([tenantId, appNo])
   @@index([tenantId, clientId])
   @@map("loan_application")
 }
