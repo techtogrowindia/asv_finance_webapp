@@ -56,7 +56,8 @@ export function CollectionsPage() {
         `Collected ${inr(res.applied)} from ${row.clientName}` +
           (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') +
           (res.advanceBanked > 0 ? ` (${inr(res.advanceBanked)} banked as advance)` : '') +
-          (res.loanClosed ? ' — loan fully closed!' : ''),
+          (res.loanClosed ? ' — loan fully closed!' : '') +
+          (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
       );
       refresh(centerId);
     } catch (e) {

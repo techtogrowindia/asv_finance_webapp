@@ -52,7 +52,12 @@ export function DemandCollectionPage() {
     setError(''); setSuccess(''); setBusyLoanId(row.loanId);
     try {
       const res = await postCollection(row.loanId, amount);
-      setSuccess(`Collected ${inr(res.applied)} from ${row.clientName}` + (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') + (res.loanClosed ? ' — loan closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : ''));
+      setSuccess(
+        `Collected ${inr(res.applied)} from ${row.clientName}`
+        + (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '')
+        + (res.loanClosed ? ' — loan closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : '')
+        + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
+      );
       refresh(centerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collection failed');

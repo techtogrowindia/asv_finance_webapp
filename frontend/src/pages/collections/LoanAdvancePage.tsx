@@ -27,7 +27,11 @@ export function LoanAdvancePage() {
     setError(''); setSuccess(''); setBusyId(row.loanId);
     try {
       const res = await applyAdvance(row.loanId);
-      setSuccess(`Applied ${inr(res.applied)}.` + (res.loanClosed ? ' Loan fully closed!' : res.advanceRemaining > 0 ? ` ${inr(res.advanceRemaining)} advance still remaining.` : ''));
+      setSuccess(
+        `Applied ${inr(res.applied)}.`
+        + (res.loanClosed ? ' Loan fully closed!' : res.advanceRemaining > 0 ? ` ${inr(res.advanceRemaining)} advance still remaining.` : '')
+        + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
+      );
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Apply failed');

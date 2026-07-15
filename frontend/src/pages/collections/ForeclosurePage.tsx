@@ -55,7 +55,8 @@ export function ForeclosurePage() {
       title: 'Foreclose this loan?',
       message: `Close ${quote.loanAccount} early for a payoff of ${inr(quote.payoffTotal)}`
         + (quote.foreclosureCharge > 0 ? ` (includes ${inr(quote.foreclosureCharge)} foreclosure charge)` : '')
-        + `${quote.interestWaived > 0 ? `, with ${inr(quote.interestWaived)} interest waived` : ''}? This settles and closes the loan — it cannot be undone.`,
+        + `${quote.interestWaived > 0 ? `, with ${inr(quote.interestWaived)} interest waived` : ''}`
+        + `${quote.savingsToRefund > 0 ? `. ${inr(quote.savingsToRefund)} of held savings will be refunded to the client automatically` : ''}? This settles and closes the loan — it cannot be undone.`,
       confirmLabel: 'Foreclose',
       danger: true,
     });
@@ -63,7 +64,10 @@ export function ForeclosurePage() {
     setError(''); setSuccess(''); setBusy(true);
     try {
       const res = await foreclose(quote.loanId, waiveNum || undefined);
-      setSuccess(`Loan closed. Payoff ${inr(res.payoffTotal)}, interest waived ${inr(res.interestWaived)}.`);
+      setSuccess(
+        `Loan closed. Payoff ${inr(res.payoffTotal)}, interest waived ${inr(res.interestWaived)}.`
+        + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
+      );
       setLoanId(''); setQuote(null); setWaive('');
       if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN')));
     } catch (e) {
@@ -119,6 +123,14 @@ export function ForeclosurePage() {
                 </div>
               </div>
               <div className="detail-item"><div className="k">Advance on hand</div><div className="v">{inr(quote.advanceBalance)}</div></div>
+              <div className="detail-item">
+                <div className="k">Savings to be refunded</div>
+                <div className="v">{inr(quote.savingsToRefund)}
+                  {quote.savingsToRefund > 0 && (
+                    <span className="hint" style={{ display: 'block' }}>Paid to the client automatically once foreclosed.</span>
+                  )}
+                </div>
+              </div>
               <div className="detail-item"><div className="k">Payoff total</div><div className="v" style={{ fontWeight: 700 }}>{inr(quote.payoffTotal)}</div></div>
             </div>
 

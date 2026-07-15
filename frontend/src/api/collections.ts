@@ -36,7 +36,10 @@ export const getDemandClientwise = (date?: string) =>
   api<DemandClientRow[]>(`/collections/demand?type=CLIENTWISE${date ? `&date=${date}` : ''}`);
 
 export const postCollection = (loanId: string, amount: number) =>
-  api<{ applied: number; advanceBanked: number; unallocated: number; savingsCollected: number; loanClosed: boolean }>('/collections', {
+  api<{
+    applied: number; advanceBanked: number; unallocated: number;
+    savingsCollected: number; savingsRefunded: number; loanClosed: boolean;
+  }>('/collections', {
     method: 'POST',
     body: JSON.stringify({ loanId, amount }),
   });
@@ -61,7 +64,7 @@ export const getArrears = (centerId: string) =>
   api<DueRow[]>(`/collections/arrears?centerId=${centerId}`);
 
 export const bulkCollectDemand = (centerId: string) =>
-  api<{ loansCollected: number; totalCollected: number; totalSavings: number }>('/collections/bulk-demand', {
+  api<{ loansCollected: number; totalCollected: number; totalSavings: number; totalSavingsRefunded: number }>('/collections/bulk-demand', {
     method: 'POST',
     body: JSON.stringify({ centerId }),
   });
@@ -92,7 +95,7 @@ export interface AdvanceLoan {
 export const getAdvanceLoans = () => api<AdvanceLoan[]>('/collections/advances');
 
 export const applyAdvance = (loanId: string) =>
-  api<{ applied: number; advanceRemaining: number; loanClosed: boolean }>(`/collections/${loanId}/apply-advance`, {
+  api<{ applied: number; advanceRemaining: number; loanClosed: boolean; savingsRefunded: number }>(`/collections/${loanId}/apply-advance`, {
     method: 'POST',
   });
 
@@ -110,6 +113,7 @@ export interface ForeclosureQuote {
   canWaive: boolean;
   payoffTotal: number;
   advanceBalance: number;
+  savingsToRefund: number;
 }
 
 export const getForeclosureQuote = (loanId: string, waiveInterest?: number) =>
@@ -118,10 +122,10 @@ export const getForeclosureQuote = (loanId: string, waiveInterest?: number) =>
   );
 
 export const foreclose = (loanId: string, waiveInterest?: number) =>
-  api<{ loanId: string; closed: boolean; payoffTotal: number; interestWaived: number; manualWaived: number; foreclosureCharge: number }>(
-    `/collections/${loanId}/foreclose`,
-    {
-      method: 'POST',
-      body: JSON.stringify(waiveInterest ? { waiveInterest } : {}),
-    },
-  );
+  api<{
+    loanId: string; closed: boolean; payoffTotal: number; interestWaived: number;
+    manualWaived: number; foreclosureCharge: number; savingsRefunded: number;
+  }>(`/collections/${loanId}/foreclose`, {
+    method: 'POST',
+    body: JSON.stringify(waiveInterest ? { waiveInterest } : {}),
+  });

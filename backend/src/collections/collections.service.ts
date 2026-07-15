@@ -180,15 +180,19 @@ export class CollectionsService {
       let loansCollected = 0;
       let totalCollected = 0;
       let totalSavings = 0;
+      let totalSavingsRefunded = 0;
       for (const loan of loans) {
         const rows = await this.pendingRows(tx, loan.id, workingDate);
         const demand = rows.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
         if (demand <= 0) continue;
-        const { applied } = await this.applyFifo(tx, user, loan.id, round2(demand), 'REGULAR', workingDate, true);
+        const { applied, savingsCollected, savingsRefunded } = await this.applyFifo(
+          tx, user, loan.id, loan.clientId, round2(demand), 'REGULAR', workingDate, true,
+        );
         if (applied > 0) {
           loansCollected += 1;
           totalCollected += applied;
-          totalSavings += await this.depositSavings(tx, user, loan.id, loan.clientId, workingDate);
+          totalSavings += savingsCollected;
+          totalSavingsRefunded += savingsRefunded;
         }
       }
 
@@ -198,10 +202,16 @@ export class CollectionsService {
         entityId: centerId,
         action: 'BULK_COLLECT',
         employeeId: user.employeeId,
-        after: { loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings), eodDate: workingDate },
+        after: {
+          loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings),
+          totalSavingsRefunded: round2(totalSavingsRefunded), eodDate: workingDate,
+        },
       });
 
-      return { loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings) };
+      return {
+        loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings),
+        totalSavingsRefunded: round2(totalSavingsRefunded),
+      };
     });
   }
 
@@ -217,10 +227,11 @@ export class CollectionsService {
 
       // A regular collection settles only what's due up to today; anything more
       // is banked as advance (apply it later on the Loan Advance screen).
-      const { applied, remaining, loanClosed } = await this.applyFifo(
+      const { applied, remaining, loanClosed, savingsCollected, savingsRefunded } = await this.applyFifo(
         tx,
         user,
         loan.id,
+        loan.clientId,
         round2(dto.amount),
         'REGULAR',
         workingDate,
@@ -236,21 +247,16 @@ export class CollectionsService {
         });
       }
 
-      // A collection event also banks the fixed savings deposit (if configured).
-      const savingsCollected = applied > 0
-        ? await this.depositSavings(tx, user, loan.id, loan.clientId, workingDate)
-        : 0;
-
       await this.audit.record(tx, {
         tenantId: user.tenantId,
         entity: 'Collection',
         entityId: loan.id,
         action: 'COLLECT',
         employeeId: user.employeeId,
-        after: { amount: round2(dto.amount), applied, advanceBanked, savingsCollected, loanClosed },
+        after: { amount: round2(dto.amount), applied, advanceBanked, savingsCollected, savingsRefunded, loanClosed },
       });
 
-      return { applied, advanceBanked, unallocated: advanceBanked, savingsCollected, loanClosed };
+      return { applied, advanceBanked, unallocated: advanceBanked, savingsCollected, savingsRefunded, loanClosed };
     });
   }
 
@@ -291,7 +297,9 @@ export class CollectionsService {
 
       const workingDate = await this.resolveWorkingDate(tx, loan.client.center.branchId);
       // Advance is spent across ALL upcoming installments (not just today's demand).
-      const { applied, remaining, loanClosed } = await this.applyFifo(tx, user, loan.id, advance, 'ADVANCE', workingDate, false);
+      const { applied, remaining, loanClosed, savingsRefunded } = await this.applyFifo(
+        tx, user, loan.id, loan.clientId, advance, 'ADVANCE', workingDate, false,
+      );
 
       await tx.loan.update({ where: { id: loan.id }, data: { advanceBalance: remaining } });
 
@@ -301,10 +309,10 @@ export class CollectionsService {
         entityId: loan.id,
         action: 'APPLY_ADVANCE',
         employeeId: user.employeeId,
-        after: { applied, advanceRemaining: remaining, loanClosed },
+        after: { applied, advanceRemaining: remaining, loanClosed, savingsRefunded },
       });
 
-      return { applied, advanceRemaining: remaining, loanClosed };
+      return { applied, advanceRemaining: remaining, loanClosed, savingsRefunded };
     });
   }
 
@@ -335,6 +343,7 @@ export class CollectionsService {
         canWaive,
         payoffTotal: q.total,
         advanceBalance: round2(Number(loan.advanceBalance)),
+        savingsToRefund: await this.loanSavingsBalance(tx, loan.id),
       };
     });
   }
@@ -407,6 +416,10 @@ export class CollectionsService {
         data: { loanType: 'CLOSED', closedDate: workingDate },
       });
 
+      // Foreclosing closes the loan immediately, so its own savings refund
+      // right away too — same as a normal full repayment closure.
+      const savingsRefunded = await this.refundLoanSavings(tx, user, { id: loan.id, clientId: loan.clientId }, workingDate);
+
       await this.audit.record(tx, {
         tenantId: user.tenantId,
         entity: 'Loan',
@@ -422,6 +435,7 @@ export class CollectionsService {
           manualWaived: q.manualWaived,
           foreclosureCharge: q.charge,
           payoffTotal: q.total,
+          savingsRefunded,
           eodDate: workingDate,
         },
       });
@@ -433,6 +447,7 @@ export class CollectionsService {
         interestWaived: q.waived,
         manualWaived: q.manualWaived,
         foreclosureCharge: q.charge,
+        savingsRefunded,
       };
     });
   }
@@ -505,6 +520,54 @@ export class CollectionsService {
 
   // ---- internals -----------------------------------------------------------
 
+  /** Net savings tied to one loan: deposits collected against it, minus any
+   *  refund already made for it. */
+  private async loanSavingsBalance(tx: Prisma.TransactionClient, loanId: string): Promise<number> {
+    const [deposits, refunds] = await Promise.all([
+      tx.savingsTxn.aggregate({ where: { loanId, kind: 'DEPOSIT' }, _sum: { amount: true } }),
+      tx.savingsTxn.aggregate({ where: { loanId, kind: 'REFUND' }, _sum: { amount: true } }),
+    ]);
+    return round2(Number(deposits._sum.amount ?? 0) - Number(refunds._sum.amount ?? 0));
+  }
+
+  /**
+   * Refund the savings tied to one loan automatically the moment it closes —
+   * foreclosed or fully repaid — rather than making the client wait for every
+   * loan of theirs to close. Returns the amount refunded (0 if none held).
+   */
+  private async refundLoanSavings(
+    tx: Prisma.TransactionClient,
+    user: AuthUser,
+    loan: { id: string; clientId: string },
+    workingDate: Date,
+  ): Promise<number> {
+    const balance = await this.loanSavingsBalance(tx, loan.id);
+    if (balance <= 0) return 0;
+
+    await tx.savingsTxn.create({
+      data: {
+        tenantId: user.tenantId,
+        clientId: loan.clientId,
+        loanId: loan.id,
+        amount: balance,
+        kind: 'REFUND',
+        collectedOn: workingDate,
+        enteredBy: user.employeeId,
+      },
+    });
+    await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { decrement: balance } } });
+
+    await this.audit.record(tx, {
+      tenantId: user.tenantId,
+      entity: 'Loan',
+      entityId: loan.id,
+      action: 'SAVINGS_REFUND',
+      employeeId: user.employeeId,
+      after: { refunded: balance, eodDate: workingDate },
+    });
+    return balance;
+  }
+
   /** Bank the tenant's fixed savings deposit for one collection event; returns
    *  the amount deposited (0 when savings is disabled). */
   private async depositSavings(
@@ -546,11 +609,12 @@ export class CollectionsService {
     tx: Prisma.TransactionClient,
     user: AuthUser,
     loanId: string,
+    clientId: string,
     amount: number,
     kind: 'REGULAR' | 'ADVANCE',
     workingDate: Date,
     onlyDue: boolean,
-  ): Promise<{ applied: number; remaining: number; loanClosed: boolean }> {
+  ): Promise<{ applied: number; remaining: number; loanClosed: boolean; savingsCollected: number; savingsRefunded: number }> {
     const pending = await this.pendingRows(tx, loanId, onlyDue ? workingDate : undefined);
     let remaining = round2(amount);
 
@@ -592,13 +656,27 @@ export class CollectionsService {
       remaining = round2(remaining - pay);
     }
 
+    const applied = round2(amount - remaining);
+
+    // A regular collection event also banks the fixed savings deposit (if
+    // configured) — this must happen BEFORE the closure check below, so a
+    // loan's very last installment payment still gets its own savings
+    // refunded immediately rather than stranded after closing.
+    const savingsCollected =
+      kind === 'REGULAR' && applied > 0 ? await this.depositSavings(tx, user, loanId, clientId, workingDate) : 0;
+
     const stillOpen = await tx.repaymentSchedule.findFirst({ where: { loanId, dueBalance: { gt: 0 } } });
     let loanClosed = false;
+    let savingsRefunded = 0;
     if (!stillOpen) {
       await tx.loan.update({ where: { id: loanId }, data: { loanType: 'CLOSED', closedDate: workingDate } });
       loanClosed = true;
+      // A normally-closed loan (fully repaid) refunds its own savings right
+      // away too — same as foreclosure — instead of waiting for every other
+      // loan of the client to close.
+      savingsRefunded = await this.refundLoanSavings(tx, user, { id: loanId, clientId }, workingDate);
     }
-    return { applied: round2(amount - remaining), remaining, loanClosed };
+    return { applied, remaining, loanClosed, savingsCollected, savingsRefunded };
   }
 
   /** Rows with an outstanding balance (collAmt < dueAmt), oldest first; if `asOf`
