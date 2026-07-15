@@ -63,14 +63,15 @@ export function CombinedStatementReport() {
                   <table className="data">
                     <thead><tr>
                       <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Due Pri</th><th>Due Int</th>
-                      <th>Due Amt</th><th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Balance</th>
+                      <th>Due Amt</th><th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Savings</th><th>Balance</th>
                     </tr></thead>
                     <tbody>
                       {l.schedule.map((r) => (
                         <tr key={r.dueNo}>
                           <td>{r.dueNo}</td><td>{date(r.dueDate)}</td><td>{date(r.collDate)}</td>
                           <td>{inr(r.duePri)}</td><td>{inr(r.dueInt)}</td><td>{inr(r.dueAmt)}</td>
-                          <td>{inr(r.collPri)}</td><td>{inr(r.collInt)}</td><td>{inr(r.collAmt)}</td><td>{inr(r.dueBalance)}</td>
+                          <td>{inr(r.collPri)}</td><td>{inr(r.collInt)}</td><td>{inr(r.collAmt)}</td>
+                          <td>{inr(r.savings)}</td><td>{inr(r.dueBalance)}</td>
                         </tr>
                       ))}
                     </tbody>

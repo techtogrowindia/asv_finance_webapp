@@ -381,6 +381,24 @@ export class ClientsService {
         orderBy: { disbursalDate: 'asc' },
         include: { schedule: { orderBy: { dueNo: 'asc' } } },
       });
+
+      // Savings is banked once per collection event (tied to a loan + date), not
+      // per installment. Attribute each deposit to the instalment collected that
+      // day so the statement can show a per-row "Savings" column (0 if none).
+      const deposits = await tx.savingsTxn.findMany({
+        where: { clientId, kind: 'DEPOSIT' },
+        orderBy: { collectedOn: 'asc' },
+        select: { loanId: true, collectedOn: true, amount: true },
+      });
+      const depositQueue = new Map<string, number[]>(); // key `${loanId}|${yyyy-mm-dd}` → amounts
+      for (const dep of deposits) {
+        if (!dep.loanId) continue;
+        const key = `${dep.loanId}|${dep.collectedOn.toISOString().slice(0, 10)}`;
+        const list = depositQueue.get(key) ?? [];
+        list.push(Number(dep.amount));
+        depositQueue.set(key, list);
+      }
+
       return {
         clientName: passbook.clientName,
         displayId: passbook.displayId,
@@ -396,11 +414,20 @@ export class ClientsService {
           totalDues: l.totalDues,
           loanType: l.loanType,
           closedDate: l.closedDate,
-          schedule: l.schedule.map((s) => ({
-            dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
-            duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
-            collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt, dueBalance: s.dueBalance,
-          })),
+          schedule: l.schedule.map((s) => {
+            let savings = 0;
+            if (s.collDate) {
+              const key = `${l.id}|${s.collDate.toISOString().slice(0, 10)}`;
+              const list = depositQueue.get(key);
+              if (list && list.length) savings = list.shift()!; // consume once
+            }
+            return {
+              dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
+              duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
+              collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt,
+              savings, dueBalance: s.dueBalance,
+            };
+          }),
         })),
       };
     });

@@ -29,6 +29,7 @@ const ADMIN_NAV: SideNavItem[] = [
       { to: '/admin/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
     ],
   },
+  { to: '/admin/savings', label: 'Savings', icon: '◈', perm: ['member.view'] },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
   { to: '/admin/masters', label: 'Business Settings', icon: '⚙', perm: ['master.manage'] },

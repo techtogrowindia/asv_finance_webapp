@@ -13,6 +13,8 @@ import { LoanApplicationPage } from './pages/LoanApplicationPage';
 import { CollectionsPage } from './pages/CollectionsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { LoanLedgerPage } from './pages/LoanLedgerPage';
+import { SavingsPage } from './pages/SavingsPage';
+import { SavingsPassbookPage } from './pages/SavingsPassbookPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
@@ -60,6 +62,8 @@ export default function App() {
         <Route path="/app/collections/pay-advance" element={<EmployeeRoute><AdvanceCollectionPage /></EmployeeRoute>} />
         <Route path="/app/collections/advance" element={<EmployeeRoute><LoanAdvancePage /></EmployeeRoute>} />
         <Route path="/app/collections/foreclose" element={<EmployeeRoute><ForeclosurePage /></EmployeeRoute>} />
+        <Route path="/app/savings" element={<EmployeeRoute><SavingsPage /></EmployeeRoute>} />
+        <Route path="/app/savings/:clientId" element={<EmployeeRoute><SavingsPassbookPage /></EmployeeRoute>} />
         <Route path="/app/reports" element={<EmployeeRoute><ReportsPage /></EmployeeRoute>} />
         <Route path="/app/loans/:loanId/ledger" element={<EmployeeRoute><LoanLedgerPage /></EmployeeRoute>} />
 
@@ -162,6 +166,22 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <AdminLayout><LoanLedgerPage /></AdminLayout>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/savings"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <AdminLayout><SavingsPage /></AdminLayout>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/savings/:clientId"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <AdminLayout><SavingsPassbookPage /></AdminLayout>
             </RequireAuth>
           }
         />

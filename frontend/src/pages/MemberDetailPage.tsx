@@ -166,8 +166,11 @@ export function MemberDetailPage() {
       <div className="panel" style={{ marginTop: 18 }}>
         <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Savings</span>
-          <span className="hint" style={{ fontWeight: 400 }}>
-            A/c {m.savingsAccount ?? '—'} · Balance <strong style={{ color: 'var(--ink-900)' }}>{inr(String(m.savingsBalance))}</strong>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span className="hint" style={{ fontWeight: 400 }}>
+              A/c {m.savingsAccount ?? '—'} · Balance <strong style={{ color: 'var(--ink-900)' }}>{inr(String(m.savingsBalance))}</strong>
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/savings/${id}`)}>View passbook</button>
           </span>
         </div>
         <div className="panel-body">

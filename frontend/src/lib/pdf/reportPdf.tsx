@@ -244,10 +244,11 @@ function ClientStatementDoc({ st }: { st: ClientStatement }) {
     { key: 'duePri', label: 'Due Pri', w: 10, align: 'right' },
     { key: 'dueInt', label: 'Due Int', w: 10, align: 'right' },
     { key: 'dueAmt', label: 'Due Amt', w: 10, align: 'right' },
-    { key: 'collPri', label: 'Coll Pri', w: 10, align: 'right' },
-    { key: 'collInt', label: 'Coll Int', w: 10, align: 'right' },
-    { key: 'collAmt', label: 'Coll Amt', w: 11, align: 'right' },
-    { key: 'dueBalance', label: 'Balance', w: 11, align: 'right' },
+    { key: 'collPri', label: 'Coll Pri', w: 9, align: 'right' },
+    { key: 'collInt', label: 'Coll Int', w: 9, align: 'right' },
+    { key: 'collAmt', label: 'Coll Amt', w: 10, align: 'right' },
+    { key: 'savings', label: 'Savings', w: 9, align: 'right' },
+    { key: 'dueBalance', label: 'Balance', w: 10, align: 'right' },
   ];
   return (
     <Document>
@@ -269,7 +270,8 @@ function ClientStatementDoc({ st }: { st: ClientStatement }) {
               rows={l.schedule.map((r) => ({
                 dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
                 duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
-                collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
+                collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt),
+                savings: inr(r.savings), dueBalance: inr(r.dueBalance),
               }))}
             />
           </View>

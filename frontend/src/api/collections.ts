@@ -35,13 +35,13 @@ export const getDemandCenterwise = (date?: string) =>
 export const getDemandClientwise = (date?: string) =>
   api<DemandClientRow[]>(`/collections/demand?type=CLIENTWISE${date ? `&date=${date}` : ''}`);
 
-export const postCollection = (loanId: string, amount: number) =>
+export const postCollection = (loanId: string, amount: number, savings?: number) =>
   api<{
     applied: number; advanceBanked: number; unallocated: number;
     savingsCollected: number; savingsRefunded: number; loanClosed: boolean;
   }>('/collections', {
     method: 'POST',
-    body: JSON.stringify({ loanId, amount }),
+    body: JSON.stringify({ loanId, amount, ...(savings !== undefined ? { savings } : {}) }),
   });
 
 export interface CenterSummary {

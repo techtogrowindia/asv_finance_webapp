@@ -11,6 +11,7 @@ const EMPLOYEE_NAV: SideNavItem[] = [
   { to: '/app/clients', label: 'Members', icon: '☺', perm: ['member.view'] },
   { to: '/app/enroll', label: 'Enroll Member', icon: '＋', perm: ['member.create'] },
   { to: '/app/loans', label: 'Loans', icon: '₹', perm: ['loan.apply', 'loan.view'] },
+  { to: '/app/savings', label: 'Savings', icon: '◈', perm: ['member.view'] },
   {
     label: 'Collections', icon: '✓', perm: ['collection.view'],
     children: [

@@ -236,6 +236,7 @@ export class CollectionsService {
         'REGULAR',
         workingDate,
         true,
+        dto.savings,
       );
 
       let advanceBanked = 0;
@@ -568,20 +569,27 @@ export class CollectionsService {
     return balance;
   }
 
-  /** Bank the tenant's fixed savings deposit for one collection event; returns
-   *  the amount deposited (0 when savings is disabled). */
+  /** Bank a savings deposit for one collection event; returns the amount
+   *  deposited. Uses `override` when the field officer set a specific amount
+   *  (including 0 to skip it), otherwise the tenant's fixed default. */
   private async depositSavings(
     tx: Prisma.TransactionClient,
     user: AuthUser,
     loanId: string,
     clientId: string,
     workingDate: Date,
+    override?: number,
   ): Promise<number> {
-    const tenant = await tx.tenant.findFirst({
-      where: { id: user.tenantId },
-      select: { savingsPerCollection: true },
-    });
-    const amount = round2(Number(tenant?.savingsPerCollection ?? 0));
+    let amount: number;
+    if (override !== undefined) {
+      amount = round2(Math.max(0, override));
+    } else {
+      const tenant = await tx.tenant.findFirst({
+        where: { id: user.tenantId },
+        select: { savingsPerCollection: true },
+      });
+      amount = round2(Number(tenant?.savingsPerCollection ?? 0));
+    }
     if (amount <= 0) return 0;
     await tx.savingsTxn.create({
       data: {
@@ -614,6 +622,7 @@ export class CollectionsService {
     kind: 'REGULAR' | 'ADVANCE',
     workingDate: Date,
     onlyDue: boolean,
+    savingsOverride?: number,
   ): Promise<{ applied: number; remaining: number; loanClosed: boolean; savingsCollected: number; savingsRefunded: number }> {
     const pending = await this.pendingRows(tx, loanId, onlyDue ? workingDate : undefined);
     let remaining = round2(amount);
@@ -663,7 +672,9 @@ export class CollectionsService {
     // loan's very last installment payment still gets its own savings
     // refunded immediately rather than stranded after closing.
     const savingsCollected =
-      kind === 'REGULAR' && applied > 0 ? await this.depositSavings(tx, user, loanId, clientId, workingDate) : 0;
+      kind === 'REGULAR' && applied > 0
+        ? await this.depositSavings(tx, user, loanId, clientId, workingDate, savingsOverride)
+        : 0;
 
     const stillOpen = await tx.repaymentSchedule.findFirst({ where: { loanId, dueBalance: { gt: 0 } } });
     let loanClosed = false;

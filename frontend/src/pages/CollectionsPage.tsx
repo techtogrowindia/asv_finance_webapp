@@ -13,6 +13,7 @@ export function CollectionsPage() {
   const [centerId, setCenterId] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
   const [advances, setAdvances] = useState<Record<string, string>>({});
+  const [savingsInputs, setSavingsInputs] = useState<Record<string, string>>({});
   const [savings, setSavings] = useState(0);
   const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -26,7 +27,7 @@ export function CollectionsPage() {
   function refresh(cid: string) {
     setRows(null);
     getDue(cid)
-      .then((data) => { setRows(data); setAdvances({}); })
+      .then((data) => { setRows(data); setAdvances({}); setSavingsInputs({}); })
       .catch((e) => setError(e.message));
   }
 
@@ -36,9 +37,12 @@ export function CollectionsPage() {
   }, [centerId]);
 
   // Cash to collect = overdue + this period's instalment + any advance the member
-  // chooses to pre-pay + the fixed savings deposit.
+  // chooses to pre-pay + the savings deposit (editable — the FDO may set it to 0
+  // if the client skips savings this time, like advance).
   const advanceOf = (r: DueRow) => Number(advances[r.loanId]) || 0;
-  const rowTotal = (r: DueRow) => r.arrear + r.currentDue + advanceOf(r) + savings;
+  const savingsOf = (r: DueRow) =>
+    savingsInputs[r.loanId] !== undefined ? Number(savingsInputs[r.loanId]) || 0 : savings;
+  const rowTotal = (r: DueRow) => r.arrear + r.currentDue + advanceOf(r) + savingsOf(r);
 
   async function onCollect(row: DueRow) {
     // The loan payment; savings is banked separately by the API.
@@ -51,7 +55,7 @@ export function CollectionsPage() {
     setSuccess('');
     setBusyLoanId(row.loanId);
     try {
-      const res = await postCollection(row.loanId, amount);
+      const res = await postCollection(row.loanId, amount, savingsOf(row));
       setSuccess(
         `Collected ${inr(res.applied)} from ${row.clientName}` +
           (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') +
@@ -129,7 +133,18 @@ export function CollectionsPage() {
                       <div className="hint" style={{ marginTop: 2 }}>Held: {inr(r.advanceBalance)}</div>
                     )}
                   </td>
-                  {showSavings && <td>{inr(savings)}</td>}
+                  {showSavings && (
+                    <td>
+                      <input
+                        className="input"
+                        style={{ width: 90, padding: '7px 10px' }}
+                        type="number"
+                        min="0"
+                        value={savingsInputs[r.loanId] ?? String(savings)}
+                        onChange={(e) => setSavingsInputs((a) => ({ ...a, [r.loanId]: e.target.value }))}
+                      />
+                    </td>
+                  )}
                   <td style={{ fontWeight: 600 }}>{inr(rowTotal(r))}</td>
                   <td>
                     <button

@@ -72,7 +72,7 @@ export const getSavingsPassbook = (id: string) => api<SavingsPassbook>(`/clients
 export interface StatementLedgerRow {
   dueNo: number; dueDate: string; collDate: string | null;
   duePri: string; dueInt: string; dueAmt: string;
-  collPri: string; collInt: string; collAmt: string; dueBalance: string;
+  collPri: string; collInt: string; collAmt: string; savings: number; dueBalance: string;
 }
 export interface StatementLoan {
   loanAccount: string;
