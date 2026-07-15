@@ -298,6 +298,13 @@ a { color: var(--brand-700); text-decoration: none; }
 .action-menu-item.danger { color: var(--danger); }
 .action-menu-item.danger:hover { background: var(--danger-bg); }
 
+/* ---- Pagination ---- */
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 4px 2px; flex-wrap: wrap; }
+.pager-size { display: flex; align-items: center; gap: 8px; color: var(--ink-700); font-size: 13px; }
+.pager-size .select { padding: 5px 8px; }
+.pager-nav { display: flex; align-items: center; gap: 10px; }
+.pager-info { color: var(--ink-500); font-size: 13px; }
+
 /* ---- Table ---- */
 .table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: auto; }
 table.data { width: 100%; border-collapse: collapse; font-size: 14px; }

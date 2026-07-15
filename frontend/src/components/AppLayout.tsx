@@ -17,6 +17,7 @@ const EMPLOYEE_NAV: SideNavItem[] = [
       { to: '/app/collections', label: 'Field Collection', end: true, perm: ['collection.post'] },
       { to: '/app/collections/demand', label: 'Demand Collection', perm: ['collection.post'] },
       { to: '/app/collections/arrears', label: 'Arrear Collection', perm: ['collection.post'] },
+      { to: '/app/collections/pay-advance', label: 'Advance Collection', perm: ['collection.post'] },
       { to: '/app/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
       { to: '/app/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
     ],

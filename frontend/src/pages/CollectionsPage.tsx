@@ -12,9 +12,9 @@ export function CollectionsPage() {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
-  const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
+  const [advances, setAdvances] = useState<Record<string, string>>({});
   const [savings, setSavings] = useState(0);
+  const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -26,12 +26,7 @@ export function CollectionsPage() {
   function refresh(cid: string) {
     setRows(null);
     getDue(cid)
-      .then((data) => {
-        setRows(data);
-        const seeded: Record<string, string> = {};
-        data.forEach((r) => { seeded[r.loanId] = String(r.totalDue); });
-        setAmounts(seeded);
-      })
+      .then((data) => { setRows(data); setAdvances({}); })
       .catch((e) => setError(e.message));
   }
 
@@ -40,10 +35,16 @@ export function CollectionsPage() {
     else setRows(null);
   }, [centerId]);
 
+  // Cash to collect = overdue + this period's instalment + any advance the member
+  // chooses to pre-pay + the fixed savings deposit.
+  const advanceOf = (r: DueRow) => Number(advances[r.loanId]) || 0;
+  const rowTotal = (r: DueRow) => r.arrear + r.currentDue + advanceOf(r) + savings;
+
   async function onCollect(row: DueRow) {
-    const amount = Number(amounts[row.loanId]);
-    if (!amount || amount <= 0) {
-      setError('Enter a valid amount to collect');
+    // The loan payment; savings is banked separately by the API.
+    const amount = row.arrear + row.currentDue + advanceOf(row);
+    if (amount <= 0) {
+      setError('Nothing to collect for this member');
       return;
     }
     setError('');
@@ -54,7 +55,8 @@ export function CollectionsPage() {
       setSuccess(
         `Collected ${inr(res.applied)} from ${row.clientName}` +
           (res.savingsCollected > 0 ? ` + ${inr(res.savingsCollected)} savings` : '') +
-          (res.loanClosed ? ' — loan fully closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : ''),
+          (res.advanceBanked > 0 ? ` (${inr(res.advanceBanked)} banked as advance)` : '') +
+          (res.loanClosed ? ' — loan fully closed!' : ''),
       );
       refresh(centerId);
     } catch (e) {
@@ -63,6 +65,9 @@ export function CollectionsPage() {
       setBusyLoanId(null);
     }
   }
+
+  const showSavings = savings > 0;
+  const cols = showSavings ? 9 : 8;
 
   return (
     <>
@@ -95,8 +100,10 @@ export function CollectionsPage() {
           <table className="data">
             <thead>
               <tr>
-                <th>Client ID</th><th>Name</th><th>Loan A/c</th><th>Dues Pending</th>
-                <th>Total Due</th>{savings > 0 && <th>Savings</th>}<th>Collect Amount</th><th></th>
+                <th>Client ID</th><th>Name</th><th>Loan A/c</th>
+                <th>Arrear</th><th>Current Due</th><th>Advance (pre-pay)</th>
+                {showSavings && <th>Savings</th>}
+                <th>Total</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -105,19 +112,24 @@ export function CollectionsPage() {
                   <td className="mono">{r.displayId}</td>
                   <td>{r.clientName}</td>
                   <td className="mono">{r.loanAccount}</td>
-                  <td>{r.dueCount}</td>
-                  <td>{inr(r.totalDue)}</td>
-                  {savings > 0 && <td>{inr(savings)}</td>}
+                  <td>{inr(r.arrear)}</td>
+                  <td>{inr(r.currentDue)}</td>
                   <td>
                     <input
                       className="input"
-                      style={{ width: 120, padding: '7px 10px' }}
+                      style={{ width: 110, padding: '7px 10px' }}
                       type="number"
                       min="0"
-                      value={amounts[r.loanId] ?? ''}
-                      onChange={(e) => setAmounts((a) => ({ ...a, [r.loanId]: e.target.value }))}
+                      placeholder="0"
+                      value={advances[r.loanId] ?? ''}
+                      onChange={(e) => setAdvances((a) => ({ ...a, [r.loanId]: e.target.value }))}
                     />
+                    {r.advanceBalance > 0 && (
+                      <div className="hint" style={{ marginTop: 2 }}>Held: {inr(r.advanceBalance)}</div>
+                    )}
                   </td>
+                  {showSavings && <td>{inr(savings)}</td>}
+                  <td style={{ fontWeight: 600 }}>{inr(rowTotal(r))}</td>
                   <td>
                     <button
                       className="btn btn-primary btn-sm"
@@ -130,7 +142,7 @@ export function CollectionsPage() {
                 </tr>
               ))}
               {rows && rows.length === 0 && (
-                <tr><td colSpan={savings > 0 ? 8 : 7} className="empty">Nothing pending for this center. All caught up!</td></tr>
+                <tr><td colSpan={cols} className="empty">Nothing pending for this center. All caught up!</td></tr>
               )}
             </tbody>
           </table>

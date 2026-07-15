@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { downloadCsv } from '../../lib/csv';
 import { downloadXlsx } from '../../lib/xlsx';
 import { Preset, PRESETS, presetRange } from '../../lib/dateFilter';
+import { Pager, usePagination } from '../../components/Pager';
 import {
   AdvanceCollectionRow,
   BranchWiseRow,
@@ -179,6 +180,7 @@ function ZeroCollectionTab() {
   }
 
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -191,6 +193,7 @@ function ZeroCollectionTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -201,7 +204,7 @@ function ZeroCollectionTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
@@ -223,6 +226,8 @@ function ZeroCollectionTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -243,6 +248,7 @@ function CollectionFollowupTab() {
   }
 
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -255,6 +261,7 @@ function CollectionFollowupTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -265,7 +272,7 @@ function CollectionFollowupTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
@@ -286,6 +293,8 @@ function CollectionFollowupTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -306,6 +315,7 @@ function AdvanceCollectionTab() {
   }
 
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -318,6 +328,7 @@ function AdvanceCollectionTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -327,7 +338,7 @@ function AdvanceCollectionTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
@@ -346,6 +357,8 @@ function AdvanceCollectionTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -384,7 +397,9 @@ function PortfolioSummaryTab() {
       setBusy(false);
     }
   }
-  useEffect(() => { show(); /* eslint-disable-next-line */ }, [level]);
+  // Load once on mount; switching Level (or dates) then waits for a Show click
+  // — no surprise fetch the moment the dropdown changes.
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
 
   const rows = level === 'branch' ? branchRows : level === 'center' ? centerRows : level === 'group' ? groupRows : clientRows;
   const asRows = () => rows as unknown as Record<string, unknown>[];
@@ -420,6 +435,7 @@ function PortfolioSummaryTab() {
           )}
         </DateFilterBar>
         {error && <div className="alert-error">{error}</div>}
+        {!rows && !busy && <div className="empty">Click <strong>Show</strong> to load this level for the chosen dates.</div>}
         {level === 'branch' && branchRows && <BranchWiseTable rows={branchRows} />}
         {level === 'center' && centerRows && <CenterWiseTable rows={centerRows} />}
         {level === 'group' && groupRows && <GroupWiseTable rows={groupRows} />}
@@ -521,35 +537,39 @@ function GroupWiseTable({ rows }: { rows: GroupWiseRow[] }) {
 }
 
 function ClientWiseTable({ rows }: { rows: ClientWiseRow[] }) {
+  const p = usePagination(rows);
   return (
-    <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
-            <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <td>{r.centerCode} — {r.centerName}</td>
-              <td className="mono">{r.displayId}</td>
-              <td>{r.memberName}</td>
-              <td className="mono">{r.loanAccount}</td>
-              <td>{date(r.disbursalDate)}</td>
-              <td>{inr(r.loanAmount)}</td>
-              <td>{r.totalDues}</td>
-              <td>{inr(r.portfolioOutstanding)}</td>
-              <td>{inr(r.arrear)}</td>
-              <td>{inr(r.collected)}</td>
-              <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
+    <>
+      <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
+              <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
             </tr>
-          ))}
-          {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {(p.pageRows ?? []).map((r, i) => (
+              <tr key={i}>
+                <td>{r.centerCode} — {r.centerName}</td>
+                <td className="mono">{r.displayId}</td>
+                <td>{r.memberName}</td>
+                <td className="mono">{r.loanAccount}</td>
+                <td>{date(r.disbursalDate)}</td>
+                <td>{inr(r.loanAmount)}</td>
+                <td>{r.totalDues}</td>
+                <td>{inr(r.portfolioOutstanding)}</td>
+                <td>{inr(r.arrear)}</td>
+                <td>{inr(r.collected)}</td>
+                <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Pager p={p} />
+    </>
   );
 }
 
@@ -631,6 +651,7 @@ function LoanApplicationsReportTab() {
   }
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -653,6 +674,7 @@ function LoanApplicationsReportTab() {
         </DateFilterBar>
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -662,7 +684,7 @@ function LoanApplicationsReportTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
@@ -680,6 +702,8 @@ function LoanApplicationsReportTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -700,6 +724,7 @@ function DisbursementTab() {
   }
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -712,6 +737,7 @@ function DisbursementTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -721,7 +747,7 @@ function DisbursementTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
@@ -741,6 +767,8 @@ function DisbursementTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -762,6 +790,7 @@ function ParAgingTab() {
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
   const asRows = () => rows as unknown as Record<string, unknown>[];
   const bucketClass = (b: string) => (b === '90+' ? 'closed' : b === '31–90' ? 'pending' : 'active');
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -774,6 +803,7 @@ function ParAgingTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -783,7 +813,7 @@ function ParAgingTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
@@ -800,6 +830,8 @@ function ParAgingTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -821,6 +853,7 @@ function CollectionRegisterTab() {
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
   const asRows = () => rows as unknown as Record<string, unknown>[];
   const total = rows?.reduce((s, r) => s + r.amount, 0) ?? 0;
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -833,6 +866,7 @@ function CollectionRegisterTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -842,7 +876,7 @@ function CollectionRegisterTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{date(r.date)}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
@@ -863,6 +897,8 @@ function CollectionRegisterTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>
@@ -883,6 +919,7 @@ function ClosureTab() {
   }
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
   const asRows = () => rows as unknown as Record<string, unknown>[];
+  const p = usePagination(rows);
 
   return (
     <div className="panel">
@@ -895,6 +932,7 @@ function ClosureTab() {
         />
         {error && <div className="alert-error">{error}</div>}
         {rows && (
+          <>
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
@@ -904,7 +942,7 @@ function ClosureTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => (
+                {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
@@ -922,6 +960,8 @@ function ClosureTab() {
               </tbody>
             </table>
           </div>
+          <Pager p={p} />
+          </>
         )}
       </div>
     </div>

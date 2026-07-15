@@ -56,6 +56,11 @@ export class CollectionsService {
             const unpaid = loan.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
             const totalDue = unpaid.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
             if (totalDue <= 0) return null;
+            // Split the demand into overdue (before today) vs the current period's
+            // instalment (due exactly as of today) for the field-collection view.
+            const arrear = unpaid
+              .filter((s) => s.dueDate < asOf)
+              .reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
             return {
               clientId: c.id,
               clientName: c.name,
@@ -64,6 +69,9 @@ export class CollectionsService {
               loanAccount: loan.loanAccount,
               dueCount: unpaid.length,
               totalDue: round2(totalDue),
+              arrear: round2(arrear),
+              currentDue: round2(totalDue - arrear),
+              advanceBalance: round2(Number(loan.advanceBalance)),
             };
           })
           .filter((row): row is NonNullable<typeof row> => row !== null),

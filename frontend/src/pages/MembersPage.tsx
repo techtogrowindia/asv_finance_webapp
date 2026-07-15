@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { CenterLite, listCenters, listMembers, MemberListItem } from '../api/members';
+import { Pager, usePagination } from '../components/Pager';
 
 export function MembersPage() {
   const navigate = useNavigate();
@@ -27,6 +28,7 @@ export function MembersPage() {
   }, [centerId, q]);
 
   const total = useMemo(() => rows?.length ?? 0, [rows]);
+  const p = usePagination(rows);
 
   return (
     <>
@@ -76,7 +78,7 @@ export function MembersPage() {
             </tr>
           </thead>
           <tbody>
-            {rows?.map((m) => (
+            {p.pageRows?.map((m) => (
               <tr key={m.id} onClick={() => navigate(`/app/clients/${m.id}`)}>
                 <td className="mono">{m.displayId}</td>
                 <td className="mono">{m.clientCode}</td>
@@ -103,6 +105,7 @@ export function MembersPage() {
           </tbody>
         </table>
       </div>
+      <Pager p={p} />
     </>
   );
 }

@@ -8,6 +8,9 @@ export interface DueRow {
   loanAccount: string;
   dueCount: number;
   totalDue: number;
+  arrear: number;
+  currentDue: number;
+  advanceBalance: number;
 }
 
 export interface DemandCenterRow {

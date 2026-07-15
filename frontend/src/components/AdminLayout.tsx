@@ -24,6 +24,7 @@ const ADMIN_NAV: SideNavItem[] = [
       { to: '/admin/collections', label: 'Field Collection', end: true, perm: ['collection.post'] },
       { to: '/admin/collections/demand', label: 'Demand Collection', perm: ['collection.post'] },
       { to: '/admin/collections/arrears', label: 'Arrear Collection', perm: ['collection.post'] },
+      { to: '/admin/collections/pay-advance', label: 'Advance Collection', perm: ['collection.post'] },
       { to: '/admin/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
       { to: '/admin/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
     ],
