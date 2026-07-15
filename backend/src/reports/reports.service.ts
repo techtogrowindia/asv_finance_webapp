@@ -50,6 +50,81 @@ export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Centerwise Demand Register (printable, one row per center + a Grand Total
+   * row) as of a single date — clients, pending loan applications, average
+   * installment number reached, loan O/s, arrear, demand and same-day
+   * collection, plus a blank signature column for the center's meeting.
+   */
+  async demandRegister(user: AuthUser, asOf: Date) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const centers = await tx.center.findMany({
+        where: centerScope(user),
+        orderBy: { code: 'asc' },
+        select: {
+          id: true, code: true, name: true, mobile: true, meetingTime: true,
+          clients: {
+            where: { isActive: true },
+            select: {
+              loans: {
+                where: { loanType: 'OPEN' },
+                select: { totalDues: true, schedule: { select: { dueDate: true, dueAmt: true, collAmt: true } } },
+              },
+              applications: { where: { status: 'PENDING' }, select: { id: true } },
+            },
+          },
+        },
+      });
+
+      const rows = await Promise.all(
+        centers.map(async (center) => {
+          let loanOS = 0;
+          let arrear = 0;
+          let pendingApplications = 0;
+          const dueNos: number[] = [];
+
+          for (const client of center.clients) {
+            pendingApplications += client.applications.length;
+            for (const loan of client.loans) {
+              const unpaid = loan.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
+              loanOS += unpaid.reduce((sum, s) => sum + Number(s.dueAmt), 0);
+              arrear += unpaid
+                .filter((s) => s.dueDate <= asOf)
+                .reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
+              // Current installment number reached (dues completed + 1, capped
+              // at the schedule length) — how far along this loan's cycle is.
+              const compDues = loan.schedule.length - unpaid.length;
+              dueNos.push(Math.min(compDues + 1, loan.totalDues));
+            }
+          }
+
+          const collected = await tx.collection.aggregate({
+            where: { collectedOn: asOf, loan: { client: { centerId: center.id } } },
+            _sum: { amount: true },
+          });
+
+          return {
+            centerId: center.id,
+            centerCode: center.code,
+            centerName: center.name,
+            phone: center.mobile,
+            clientCount: center.clients.length,
+            pendingApplications,
+            avgDueNo: dueNos.length ? Math.round(dueNos.reduce((a, b) => a + b, 0) / dueNos.length) : 0,
+            meetingTime: center.meetingTime,
+            loanOS: round2(loanOS),
+            arrear: round2(arrear),
+            // Demand for the day = everything due up to and including `asOf`
+            // (same convention as CollectionsService.centerSummary).
+            demand: round2(arrear),
+            collected: round2(Number(collected._sum.amount ?? 0)),
+          };
+        }),
+      );
+      return rows;
+    });
+  }
+
+  /**
    * Members who paid nothing on a due installment within [from, to] — for
    * follow-up calling. One row per uncollected due, with opening arrear
    * (unpaid balance from before the window) and both phone numbers.

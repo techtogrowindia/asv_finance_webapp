@@ -13,6 +13,7 @@ import {
   CollectionFollowupRow,
   ClosureRow,
   CollectionRegisterRow,
+  DemandRegisterRow,
   DisbursementRow,
   EmployeePerformanceRow,
   ForeclosureReportRow,
@@ -26,6 +27,7 @@ import {
   getClientWise,
   getCollectionFollowup,
   getCollectionRegister,
+  getDemandRegister,
   getDisbursementRegister,
   getEmployeePerformance,
   getForeclosures,
@@ -38,8 +40,9 @@ import {
 import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
 import { useConfirm } from '../../components/ConfirmProvider';
 
-type Tab = 'zero' | 'followup' | 'advance' | 'register' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
+type Tab = 'demand' | 'zero' | 'followup' | 'advance' | 'register' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings';
 const TABS: { id: Tab; label: string; perm: string }[] = [
+  { id: 'demand', label: 'Demand Register', perm: 'report.monitoring' },
   { id: 'zero', label: 'Zero Collection', perm: 'report.monitoring' },
   { id: 'followup', label: 'Collection Followup', perm: 'report.monitoring' },
   { id: 'advance', label: 'Advance Collection', perm: 'report.monitoring' },
@@ -82,6 +85,7 @@ export function ReportsPage() {
         </nav>
 
         <div className="report-content">
+          {tab === 'demand' && <DemandRegisterTab />}
           {tab === 'zero' && <ZeroCollectionTab />}
           {tab === 'followup' && <CollectionFollowupTab />}
           {tab === 'advance' && <AdvanceCollectionTab />}
@@ -159,6 +163,121 @@ function DateFilterBar({
         <button className="btn btn-primary" disabled={busy} onClick={onShow}>{busy ? <span className="spinner" /> : 'Show'}</button>
         <button className="btn btn-ghost" disabled={!hasRows} onClick={onCsv}>Export CSV</button>
         <button className="btn btn-ghost" disabled={!hasRows} onClick={onXlsx}>Export Excel</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Demand Register — printable centerwise register, single "as of" date.
+
+function DemandRegisterTab() {
+  const [date, setDate] = useState(presetRange('today').from);
+  const [preset, setPreset] = useState<'today' | 'yesterday' | 'custom'>('today');
+  const [rows, setRows] = useState<DemandRegisterRow[] | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  function choose(p: 'today' | 'yesterday') {
+    setPreset(p);
+    setDate(presetRange(p).from);
+  }
+
+  async function show() {
+    setError(''); setBusy(true);
+    try { setRows(await getDemandRegister(date)); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+
+  const totals = (rows ?? []).reduce(
+    (t, r) => ({
+      clients: t.clients + r.clientCount,
+      pending: t.pending + r.pendingApplications,
+      loanOS: t.loanOS + r.loanOS,
+      arrear: t.arrear + r.arrear,
+      demand: t.demand + r.demand,
+      collected: t.collected + r.collected,
+    }),
+    { clients: 0, pending: 0, loanOS: 0, arrear: 0, demand: 0, collected: 0 },
+  );
+  const asRows = () => rows as unknown as Record<string, unknown>[];
+
+  return (
+    <div className="panel">
+      <div className="panel-head no-print">Centerwise Demand Register — as of a single date, for the center meeting</div>
+      <div className="panel-body">
+        <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+          <div className="preset-row">
+            <button className={`chip ${preset === 'today' ? 'active' : ''}`} onClick={() => choose('today')}>Today</button>
+            <button className={`chip ${preset === 'yesterday' ? 'active' : ''}`} onClick={() => choose('yesterday')}>Yesterday</button>
+            <button className={`chip ${preset === 'custom' ? 'active' : ''}`} onClick={() => setPreset('custom')}>Custom</button>
+          </div>
+          <div className="form-grid" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label>Date</label>
+              <input type="date" className="input" value={date} onChange={(e) => { setPreset('custom'); setDate(e.target.value); }} />
+            </div>
+          </div>
+          <div className="form-actions" style={{ marginTop: 4 }}>
+            <button className="btn btn-primary" disabled={busy} onClick={show}>{busy ? <span className="spinner" /> : 'Show'}</button>
+            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => window.print()}>Print</button>
+            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadCsv('demand-register.csv', asRows())}>Export CSV</button>
+            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadXlsx('demand-register.xlsx', asRows())}>Export Excel</button>
+          </div>
+        </div>
+        {error && <div className="alert-error">{error}</div>}
+        {rows && (
+          <div className="ledger-print">
+            <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>ASV FINANCE</h2>
+            <p style={{ textAlign: 'center', margin: '0 0 16px', color: 'var(--ink-500)' }}>Centerwise Demand Register — {date}</p>
+            <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>SI No</th><th>Center Name</th><th>Phone</th><th>No. of Clients</th>
+                    <th>Pending Apps</th><th>Avg. Due No</th><th>Meeting Time</th>
+                    <th>Loan OS</th><th>Arrear</th><th>Demand</th><th>Collected</th><th>CL Signature</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.centerId}>
+                      <td>{i + 1}</td>
+                      <td>{r.centerCode}-{r.centerName}</td>
+                      <td>{r.phone ?? '—'}</td>
+                      <td>{r.clientCount}</td>
+                      <td>{r.pendingApplications}</td>
+                      <td>{r.avgDueNo}</td>
+                      <td>{r.meetingTime ?? '—'}</td>
+                      <td>{inr(r.loanOS)}</td>
+                      <td>{inr(r.arrear)}</td>
+                      <td>{inr(r.demand)}</td>
+                      <td>{inr(r.collected)}</td>
+                      <td></td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && <tr><td colSpan={12} className="empty">No centers in scope.</td></tr>}
+                  {rows.length > 0 && (
+                    <tr style={{ fontWeight: 700 }}>
+                      <td colSpan={3}>Grand Total</td>
+                      <td>{totals.clients}</td>
+                      <td>{totals.pending}</td>
+                      <td></td>
+                      <td></td>
+                      <td>{inr(totals.loanOS)}</td>
+                      <td>{inr(totals.arrear)}</td>
+                      <td>{inr(totals.demand)}</td>
+                      <td>{inr(totals.collected)}</td>
+                      <td></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

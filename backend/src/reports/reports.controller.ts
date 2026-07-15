@@ -21,6 +21,15 @@ export class ReportsController {
 
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
+  @Get('demand-register')
+  demandRegister(@CurrentUser() user: AuthUser, @Query('date') date?: string) {
+    const asOf = date ? new Date(date) : new Date();
+    if (Number.isNaN(asOf.getTime())) throw new BadRequestException('Invalid date');
+    return this.reports.demandRegister(user, asOf);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('report.monitoring')
   @Get('zero-collection')
   zeroCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
     const [f, t] = parseRange(from, to);

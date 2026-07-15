@@ -1,5 +1,23 @@
 import { api } from '../lib/api';
 
+export interface DemandRegisterRow {
+  centerId: string;
+  centerCode: string;
+  centerName: string;
+  phone: string | null;
+  clientCount: number;
+  pendingApplications: number;
+  avgDueNo: number;
+  meetingTime: string | null;
+  loanOS: number;
+  arrear: number;
+  demand: number;
+  collected: number;
+}
+
+export const getDemandRegister = (date: string) =>
+  api<DemandRegisterRow[]>(`/reports/demand-register?date=${date}`);
+
 export interface ZeroCollectionRow {
   branchCode: string;
   centerCode: string;
