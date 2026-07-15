@@ -173,6 +173,17 @@ export interface LoanLedger {
 
 export const getLedger = (loanId: string) => api<LoanLedger>(`/loans/${loanId}/ledger`);
 
+export interface SavingsLine {
+  date: string;
+  kind: 'DEPOSIT' | 'REFUND';
+  deposit: number;
+  refund: number;
+}
+export interface LoanStatement extends LoanLedger {
+  savings: SavingsLine[];
+}
+export const getLoanStatement = (loanId: string) => api<LoanStatement>(`/loans/${loanId}/statement`);
+
 // ---- Client Loan Schedule (all loans in a center) --------------------------
 
 export interface CenterLoanRow {

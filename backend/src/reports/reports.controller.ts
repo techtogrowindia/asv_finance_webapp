@@ -28,7 +28,8 @@ export class ReportsController {
     return this.reports.savingsLedger(user, f, t);
   }
 
-  @Roles('BM', 'HO')
+  // Available in both portals (FDO sees their own centers).
+  @Roles('FDO', 'BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('demand-register')
   demandRegister(@CurrentUser() user: AuthUser, @Query('date') date?: string) {

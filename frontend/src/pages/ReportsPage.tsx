@@ -1,13 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  DemandCenterRow,
   DemandClientRow,
-  getDemandCenterwise,
   getDemandClientwise,
 } from '../api/collections';
-import { CenterLoanRow, getLedger, listLoansByCenter, LoanApplicationSummary, listLoanApplications, LoanLedger } from '../api/loans';
+import { CenterLoanRow, getLoanStatement, listLoansByCenter, LoanApplicationSummary, listLoanApplications, LoanStatement } from '../api/loans';
 import { CenterLite, listCenters } from '../api/members';
-import { SavingsLedgerRow, getSavingsLedger } from '../api/reportsAdmin';
+import { DemandRegisterRow, SavingsLedgerRow, getDemandRegister, getSavingsLedger } from '../api/reportsAdmin';
 import { presetRange } from '../lib/dateFilter';
 import { LedgerView } from '../components/LedgerView';
 
@@ -49,48 +47,93 @@ export function ReportsPage() {
 
 function DemandSheetTab() {
   const [type, setType] = useState<'CENTERWISE' | 'CLIENTWISE'>('CENTERWISE');
-  const [centerRows, setCenterRows] = useState<DemandCenterRow[] | null>(null);
+  const [asOf, setAsOf] = useState(presetRange('today').from);
+  const [centerRows, setCenterRows] = useState<DemandRegisterRow[] | null>(null);
   const [clientRows, setClientRows] = useState<DemandClientRow[] | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState('');
 
   function load() {
     setError('');
     if (type === 'CENTERWISE') {
-      getDemandCenterwise().then(setCenterRows).catch((e) => setError(e.message));
+      getDemandRegister(asOf).then(setCenterRows).catch((e) => setError(e.message));
     } else {
       getDemandClientwise().then(setClientRows).catch((e) => setError(e.message));
     }
   }
-  useEffect(load, [type]);
+  useEffect(load, [type, asOf]);
+
+  const totals = (centerRows ?? []).reduce(
+    (t, r) => ({
+      clients: t.clients + r.clientCount, pending: t.pending + r.pendingApplications,
+      os: t.os + r.loanOS, arrear: t.arrear + r.arrear, demand: t.demand + r.demand, coll: t.coll + r.collected,
+    }),
+    { clients: 0, pending: 0, os: 0, arrear: 0, demand: 0, coll: 0 },
+  );
+
+  async function downloadPdf() {
+    if (!centerRows) return;
+    setPdfBusy(true);
+    try {
+      const m = await import('../lib/pdf/reportPdf');
+      await m.downloadDemandRegisterPdf(centerRows, asOf);
+    } finally { setPdfBusy(false); }
+  }
 
   return (
     <div className="panel">
-      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <span>Demand Sheet</span>
           <select className="select" value={type} onChange={(e) => setType(e.target.value as 'CENTERWISE' | 'CLIENTWISE')}>
-            <option value="CENTERWISE">Centerwise</option>
+            <option value="CENTERWISE">Centerwise (detailed)</option>
             <option value="CLIENTWISE">Clientwise</option>
           </select>
+          {type === 'CENTERWISE' && (
+            <input type="date" className="input" style={{ width: 160 }} value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          )}
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+        {type === 'CENTERWISE' && (
+          <button className="btn btn-primary btn-sm" disabled={pdfBusy || !centerRows?.length} onClick={downloadPdf}>
+            {pdfBusy ? <span className="spinner" /> : 'Download PDF'}
+          </button>
+        )}
       </div>
       <div className="panel-body">
         {error && <div className="alert-error">{error}</div>}
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           {type === 'CENTERWISE' ? (
             <table className="data">
-              <thead><tr><th>Code</th><th>Center</th><th>Members with Dues</th><th>Total Demand</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>SI No</th><th>Center Name</th><th>Phone</th><th>No. of Clients</th><th>Pending Apps</th>
+                  <th>Avg. Due No</th><th>Meeting Time</th><th>Loan OS</th><th>Arrear</th><th>Demand</th><th>Collected</th><th>CL Signature</th>
+                </tr>
+              </thead>
               <tbody>
-                {centerRows?.map((r) => (
+                {centerRows?.map((r, i) => (
                   <tr key={r.centerId}>
-                    <td className="mono">{r.centerCode}</td>
-                    <td>{r.centerName}</td>
+                    <td>{i + 1}</td>
+                    <td>{r.centerCode}-{r.centerName}</td>
+                    <td>{r.phone ?? '—'}</td>
                     <td>{r.clientCount}</td>
-                    <td>{inr(r.totalDemand)}</td>
+                    <td>{r.pendingApplications}</td>
+                    <td>{r.avgDueNo}</td>
+                    <td>{r.meetingTime ?? '—'}</td>
+                    <td>{inr(r.loanOS)}</td>
+                    <td>{inr(r.arrear)}</td>
+                    <td>{inr(r.demand)}</td>
+                    <td>{inr(r.collected)}</td>
+                    <td></td>
                   </tr>
                 ))}
-                {centerRows && centerRows.length === 0 && <tr><td colSpan={4} className="empty">No demand outstanding.</td></tr>}
+                {centerRows && centerRows.length === 0 && <tr><td colSpan={12} className="empty">No centers in scope.</td></tr>}
+                {centerRows && centerRows.length > 0 && (
+                  <tr style={{ fontWeight: 700 }}>
+                    <td colSpan={3}>Grand Total</td><td>{totals.clients}</td><td>{totals.pending}</td><td></td><td></td>
+                    <td>{inr(totals.os)}</td><td>{inr(totals.arrear)}</td><td>{inr(totals.demand)}</td><td>{inr(totals.coll)}</td><td></td>
+                  </tr>
+                )}
               </tbody>
             </table>
           ) : (
@@ -178,7 +221,7 @@ function LoanLedgerTab() {
   const [centerId, setCenterId] = useState('');
   const [type, setType] = useState<'OPEN' | 'CLOSED' | 'ALL'>('OPEN');
   const [loans, setLoans] = useState<CenterLoanRow[] | null>(null);
-  const [ledger, setLedger] = useState<LoanLedger | null>(null);
+  const [ledger, setLedger] = useState<LoanStatement | null>(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [error, setError] = useState('');
 
@@ -193,7 +236,7 @@ function LoanLedgerTab() {
   function viewLedger(loanId: string) {
     setError('');
     setLoadingLedger(true);
-    getLedger(loanId)
+    getLoanStatement(loanId)
       .then(setLedger)
       .catch((e) => setError(e.message))
       .finally(() => setLoadingLedger(false));

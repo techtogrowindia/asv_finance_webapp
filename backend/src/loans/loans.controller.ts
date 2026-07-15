@@ -123,4 +123,10 @@ export class LoansController {
   ledger(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.ledger(user, id);
   }
+
+  @RequirePermission('loan.view')
+  @Get('loans/:id/statement')
+  statement(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.loans.loanStatement(user, id);
+  }
 }

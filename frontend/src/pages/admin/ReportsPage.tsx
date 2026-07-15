@@ -39,11 +39,10 @@ import {
   getParAging,
   getZeroCollection,
 } from '../../api/reportsAdmin';
-import { CenterLoanRow, LoanLedger, getLedger, listLoansByCenter } from '../../api/loans';
+import { CenterLoanRow, LoanStatement, getLoanStatement, listLoansByCenter } from '../../api/loans';
 import { CenterLite, listCenters } from '../../api/members';
 import { LedgerView } from '../../components/LedgerView';
-import { SavingsBalance, getSavingsBalances, refundSavings } from '../../api/collections';
-import { useConfirm } from '../../components/ConfirmProvider';
+import { SavingsBalance, getSavingsBalances } from '../../api/collections';
 
 type Tab = 'demand' | 'zero' | 'followup' | 'advance' | 'register' | 'ledger' | 'portfolio' | 'employee' | 'applications' | 'disbursement' | 'par' | 'foreclosure' | 'closure' | 'savings' | 'savingsledger';
 const TABS: { id: Tab; label: string; perm: string }[] = [
@@ -186,6 +185,7 @@ function DemandRegisterTab() {
   const [rows, setRows] = useState<DemandRegisterRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   function choose(p: 'today' | 'yesterday') {
     setPreset(p);
@@ -199,6 +199,15 @@ function DemandRegisterTab() {
     finally { setBusy(false); }
   }
   useEffect(() => { show(); /* eslint-disable-next-line */ }, []);
+
+  async function downloadPdf() {
+    if (!rows) return;
+    setPdfBusy(true);
+    try {
+      const m = await import('../../lib/pdf/reportPdf');
+      await m.downloadDemandRegisterPdf(rows, date);
+    } finally { setPdfBusy(false); }
+  }
 
   const totals = (rows ?? []).reduce(
     (t, r) => ({
@@ -231,7 +240,7 @@ function DemandRegisterTab() {
           </div>
           <div className="form-actions" style={{ marginTop: 4 }}>
             <button className="btn btn-primary" disabled={busy} onClick={show}>{busy ? <span className="spinner" /> : 'Show'}</button>
-            <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => window.print()}>Print</button>
+            <button className="btn btn-ghost" disabled={pdfBusy || !rows?.length} onClick={downloadPdf}>{pdfBusy ? <span className="spinner" /> : 'Download PDF'}</button>
             <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadCsv('demand-register.csv', asRows())}>Export CSV</button>
             <button className="btn btn-ghost" disabled={!rows?.length} onClick={() => rows && downloadXlsx('demand-register.xlsx', asRows())}>Export Excel</button>
           </div>
@@ -1195,46 +1204,24 @@ function ForeclosureTab() {
 }
 
 function SavingsTab() {
-  const { can } = useAuth();
-  const confirm = useConfirm();
   const [rows, setRows] = useState<SavingsBalance[] | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
-  function refresh() { getSavingsBalances().then(setRows).catch((e) => setError(e.message)); }
-  useEffect(refresh, []);
-
-  async function onRefund(r: SavingsBalance) {
-    const ok = await confirm({
-      title: 'Refund savings?',
-      message: `Refund ${inr(r.savingsBalance)} of held savings to ${r.clientName} (${r.displayId})? This records the payout and zeroes their savings balance.`,
-      confirmLabel: 'Refund',
-    });
-    if (!ok) return;
-    setError(''); setSuccess(''); setBusyId(r.clientId);
-    try {
-      const res = await refundSavings(r.clientId);
-      setSuccess(`Refunded ${inr(res.refunded)} to ${r.clientName}.`);
-      refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Refund failed');
-    } finally {
-      setBusyId(null);
-    }
-  }
+  useEffect(() => { getSavingsBalances().then(setRows).catch((e) => setError(e.message)); }, []);
 
   return (
     <div className="panel">
       <div className="panel-head">Clients holding a savings balance</div>
       <div className="panel-body">
         {error && <div className="alert-error">{error}</div>}
-        {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+        <div className="hint" style={{ marginBottom: 12 }}>
+          Savings is refunded automatically when a loan closes — this report is view-only.
+        </div>
         {rows && (
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
-                <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th>{can('savings.refund') && <th></th>}</tr>
+                <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -1244,16 +1231,9 @@ function SavingsTab() {
                     <td>{r.centerName}</td>
                     <td>{inr(r.savingsBalance)}</td>
                     <td>{r.hasOpenLoan ? <span className="badge active">Open loan</span> : <span className="badge closed">No open loan</span>}</td>
-                    {can('savings.refund') && (
-                      <td>
-                        <button className="btn btn-primary btn-sm" disabled={r.hasOpenLoan || busyId === r.clientId} title={r.hasOpenLoan ? 'Refund only after all loans close' : ''} onClick={() => onRefund(r)}>
-                          {busyId === r.clientId ? <span className="spinner" /> : 'Refund'}
-                        </button>
-                      </td>
-                    )}
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={6} className="empty">No clients are holding savings.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={5} className="empty">No clients are holding savings.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1346,7 +1326,7 @@ function LoanLedgerTab() {
   const [centerId, setCenterId] = useState('');
   const [type, setType] = useState<'OPEN' | 'CLOSED' | 'ALL'>('OPEN');
   const [loans, setLoans] = useState<CenterLoanRow[] | null>(null);
-  const [ledger, setLedger] = useState<LoanLedger | null>(null);
+  const [ledger, setLedger] = useState<LoanStatement | null>(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [error, setError] = useState('');
 
@@ -1360,7 +1340,7 @@ function LoanLedgerTab() {
 
   function viewLedger(loanId: string) {
     setError(''); setLoadingLedger(true);
-    getLedger(loanId).then(setLedger).catch((e) => setError(e.message)).finally(() => setLoadingLedger(false));
+    getLoanStatement(loanId).then(setLedger).catch((e) => setError(e.message)).finally(() => setLoadingLedger(false));
   }
 
   if (ledger) {

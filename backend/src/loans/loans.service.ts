@@ -510,6 +510,27 @@ export class LoansService {
     });
   }
 
+  /** Combined statement: the loan ledger plus the savings deposits/refunds tied
+   *  to this loan (the "loan ledger + savings ledger" report). */
+  async loanStatement(user: AuthUser, loanId: string) {
+    const ledger = await this.ledger(user, loanId); // also enforces scope (throws if not in scope)
+    return this.prisma.withTenant(user, async (tx) => {
+      const savings = await tx.savingsTxn.findMany({
+        where: { loanId },
+        orderBy: [{ collectedOn: 'asc' }, { createdAt: 'asc' }],
+      });
+      return {
+        ...ledger,
+        savings: savings.map((s) => ({
+          date: s.collectedOn,
+          kind: s.kind,
+          deposit: s.kind === 'DEPOSIT' ? Number(s.amount) : 0,
+          refund: s.kind === 'REFUND' ? Number(s.amount) : 0,
+        })),
+      };
+    });
+  }
+
   /** Loan-balance / arrear / missing-document warnings, matching the reference's yellow list. */
   private async computeWarnings(
     tx: Prisma.TransactionClient,
