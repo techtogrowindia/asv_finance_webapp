@@ -30,6 +30,8 @@ export interface MemberListItem {
   mobile: string | null;
   status: string;
   dateOfJoining: string | null;
+  savingsAccount: string | null;
+  savingsBalance: number;
 }
 
 /** One admin-configured ID-proof number, already resolved for a client + party. */
@@ -49,7 +51,53 @@ export interface CoApplicantInfo {
   mobile: string | null;
 }
 
+export interface SavingsPassbookRow {
+  date: string;
+  loanAccount: string | null;
+  kind: 'DEPOSIT' | 'REFUND';
+  deposit: number;
+  refund: number;
+  balance: number;
+}
+export interface SavingsPassbook {
+  clientId: string;
+  clientName: string;
+  displayId: string;
+  savingsAccount: string | null;
+  savingsBalance: number;
+  rows: SavingsPassbookRow[];
+}
+export const getSavingsPassbook = (id: string) => api<SavingsPassbook>(`/clients/${id}/savings`);
+
+export interface StatementLedgerRow {
+  dueNo: number; dueDate: string; collDate: string | null;
+  duePri: string; dueInt: string; dueAmt: string;
+  collPri: string; collInt: string; collAmt: string; dueBalance: string;
+}
+export interface StatementLoan {
+  loanAccount: string;
+  disbursalDate: string;
+  loanAmount: string;
+  interestAmount: string;
+  totalAmount: string;
+  totalDues: number;
+  loanType: 'OPEN' | 'CLOSED';
+  closedDate: string | null;
+  schedule: StatementLedgerRow[];
+}
+export interface ClientStatement {
+  clientName: string;
+  displayId: string;
+  savingsAccount: string | null;
+  savingsBalance: number;
+  savings: SavingsPassbookRow[];
+  loans: StatementLoan[];
+}
+export const getClientStatement = (id: string) => api<ClientStatement>(`/clients/${id}/statement`);
+
 export interface MemberDetail extends MemberListItem {
+  savingsAccount: string | null;
+  savingsBalance: number;
   dob: string | null;
   gender: string | null;
   presentAddress: string | null;

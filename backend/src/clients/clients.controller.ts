@@ -47,6 +47,18 @@ export class ClientsController {
     return this.clients.get(user, id);
   }
 
+  @RequirePermission('member.view')
+  @Get(':id/savings')
+  savings(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.clients.savingsPassbook(user, id);
+  }
+
+  @RequirePermission('member.view')
+  @Get(':id/statement')
+  statement(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.clients.clientStatement(user, id);
+  }
+
   @Roles('BM', 'HO')
   @RequirePermission('member.transfer')
   @Post(':id/transfer')

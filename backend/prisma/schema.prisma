@@ -264,6 +264,8 @@ model Client {
   groupId        String       @map("group_id") @db.Uuid
   memberNo       Int          @map("member_no") // 1..5
   clientCode     String       @unique @map("client_code") // e.g. PMF005179
+  // Savings passbook account number (one per member), e.g. SB005179.
+  savingsAccount String?      @map("savings_account")
   name           String
   dob            DateTime?    @db.Date
   gender         String?
@@ -302,6 +304,7 @@ model Client {
   loans            Loan[]
   savingsTxns      SavingsTxn[]
 
+  @@unique([tenantId, savingsAccount])
   @@index([tenantId, centerId])
   @@map("client")
 }

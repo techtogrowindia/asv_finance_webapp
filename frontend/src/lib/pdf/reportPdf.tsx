@@ -2,6 +2,7 @@ import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer
 import type { ReactElement } from 'react';
 import type { LoanStatement } from '../../api/loans';
 import type { DemandRegisterRow } from '../../api/reportsAdmin';
+import type { ClientStatement, SavingsPassbook } from '../../api/members';
 
 // react-pdf renders real, paginated PDFs (no cropping like the browser print).
 // This whole module is loaded on demand (dynamic import) so it stays out of the
@@ -195,6 +196,94 @@ function DemandRegisterDoc({ rows, date }: { rows: DemandRegisterRow[]; date: st
   );
 }
 
+// ---- Savings passbook ------------------------------------------------------
+
+const savCols: Col[] = [
+  { key: 'date', label: 'Date', w: 16 },
+  { key: 'loan', label: 'Loan A/c', w: 22 },
+  { key: 'kind', label: 'Type', w: 14 },
+  { key: 'deposit', label: 'Deposit', w: 16, align: 'right' },
+  { key: 'refund', label: 'Refund', w: 16, align: 'right' },
+  { key: 'balance', label: 'Balance', w: 16, align: 'right' },
+];
+function savingsRows(rows: SavingsPassbook['rows']) {
+  return rows.map((r) => ({
+    date: d(r.date), loan: r.loanAccount ?? '—', kind: r.kind,
+    deposit: r.deposit ? inr(r.deposit) : '—',
+    refund: r.refund ? inr(r.refund) : '—',
+    balance: inr(r.balance),
+  }));
+}
+
+function SavingsPassbookDoc({ pb }: { pb: SavingsPassbook }) {
+  return (
+    <Document>
+      <Page size="A4" orientation="landscape" style={s.page}>
+        <Text style={s.title}>ASV FINANCE</Text>
+        <Text style={s.subtitle}>Savings Passbook</Text>
+        <View style={s.metaRow}>
+          <Meta k="Client ID" v={pb.displayId} />
+          <Meta k="Client Name" v={pb.clientName} />
+          <Meta k="Savings A/c" v={pb.savingsAccount ?? '—'} />
+          <Meta k="Balance" v={inr(pb.savingsBalance)} />
+        </View>
+        <Table cols={savCols} rows={savingsRows(pb.rows)} />
+        <Foot />
+      </Page>
+    </Document>
+  );
+}
+
+// ---- Combined member statement (loans + savings) ---------------------------
+
+function ClientStatementDoc({ st }: { st: ClientStatement }) {
+  const schCols: Col[] = [
+    { key: 'dueNo', label: 'Due No', w: 6, align: 'center' },
+    { key: 'dueDate', label: 'Due Date', w: 11 },
+    { key: 'collDate', label: 'Coll Date', w: 11 },
+    { key: 'duePri', label: 'Due Pri', w: 10, align: 'right' },
+    { key: 'dueInt', label: 'Due Int', w: 10, align: 'right' },
+    { key: 'dueAmt', label: 'Due Amt', w: 10, align: 'right' },
+    { key: 'collPri', label: 'Coll Pri', w: 10, align: 'right' },
+    { key: 'collInt', label: 'Coll Int', w: 10, align: 'right' },
+    { key: 'collAmt', label: 'Coll Amt', w: 11, align: 'right' },
+    { key: 'dueBalance', label: 'Balance', w: 11, align: 'right' },
+  ];
+  return (
+    <Document>
+      <Page size="A4" orientation="landscape" style={s.page}>
+        <Text style={s.title}>ASV FINANCE</Text>
+        <Text style={s.subtitle}>Member Statement — Loans &amp; Savings</Text>
+        <View style={s.metaRow}>
+          <Meta k="Client ID" v={st.displayId} />
+          <Meta k="Client Name" v={st.clientName} />
+          <Meta k="Savings A/c" v={st.savingsAccount ?? '—'} />
+          <Meta k="Savings Balance" v={inr(st.savingsBalance)} />
+        </View>
+
+        {st.loans.map((l) => (
+          <View key={l.loanAccount}>
+            <Text style={s.section}>Loan {l.loanAccount} — {inr(l.loanAmount)} · {l.loanType}{l.closedDate ? ` (${d(l.closedDate)})` : ''}</Text>
+            <Table
+              cols={schCols}
+              rows={l.schedule.map((r) => ({
+                dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
+                duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
+                collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
+              }))}
+            />
+          </View>
+        ))}
+        {st.loans.length === 0 && <Text style={s.section}>No loans.</Text>}
+
+        <Text style={s.section}>Savings Passbook</Text>
+        <Table cols={savCols} rows={savingsRows(st.savings)} />
+        <Foot />
+      </Page>
+    </Document>
+  );
+}
+
 // ---- download helpers ------------------------------------------------------
 
 async function download(doc: ReactElement, filename: string) {
@@ -212,3 +301,9 @@ export const downloadLoanStatementPdf = (st: LoanStatement) =>
 
 export const downloadDemandRegisterPdf = (rows: DemandRegisterRow[], date: string) =>
   download(<DemandRegisterDoc rows={rows} date={date} />, `demand-register-${date}.pdf`);
+
+export const downloadSavingsPassbookPdf = (pb: SavingsPassbook) =>
+  download(<SavingsPassbookDoc pb={pb} />, `savings-passbook-${pb.savingsAccount ?? pb.displayId}.pdf`);
+
+export const downloadClientStatementPdf = (st: ClientStatement) =>
+  download(<ClientStatementDoc st={st} />, `member-statement-${st.displayId}.pdf`);

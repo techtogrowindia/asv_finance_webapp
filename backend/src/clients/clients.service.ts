@@ -101,6 +101,7 @@ export class ClientsService {
       }
 
       const clientCode = await this.nextClientCode(tx);
+      const savingsAccount = `SB${clientCode.replace(/\D/g, '')}`;
 
       const created = await tx.client.create({
         data: {
@@ -109,6 +110,7 @@ export class ClientsService {
           groupId: group.id,
           memberNo: memberCount + 1,
           clientCode,
+          savingsAccount,
           name: dto.name,
           dob: dto.dob ? new Date(dto.dob) : null,
           gender: dto.gender,
@@ -317,6 +319,93 @@ export class ClientsService {
     return this.serialize(c, true);
   }
 
+  /** A member's savings passbook — the account number, current balance and every
+   *  deposit/refund (with the loan it came from) and a running balance. */
+  async savingsPassbook(user: AuthUser, clientId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: clientId, ...clientCenterScope(user) },
+        select: {
+          name: true, clientCode: true, savingsAccount: true, savingsBalance: true, memberNo: true,
+          group: { select: { groupNo: true } },
+          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+        },
+      });
+      if (!client) throw new NotFoundException('Member not found');
+
+      const txns = await tx.savingsTxn.findMany({
+        where: { clientId },
+        orderBy: [{ collectedOn: 'asc' }, { createdAt: 'asc' }],
+      });
+
+      // SavingsTxn has no loan relation — map loan accounts separately.
+      const loanIds = [...new Set(txns.map((t) => t.loanId).filter((x): x is string => !!x))];
+      const loans = loanIds.length
+        ? await tx.loan.findMany({ where: { id: { in: loanIds } }, select: { id: true, loanAccount: true } })
+        : [];
+      const acctById = new Map(loans.map((l) => [l.id, l.loanAccount]));
+
+      let balance = 0;
+      const rows = txns.map((t) => {
+        const deposit = t.kind === 'DEPOSIT' ? Number(t.amount) : 0;
+        const refund = t.kind === 'REFUND' ? Number(t.amount) : 0;
+        balance = Math.round((balance + deposit - refund) * 100) / 100;
+        return {
+          date: t.collectedOn,
+          loanAccount: t.loanId ? acctById.get(t.loanId) ?? null : null,
+          kind: t.kind,
+          deposit,
+          refund,
+          balance,
+        };
+      });
+
+      return {
+        clientId,
+        clientName: client.name,
+        displayId: `${stripLeadingZeros(client.center.branch.code)}.${stripLeadingZeros(client.center.code)}.${client.group.groupNo}.${client.memberNo}`,
+        savingsAccount: client.savingsAccount,
+        savingsBalance: Number(client.savingsBalance),
+        rows,
+      };
+    });
+  }
+
+  /** Combined member statement — every loan ledger plus the savings passbook,
+   *  for the "loan + savings" report and its PDF. */
+  async clientStatement(user: AuthUser, clientId: string) {
+    const passbook = await this.savingsPassbook(user, clientId); // enforces scope
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await tx.loan.findMany({
+        where: { clientId },
+        orderBy: { disbursalDate: 'asc' },
+        include: { schedule: { orderBy: { dueNo: 'asc' } } },
+      });
+      return {
+        clientName: passbook.clientName,
+        displayId: passbook.displayId,
+        savingsAccount: passbook.savingsAccount,
+        savingsBalance: passbook.savingsBalance,
+        savings: passbook.rows,
+        loans: loans.map((l) => ({
+          loanAccount: l.loanAccount,
+          disbursalDate: l.disbursalDate,
+          loanAmount: l.loanAmount,
+          interestAmount: l.interestAmount,
+          totalAmount: l.totalAmount,
+          totalDues: l.totalDues,
+          loanType: l.loanType,
+          closedDate: l.closedDate,
+          schedule: l.schedule.map((s) => ({
+            dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
+            duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
+            collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt, dueBalance: s.dueBalance,
+          })),
+        })),
+      };
+    });
+  }
+
   /** Next PMF code = highest existing + 1, starting at PMF005500. */
   private async nextClientCode(tx: Prisma.TransactionClient): Promise<string> {
     const last = await tx.client.findFirst({
@@ -347,6 +436,8 @@ export class ClientsService {
       mobile: c.mobile,
       status: c.status,
       dateOfJoining: c.dateOfJoining,
+      savingsAccount: c.savingsAccount ?? null,
+      savingsBalance: Number(c.savingsBalance ?? 0),
     };
     if (!full) return base;
     return {
