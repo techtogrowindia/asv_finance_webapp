@@ -220,22 +220,6 @@ export interface ClosureRow {
   closedDate: string | null;
 }
 
-export interface SavingsLedgerRow {
-  date: string;
-  branchCode: string;
-  centerCode: string;
-  centerName: string;
-  displayId: string;
-  memberName: string;
-  loanAccount: string;
-  kind: 'DEPOSIT' | 'REFUND';
-  deposit: number;
-  refund: number;
-}
-
-export const getSavingsLedger = (from: string, to: string) =>
-  api<SavingsLedgerRow[]>(`/reports/savings-ledger${qs(from, to)}`);
-
 export interface LoanApplicationReportRow {
   appNo: string | null;
   branchCode: string;
