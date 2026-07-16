@@ -19,6 +19,9 @@ export function LoanSavingsCard({ ledger }: { ledger: LoanSavingsLedger }) {
     }
   }
 
+  const collected = ledger.rows.reduce((a, r) => a + r.deposit, 0);
+  const returned = ledger.rows.reduce((a, r) => a + r.refund, 0);
+
   return (
     <div className="panel ledger-print">
       <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -33,6 +36,8 @@ export function LoanSavingsCard({ ledger }: { ledger: LoanSavingsLedger }) {
           <div className="detail-item"><div className="k">Client ID</div><div className="v">{ledger.displayId}</div></div>
           <div className="detail-item"><div className="k">Client Name</div><div className="v">{ledger.clientName}</div></div>
           <div className="detail-item"><div className="k">Savings A/c</div><div className="v mono">{ledger.savingsAccount}</div></div>
+          <div className="detail-item"><div className="k">Total Collected</div><div className="v">{inr(collected)}</div></div>
+          <div className="detail-item"><div className="k">Total Returned</div><div className="v">{inr(returned)}</div></div>
           <div className="detail-item"><div className="k">Balance</div><div className="v" style={{ fontWeight: 700 }}>{inr(ledger.balance)}</div></div>
         </div>
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
@@ -48,7 +53,16 @@ export function LoanSavingsCard({ ledger }: { ledger: LoanSavingsLedger }) {
                   <td>{inr(r.balance)}</td>
                 </tr>
               ))}
-              {ledger.rows.length === 0 && <tr><td colSpan={5} className="empty">No savings activity for this loan yet.</td></tr>}
+              {ledger.rows.length === 0 ? (
+                <tr><td colSpan={5} className="empty">No savings activity for this loan yet.</td></tr>
+              ) : (
+                <tr style={{ fontWeight: 700 }}>
+                  <td colSpan={2}>Total</td>
+                  <td>{inr(collected)}</td>
+                  <td>{inr(returned)}</td>
+                  <td>{inr(ledger.balance)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

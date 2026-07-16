@@ -73,7 +73,16 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
                   <td>{r.deposit ? inr(r.deposit) : '—'}</td><td>{r.refund ? inr(r.refund) : '—'}</td><td>{inr(r.balance)}</td>
                 </tr>
               ))}
-              {st.savings.length === 0 && <tr><td colSpan={5} className="empty">No savings activity.</td></tr>}
+              {st.savings.length === 0 ? (
+                <tr><td colSpan={5} className="empty">No savings activity.</td></tr>
+              ) : (
+                <tr style={{ fontWeight: 700 }}>
+                  <td colSpan={2}>Total</td>
+                  <td>{inr(st.savings.reduce((a, r) => a + r.deposit, 0))}</td>
+                  <td>{inr(st.savings.reduce((a, r) => a + r.refund, 0))}</td>
+                  <td>{inr(st.savings.length ? st.savings[st.savings.length - 1].balance : 0)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -148,6 +148,14 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
     refund: x.refund ? inr(x.refund) : '—',
     balance: inr(x.balance),
   }));
+  const savTotal = st.savings.length
+    ? {
+        date: 'Total', kind: '',
+        deposit: inr(st.savings.reduce((a, b) => a + b.deposit, 0)),
+        refund: inr(st.savings.reduce((a, b) => a + b.refund, 0)),
+        balance: inr(st.savings[st.savings.length - 1].balance),
+      }
+    : undefined;
 
   return (
     <Document>
@@ -169,7 +177,7 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
         {st.savings.length > 0 && (
           <>
             <Text style={s.section}>Savings Passbook</Text>
-            <Table cols={savCols} rows={savRows} />
+            <Table cols={savCols} rows={savRows} total={savTotal} />
           </>
         )}
         <Foot />
@@ -188,6 +196,8 @@ function LoanSavingsDoc({ l }: { l: LoanSavingsLedger }) {
     { key: 'refund', label: 'Refund', w: 20, align: 'right' },
     { key: 'balance', label: 'Balance', w: 20, align: 'right' },
   ];
+  const collected = l.rows.reduce((a, r) => a + r.deposit, 0);
+  const returned = l.rows.reduce((a, r) => a + r.refund, 0);
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
@@ -197,6 +207,8 @@ function LoanSavingsDoc({ l }: { l: LoanSavingsLedger }) {
           <Meta k="Client ID" v={l.displayId} />
           <Meta k="Client Name" v={l.clientName} />
           <Meta k="Savings A/c" v={l.savingsAccount} />
+          <Meta k="Total Collected" v={inr(collected)} />
+          <Meta k="Total Returned" v={inr(returned)} />
           <Meta k="Balance" v={inr(l.balance)} />
         </View>
         <Table
@@ -207,6 +219,7 @@ function LoanSavingsDoc({ l }: { l: LoanSavingsLedger }) {
             refund: r.refund ? inr(r.refund) : '—',
             balance: inr(r.balance),
           }))}
+          total={{ date: 'Total', kind: '', deposit: inr(collected), refund: inr(returned), balance: inr(l.balance) }}
         />
         <Foot />
       </Page>
