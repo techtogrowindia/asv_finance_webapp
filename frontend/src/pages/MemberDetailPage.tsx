@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getMember, getSavingsPassbook, KycNumberInfo, MemberDetail, SavingsPassbook } from '../api/members';
+import { getMember, KycNumberInfo, MemberDetail } from '../api/members';
 import { ExistingLoan, listExistingLoans } from '../api/loans';
 import { useAuth } from '../auth/AuthContext';
 import { KycNumbersSection } from '../components/KycNumbersSection';
@@ -17,14 +17,12 @@ export function MemberDetailPage() {
   const base = user?.role === 'FDO' ? '/app' : '/admin';
   const [m, setM] = useState<MemberDetail | null>(null);
   const [loans, setLoans] = useState<ExistingLoan[] | null>(null);
-  const [passbook, setPassbook] = useState<SavingsPassbook | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!id) return;
     getMember(id).then(setM).catch((e) => setError(e.message));
     listExistingLoans(id).then(setLoans).catch((e) => setError(e.message));
-    getSavingsPassbook(id).then(setPassbook).catch(() => {});
   }, [id]);
 
   if (error) return <div className="alert-error">{error}</div>;
@@ -134,7 +132,7 @@ export function MemberDetailPage() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th>Status</th>
+                    <th>Loan A/c</th><th>Savings A/c</th><th>Disb. Date</th><th>Amount</th><th>Status</th>
                     <th>Pri. Balance</th><th>Int. Balance</th><th></th>
                   </tr>
                 </thead>
@@ -142,14 +140,18 @@ export function MemberDetailPage() {
                   {loans.map((l) => (
                     <tr key={l.id}>
                       <td className="mono">{l.loanAccount}</td>
+                      <td className="mono">{m.savingsAccount ? `${m.savingsAccount}_${l.loanAccount}` : '—'}</td>
                       <td>{date(l.disbursalDate)}</td>
                       <td>{inr(l.loanAmount)}</td>
                       <td><span className={`badge ${l.loanType === 'OPEN' ? 'active' : 'closed'}`}>{l.loanType}</span></td>
                       <td>{inr(String(l.priBalance))}</td>
                       <td>{inr(String(l.intBalance))}</td>
-                      <td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/ledger`)}>
                           View Ledger
+                        </button>{' '}
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/savings`)}>
+                          Savings Ledger
                         </button>
                       </td>
                     </tr>
@@ -163,42 +165,6 @@ export function MemberDetailPage() {
         </div>
       </div>
 
-      <div className="panel" style={{ marginTop: 18 }}>
-        <div className="panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Savings</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="hint" style={{ fontWeight: 400 }}>
-              A/c {m.savingsAccount ?? '—'} · Balance <strong style={{ color: 'var(--ink-900)' }}>{inr(String(m.savingsBalance))}</strong>
-            </span>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/savings/${id}`)}>View passbook</button>
-          </span>
-        </div>
-        <div className="panel-body">
-          {passbook && passbook.rows.length > 0 ? (
-            <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
-              <table className="data">
-                <thead>
-                  <tr><th>Date</th><th>Loan A/c</th><th>Type</th><th>Deposit</th><th>Refund</th><th>Balance</th></tr>
-                </thead>
-                <tbody>
-                  {passbook.rows.map((r, i) => (
-                    <tr key={i}>
-                      <td>{date(r.date)}</td>
-                      <td className="mono">{r.loanAccount ?? '—'}</td>
-                      <td><span className={`badge ${r.kind === 'DEPOSIT' ? 'active' : 'pending'}`}>{r.kind}</span></td>
-                      <td>{r.deposit ? inr(String(r.deposit)) : '—'}</td>
-                      <td>{r.refund ? inr(String(r.refund)) : '—'}</td>
-                      <td>{inr(String(r.balance))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="empty">No savings activity yet — the fixed savings amount is collected with each repayment.</div>
-          )}
-        </div>
-      </div>
     </>
   );
 }

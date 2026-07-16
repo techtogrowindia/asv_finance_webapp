@@ -510,24 +510,161 @@ export class LoansService {
     });
   }
 
-  /** Combined statement: the loan ledger plus the savings deposits/refunds tied
-   *  to this loan (the "loan ledger + savings ledger" report). */
+  /** Combined per-loan statement: the loan ledger (with a per-instalment savings
+   *  column) plus the loan's savings passbook and its savings account number. */
   async loanStatement(user: AuthUser, loanId: string) {
-    const ledger = await this.ledger(user, loanId); // also enforces scope (throws if not in scope)
     return this.prisma.withTenant(user, async (tx) => {
-      const savings = await tx.savingsTxn.findMany({
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, client: clientCenterScope(user) },
+        include: {
+          client: {
+            select: {
+              name: true, savingsAccount: true, memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, branch: { select: { code: true } } } },
+            },
+          },
+          schedule: { orderBy: { dueNo: 'asc' } },
+        },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+      const c = loan.client;
+
+      const txns = await tx.savingsTxn.findMany({
         where: { loanId },
         orderBy: [{ collectedOn: 'asc' }, { createdAt: 'asc' }],
       });
+
+      // Attribute each deposit to the instalment collected that day (per-row column).
+      const depQueue = new Map<string, number[]>();
+      for (const t of txns) {
+        if (t.kind !== 'DEPOSIT') continue;
+        const key = t.collectedOn.toISOString().slice(0, 10);
+        const list = depQueue.get(key) ?? [];
+        list.push(Number(t.amount));
+        depQueue.set(key, list);
+      }
+
+      // Passbook with running balance.
+      let bal = 0;
+      const savings = txns.map((t) => {
+        const deposit = t.kind === 'DEPOSIT' ? Number(t.amount) : 0;
+        const refund = t.kind === 'REFUND' ? Number(t.amount) : 0;
+        bal = round2(bal + deposit - refund);
+        return { date: t.collectedOn, kind: t.kind, deposit, refund, balance: bal };
+      });
+
       return {
-        ...ledger,
-        savings: savings.map((s) => ({
-          date: s.collectedOn,
-          kind: s.kind,
-          deposit: s.kind === 'DEPOSIT' ? Number(s.amount) : 0,
-          refund: s.kind === 'REFUND' ? Number(s.amount) : 0,
-        })),
+        loanAccount: loan.loanAccount,
+        savingsAccount: `${c.savingsAccount}_${loan.loanAccount}`,
+        clientDisplayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+        clientName: c.name,
+        disbursalDate: loan.disbursalDate,
+        loanAmount: loan.loanAmount,
+        interestAmount: loan.interestAmount,
+        totalAmount: loan.totalAmount,
+        totalDues: loan.totalDues,
+        loanType: loan.loanType,
+        closedDate: loan.closedDate,
+        schedule: loan.schedule.map((s) => {
+          let rowSavings = 0;
+          if (s.collDate) {
+            const list = depQueue.get(s.collDate.toISOString().slice(0, 10));
+            if (list && list.length) rowSavings = list.shift()!;
+          }
+          return {
+            dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
+            duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
+            collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt,
+            savings: rowSavings, dueBalance: s.dueBalance,
+          };
+        }),
+        savings,
       };
+    });
+  }
+
+  /** Per-loan savings account = `‹member savings no›_‹loan a/c›`. Each loan has
+   *  its own savings sub-account; this returns its passbook (deposits/refunds +
+   *  running balance). */
+  async loanSavingsLedger(user: AuthUser, loanId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, client: clientCenterScope(user) },
+        include: {
+          client: {
+            select: {
+              name: true, savingsAccount: true, memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, branch: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+
+      const txns = await tx.savingsTxn.findMany({
+        where: { loanId },
+        orderBy: [{ collectedOn: 'asc' }, { createdAt: 'asc' }],
+      });
+      let balance = 0;
+      const rows = txns.map((t) => {
+        const deposit = t.kind === 'DEPOSIT' ? Number(t.amount) : 0;
+        const refund = t.kind === 'REFUND' ? Number(t.amount) : 0;
+        balance = round2(balance + deposit - refund);
+        return { date: t.collectedOn, kind: t.kind, deposit, refund, balance };
+      });
+      const c = loan.client;
+      return {
+        loanId: loan.id,
+        loanAccount: loan.loanAccount,
+        savingsAccount: `${c.savingsAccount}_${loan.loanAccount}`,
+        clientName: c.name,
+        displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+        balance,
+        rows,
+      };
+    });
+  }
+
+  /** One savings account per loan in a center (Savings report list). */
+  async centerSavingsAccounts(user: AuthUser, centerId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const center = await tx.center.findFirst({
+        where: { id: centerId, ...centerScope(user) },
+        include: { branch: { select: { code: true } } },
+      });
+      if (!center) throw new ForbiddenException('Center not assigned to you');
+
+      const loans = await tx.loan.findMany({
+        where: { client: { centerId } },
+        orderBy: [{ client: { group: { groupNo: 'asc' } } }, { client: { memberNo: 'asc' } }, { disbursalDate: 'desc' }],
+        include: {
+          client: { select: { name: true, savingsAccount: true, memberNo: true, group: { select: { groupNo: true } } } },
+        },
+      });
+
+      const balances = await tx.savingsTxn.groupBy({
+        by: ['loanId', 'kind'],
+        where: { loanId: { in: loans.map((l) => l.id) } },
+        _sum: { amount: true },
+      });
+      const net = new Map<string, number>();
+      for (const b of balances) {
+        if (!b.loanId) continue;
+        const delta = (b.kind === 'DEPOSIT' ? 1 : -1) * Number(b._sum.amount ?? 0);
+        net.set(b.loanId, round2((net.get(b.loanId) ?? 0) + delta));
+      }
+
+      return loans.map((l) => ({
+        loanId: l.id,
+        loanAccount: l.loanAccount,
+        savingsAccount: `${l.client.savingsAccount}_${l.loanAccount}`,
+        clientName: l.client.name,
+        displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${l.client.group.groupNo}.${l.client.memberNo}`,
+        loanType: l.loanType,
+        balance: net.get(l.id) ?? 0,
+      }));
     });
   }
 

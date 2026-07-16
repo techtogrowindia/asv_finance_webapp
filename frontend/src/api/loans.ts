@@ -178,11 +178,50 @@ export interface SavingsLine {
   kind: 'DEPOSIT' | 'REFUND';
   deposit: number;
   refund: number;
+  balance: number;
 }
-export interface LoanStatement extends LoanLedger {
+export interface StatementRow extends LedgerRow {
+  savings: number;
+}
+/** Per-loan combined statement: schedule (with a per-instalment savings column),
+ *  the loan's savings passbook, and its savings account number. */
+export interface LoanStatement extends Omit<LoanLedger, 'schedule'> {
+  savingsAccount: string;
+  schedule: StatementRow[];
   savings: SavingsLine[];
 }
 export const getLoanStatement = (loanId: string) => api<LoanStatement>(`/loans/${loanId}/statement`);
+
+export interface LoanSavingsRow {
+  date: string;
+  kind: 'DEPOSIT' | 'REFUND';
+  deposit: number;
+  refund: number;
+  balance: number;
+}
+export interface LoanSavingsLedger {
+  loanId: string;
+  loanAccount: string;
+  savingsAccount: string;
+  clientName: string;
+  displayId: string;
+  balance: number;
+  rows: LoanSavingsRow[];
+}
+export const getLoanSavingsLedger = (loanId: string) =>
+  api<LoanSavingsLedger>(`/loans/${loanId}/savings`);
+
+export interface CenterSavingsAccount {
+  loanId: string;
+  loanAccount: string;
+  savingsAccount: string;
+  clientName: string;
+  displayId: string;
+  loanType: 'OPEN' | 'CLOSED';
+  balance: number;
+}
+export const listCenterSavingsAccounts = (centerId: string) =>
+  api<CenterSavingsAccount[]>(`/savings-accounts?centerId=${centerId}`);
 
 // ---- Client Loan Schedule (all loans in a center) --------------------------
 

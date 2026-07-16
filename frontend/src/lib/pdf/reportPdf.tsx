@@ -1,6 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
 import type { ReactElement } from 'react';
-import type { LoanStatement } from '../../api/loans';
+import type { LoanLedger, LoanStatement, LoanSavingsLedger } from '../../api/loans';
 import type { DemandRegisterRow } from '../../api/reportsAdmin';
 import type { ClientStatement, SavingsPassbook } from '../../api/members';
 
@@ -66,61 +66,100 @@ function Foot() {
   );
 }
 
-// ---- Loan statement (ledger + savings) ------------------------------------
+// ---- Loan ledger (loan-only) ----------------------------------------------
+
+const LEDGER_COLS: Col[] = [
+  { key: 'dueNo', label: 'Due No', w: 6, align: 'center' },
+  { key: 'dueDate', label: 'Due Date', w: 11 },
+  { key: 'collDate', label: 'Coll Date', w: 11 },
+  { key: 'duePri', label: 'Due Pri', w: 10, align: 'right' },
+  { key: 'dueInt', label: 'Due Int', w: 10, align: 'right' },
+  { key: 'dueAmt', label: 'Due Amt', w: 10, align: 'right' },
+  { key: 'collPri', label: 'Coll Pri', w: 10, align: 'right' },
+  { key: 'collInt', label: 'Coll Int', w: 10, align: 'right' },
+  { key: 'collAmt', label: 'Coll Amt', w: 11, align: 'right' },
+  { key: 'dueBalance', label: 'Balance', w: 11, align: 'right' },
+];
+
+function LoanLedgerDoc({ l }: { l: LoanLedger }) {
+  return (
+    <Document>
+      <Page size="A4" orientation="landscape" style={s.page}>
+        <Text style={s.title}>ASV FINANCE</Text>
+        <Text style={s.subtitle}>Loan Ledger</Text>
+        <View style={s.metaRow}>
+          <Meta k="Client ID" v={l.clientDisplayId} />
+          <Meta k="Client Name" v={l.clientName} />
+          <Meta k="Loan Account" v={l.loanAccount} />
+          <Meta k="Disbursal Date" v={d(l.disbursalDate)} />
+          <Meta k="Loan Amount" v={inr(l.loanAmount)} />
+          <Meta k="Interest Amount" v={inr(l.interestAmount)} />
+          <Meta k="Total Amount" v={inr(l.totalAmount)} />
+          <Meta k="Total Dues" v={String(l.totalDues)} />
+          <Meta k="Status" v={`${l.loanType}${l.closedDate ? ` (${d(l.closedDate)})` : ''}`} />
+        </View>
+        <Table
+          cols={LEDGER_COLS}
+          rows={l.schedule.map((r) => ({
+            dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
+            duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
+            collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
+          }))}
+        />
+        <Foot />
+      </Page>
+    </Document>
+  );
+}
+
+// ---- Loan + Savings (per loan: schedule with a savings column + passbook) --
 
 function LoanStatementDoc({ st }: { st: LoanStatement }) {
   const cols: Col[] = [
     { key: 'dueNo', label: 'Due No', w: 6, align: 'center' },
-    { key: 'dueDate', label: 'Due Date', w: 11 },
-    { key: 'collDate', label: 'Coll Date', w: 11 },
-    { key: 'duePri', label: 'Due Pri', w: 10, align: 'right' },
-    { key: 'dueInt', label: 'Due Int', w: 10, align: 'right' },
-    { key: 'dueAmt', label: 'Due Amt', w: 10, align: 'right' },
-    { key: 'collPri', label: 'Coll Pri', w: 10, align: 'right' },
-    { key: 'collInt', label: 'Coll Int', w: 10, align: 'right' },
-    { key: 'collAmt', label: 'Coll Amt', w: 11, align: 'right' },
-    { key: 'dueBalance', label: 'Balance', w: 11, align: 'right' },
+    { key: 'dueDate', label: 'Due Date', w: 10 },
+    { key: 'collDate', label: 'Coll Date', w: 10 },
+    { key: 'duePri', label: 'Due Pri', w: 9, align: 'right' },
+    { key: 'dueInt', label: 'Due Int', w: 9, align: 'right' },
+    { key: 'dueAmt', label: 'Due Amt', w: 9, align: 'right' },
+    { key: 'collPri', label: 'Coll Pri', w: 9, align: 'right' },
+    { key: 'collInt', label: 'Coll Int', w: 9, align: 'right' },
+    { key: 'collAmt', label: 'Coll Amt', w: 10, align: 'right' },
+    { key: 'savings', label: 'Savings', w: 9, align: 'right' },
+    { key: 'dueBalance', label: 'Balance', w: 10, align: 'right' },
   ];
   const rows = st.schedule.map((r) => ({
-    dueNo: String(r.dueNo),
-    dueDate: d(r.dueDate),
-    collDate: d(r.collDate),
+    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
     duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
     collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt),
-    dueBalance: inr(r.dueBalance),
+    savings: inr(r.savings), dueBalance: inr(r.dueBalance),
   }));
 
   const savCols: Col[] = [
-    { key: 'date', label: 'Date', w: 20 },
-    { key: 'kind', label: 'Type', w: 20 },
-    { key: 'deposit', label: 'Deposit', w: 30, align: 'right' },
-    { key: 'refund', label: 'Refund', w: 30, align: 'right' },
+    { key: 'date', label: 'Date', w: 22 },
+    { key: 'kind', label: 'Type', w: 18 },
+    { key: 'deposit', label: 'Deposit', w: 20, align: 'right' },
+    { key: 'refund', label: 'Refund', w: 20, align: 'right' },
+    { key: 'balance', label: 'Balance', w: 20, align: 'right' },
   ];
   const savRows = st.savings.map((x) => ({
     date: d(x.date), kind: x.kind,
     deposit: x.deposit ? inr(x.deposit) : '—',
     refund: x.refund ? inr(x.refund) : '—',
+    balance: inr(x.balance),
   }));
-  const savTotal = st.savings.length
-    ? {
-        date: 'Total', kind: '',
-        deposit: inr(st.savings.reduce((a, b) => a + b.deposit, 0)),
-        refund: inr(st.savings.reduce((a, b) => a + b.refund, 0)),
-      }
-    : undefined;
 
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
         <Text style={s.title}>ASV FINANCE</Text>
-        <Text style={s.subtitle}>Loan Statement</Text>
+        <Text style={s.subtitle}>Loan + Savings Statement</Text>
         <View style={s.metaRow}>
           <Meta k="Client ID" v={st.clientDisplayId} />
           <Meta k="Client Name" v={st.clientName} />
           <Meta k="Loan Account" v={st.loanAccount} />
-          <Meta k="Disbursal Date" v={d(st.disbursalDate)} />
+          <Meta k="Savings A/c" v={st.savingsAccount} />
           <Meta k="Loan Amount" v={inr(st.loanAmount)} />
-          <Meta k="Interest Amount" v={inr(st.interestAmount)} />
           <Meta k="Total Amount" v={inr(st.totalAmount)} />
           <Meta k="Total Dues" v={String(st.totalDues)} />
           <Meta k="Status" v={`${st.loanType}${st.closedDate ? ` (${d(st.closedDate)})` : ''}`} />
@@ -130,9 +169,45 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
         {st.savings.length > 0 && (
           <>
             <Text style={s.section}>Savings Passbook</Text>
-            <Table cols={savCols} rows={savRows} total={savTotal} />
+            <Table cols={savCols} rows={savRows} />
           </>
         )}
+        <Foot />
+      </Page>
+    </Document>
+  );
+}
+
+// ---- Per-loan savings ledger ----------------------------------------------
+
+function LoanSavingsDoc({ l }: { l: LoanSavingsLedger }) {
+  const cols: Col[] = [
+    { key: 'date', label: 'Date', w: 22 },
+    { key: 'kind', label: 'Type', w: 18 },
+    { key: 'deposit', label: 'Deposit', w: 20, align: 'right' },
+    { key: 'refund', label: 'Refund', w: 20, align: 'right' },
+    { key: 'balance', label: 'Balance', w: 20, align: 'right' },
+  ];
+  return (
+    <Document>
+      <Page size="A4" orientation="landscape" style={s.page}>
+        <Text style={s.title}>ASV FINANCE</Text>
+        <Text style={s.subtitle}>Savings Ledger</Text>
+        <View style={s.metaRow}>
+          <Meta k="Client ID" v={l.displayId} />
+          <Meta k="Client Name" v={l.clientName} />
+          <Meta k="Savings A/c" v={l.savingsAccount} />
+          <Meta k="Balance" v={inr(l.balance)} />
+        </View>
+        <Table
+          cols={cols}
+          rows={l.rows.map((r) => ({
+            date: d(r.date), kind: r.kind,
+            deposit: r.deposit ? inr(r.deposit) : '—',
+            refund: r.refund ? inr(r.refund) : '—',
+            balance: inr(r.balance),
+          }))}
+        />
         <Foot />
       </Page>
     </Document>
@@ -298,8 +373,16 @@ async function download(doc: ReactElement, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+const safe = (v: string) => v.replace(/\//g, '-');
+
+export const downloadLoanLedgerPdf = (l: LoanLedger) =>
+  download(<LoanLedgerDoc l={l} />, `loan-ledger-${safe(l.loanAccount)}.pdf`);
+
 export const downloadLoanStatementPdf = (st: LoanStatement) =>
-  download(<LoanStatementDoc st={st} />, `loan-statement-${st.loanAccount.replace(/\//g, '-')}.pdf`);
+  download(<LoanStatementDoc st={st} />, `loan-savings-statement-${safe(st.loanAccount)}.pdf`);
+
+export const downloadLoanSavingsPdf = (l: LoanSavingsLedger) =>
+  download(<LoanSavingsDoc l={l} />, `savings-ledger-${safe(l.savingsAccount)}.pdf`);
 
 export const downloadDemandRegisterPdf = (rows: DemandRegisterRow[], date: string) =>
   download(<DemandRegisterDoc rows={rows} date={date} />, `demand-register-${date}.pdf`);

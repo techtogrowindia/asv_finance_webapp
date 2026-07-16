@@ -15,6 +15,7 @@ import { ReportsPage } from './pages/ReportsPage';
 import { LoanLedgerPage } from './pages/LoanLedgerPage';
 import { SavingsPage } from './pages/SavingsPage';
 import { SavingsPassbookPage } from './pages/SavingsPassbookPage';
+import { SavingsLoanLedgerPage } from './pages/SavingsLoanLedgerPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/app/savings/:clientId" element={<EmployeeRoute><SavingsPassbookPage /></EmployeeRoute>} />
         <Route path="/app/reports" element={<EmployeeRoute><ReportsPage /></EmployeeRoute>} />
         <Route path="/app/loans/:loanId/ledger" element={<EmployeeRoute><LoanLedgerPage /></EmployeeRoute>} />
+        <Route path="/app/loans/:loanId/savings" element={<EmployeeRoute><SavingsLoanLedgerPage /></EmployeeRoute>} />
 
         {/* Admin (BM/HO) portal */}
         <Route
@@ -182,6 +184,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <AdminLayout><SavingsPassbookPage /></AdminLayout>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/loans/:loanId/savings"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <AdminLayout><SavingsLoanLedgerPage /></AdminLayout>
             </RequireAuth>
           }
         />

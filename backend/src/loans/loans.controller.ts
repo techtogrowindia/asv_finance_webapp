@@ -129,4 +129,16 @@ export class LoansController {
   statement(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.loans.loanStatement(user, id);
   }
+
+  @RequirePermission('loan.view')
+  @Get('loans/:id/savings')
+  loanSavings(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.loans.loanSavingsLedger(user, id);
+  }
+
+  @RequirePermission('loan.view')
+  @Get('savings-accounts')
+  savingsAccounts(@CurrentUser() user: AuthUser, @Query('centerId', ParseUUIDPipe) centerId: string) {
+    return this.loans.centerSavingsAccounts(user, centerId);
+  }
 }

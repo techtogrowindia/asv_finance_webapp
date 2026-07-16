@@ -283,6 +283,14 @@ export function LoanApplicationPage() {
             placeholder="Your note for the reviewer — e.g. petty-shop stock, second cycle…"
           />
         </div>
+        {editingApp?.approverNotes && (
+          <div className="field" style={{ marginTop: 4 }}>
+            <label>Approver Notes (from the branch — read only)</label>
+            <div className="input" style={{ background: 'var(--canvas)', minHeight: 'auto', whiteSpace: 'pre-wrap' }}>
+              {editingApp.approverNotes}
+            </div>
+          </div>
+        )}
         <div className="hint">
           Sanctioned Amount:{' '}
           <strong style={{ color: 'var(--ink-900)' }}>

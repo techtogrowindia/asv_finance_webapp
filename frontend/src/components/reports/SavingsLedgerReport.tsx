@@ -1,40 +1,41 @@
 import { useEffect, useState } from 'react';
-import { CenterLite, listCenters, listMembers, MemberListItem, getSavingsPassbook, SavingsPassbook } from '../../api/members';
-import { SavingsPassbookCard } from './SavingsPassbookCard';
+import { CenterLite, listCenters } from '../../api/members';
+import { CenterSavingsAccount, listCenterSavingsAccounts, getLoanSavingsLedger, LoanSavingsLedger } from '../../api/loans';
+import { LoanSavingsCard } from './LoanSavingsCard';
 
 const inr = (v: number | string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
 
-/** Savings Ledger: pick a center, pick a member, view their savings passbook
- *  (deposits & refunds with a running balance) — mirrors the Loan Ledger flow. */
+/** Savings Ledger: pick a center → one row per loan's savings account
+ *  (SB…_loan a/c) → view that account's deposits/refunds + running balance. */
 export function SavingsLedgerReport() {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
-  const [members, setMembers] = useState<MemberListItem[] | null>(null);
-  const [passbook, setPassbook] = useState<SavingsPassbook | null>(null);
+  const [accounts, setAccounts] = useState<CenterSavingsAccount[] | null>(null);
+  const [ledger, setLedger] = useState<LoanSavingsLedger | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
   useEffect(() => {
-    setPassbook(null);
-    if (!centerId) { setMembers(null); return; }
+    setLedger(null);
+    if (!centerId) { setAccounts(null); return; }
     setError('');
-    listMembers({ centerId }).then(setMembers).catch((e) => setError(e.message));
+    listCenterSavingsAccounts(centerId).then(setAccounts).catch((e) => setError(e.message));
   }, [centerId]);
 
-  function view(clientId: string) {
+  function view(loanId: string) {
     setError(''); setBusy(true);
-    getSavingsPassbook(clientId).then(setPassbook).catch((e) => setError(e.message)).finally(() => setBusy(false));
+    getLoanSavingsLedger(loanId).then(setLedger).catch((e) => setError(e.message)).finally(() => setBusy(false));
   }
 
-  if (passbook) {
+  if (ledger) {
     return (
       <>
         <div className="no-print" style={{ marginBottom: 14 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setPassbook(null)}>← Back to member list</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setLedger(null)}>← Back to accounts</button>
         </div>
-        <SavingsPassbookCard passbook={passbook} />
+        <LoanSavingsCard ledger={ledger} />
       </>
     );
   }
@@ -55,25 +56,26 @@ export function SavingsLedgerReport() {
       </div>
 
       {!centerId ? (
-        <div className="panel"><div className="panel-body"><div className="empty">Select a center to list its members' savings.</div></div></div>
+        <div className="panel"><div className="panel-body"><div className="empty">Select a center to list its savings accounts (one per loan).</div></div></div>
       ) : (
         <div className="panel">
-          <div className="panel-head">Members — Savings</div>
+          <div className="panel-head">Savings Accounts</div>
           <div className="panel-body">
             <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
               <table className="data">
-                <thead><tr><th>Client ID</th><th>Member</th><th>Savings A/c</th><th>Balance</th><th></th></tr></thead>
+                <thead><tr><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Balance</th><th></th></tr></thead>
                 <tbody>
-                  {members?.map((m) => (
-                    <tr key={m.id}>
-                      <td className="mono">{m.displayId}</td>
-                      <td>{m.name}</td>
-                      <td className="mono">{m.savingsAccount ?? '—'}</td>
-                      <td>{inr(m.savingsBalance)}</td>
-                      <td><button className="btn btn-primary btn-sm" disabled={busy} onClick={() => view(m.id)}>View passbook</button></td>
+                  {accounts?.map((a) => (
+                    <tr key={a.loanId}>
+                      <td className="mono">{a.displayId}</td>
+                      <td>{a.clientName}</td>
+                      <td className="mono">{a.loanAccount}</td>
+                      <td className="mono">{a.savingsAccount}</td>
+                      <td>{inr(a.balance)}</td>
+                      <td><button className="btn btn-primary btn-sm" disabled={busy} onClick={() => view(a.loanId)}>View ledger</button></td>
                     </tr>
                   ))}
-                  {members && members.length === 0 && <tr><td colSpan={5} className="empty">No members in this center.</td></tr>}
+                  {accounts && accounts.length === 0 && <tr><td colSpan={6} className="empty">No loans (savings accounts) in this center.</td></tr>}
                 </tbody>
               </table>
             </div>
