@@ -7,12 +7,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Project state:** Live in production at https://asvsmallfinance.com. Monorepo:
 `backend/` (NestJS + Prisma + PostgreSQL/RLS) and `frontend/` (React + Vite).
 Built & deployed: auth (portal-enforced login + JWT), RLS request-context,
-dashboard, client enrollment + KYC + document upload, loan application →
-verification → disbursement (flat-interest schedule engine), daily collections,
-End of Day cash reconciliation, admin masters/centers/employees, monitoring +
-portfolio **Reports** (CSV/Excel export, preset date filters), and a configurable
-**Roles & Permissions** module (RBAC — see invariant #10). Both `/login`
-(employee/FDO) and `/admin` (BM/HO) portals are mobile-responsive.
+dashboard, client enrollment + KYC + document upload, loan application (with a
+searchable app number, editable/resubmittable while pending) → verification →
+disbursement (flat-interest schedule engine), daily collections (field/demand/
+arrear/advance-collection + loan advance pre-payment + configurable-policy
+foreclosure), a **compulsory per-loan savings** add-on (fixed amount collected
+alongside every instalment, auto-refunded the moment *that* loan closes — see
+invariant #11), End of Day cash reconciliation, admin masters/centers/
+employees, monitoring + portfolio **Reports** (client-side CSV/Excel/PDF
+export, preset date filters), and a configurable **Roles & Permissions** module
+(RBAC — see invariant #10). Both `/login` (employee/FDO) and `/admin` (BM/HO)
+portals are mobile-responsive.
 
 **Commands:**
 
@@ -66,13 +71,16 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
 5. **Money:** `numeric(14,2)`; UUID primary keys; **soft-delete only** on financial
    data; write an `audit_log` entry for money-affecting actions; **maker-checker**
    (separate approver) on disbursement.
-6. **Loan schedule = flat interest** (interest added upfront, equal instalments).
-   The exact per-instalment principal/interest split rule is **TBC — confirm with
-   the client, do not hardcode** the 750/250 example.
+6. **Loan schedule = flat interest, even split** (confirmed with the client —
+   see `backend/src/loans/schedule.util.ts`): interest is added upfront: every
+   instalment carries the same principal share (`loanAmount/totalDues`) and the
+   same interest share (`interestAmount/totalDues`); the **last** instalment
+   absorbs the rounding remainder. Do not hardcode a different split.
 7. **UI is original.** The reference product's screenshots are for *concept only* —
    never clone their layout, colours, or wording (see §6.4).
-8. **Build order:** Employee (Field Officer) portal first; BM and HO later, but the
-   schema/security must support all three from the start.
+8. **Employee (FDO) portal shipped first; BM/HO now fully built too** — all
+   three roles are live in production. Any new feature must still be scoped
+   per role/permission from the start (invariant #10), not bolted on later.
 9. **Confirm before destructive actions.** Any hard delete (center, uploaded KYC
    document, etc.) must show a confirmation dialog before calling the API — use
    the shared `useConfirm()` / `<ConfirmProvider>` in `frontend/src/components/
@@ -96,6 +104,15 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
     `Field Officer` gets field-appropriate ones), (d) gate the nav/buttons with
     `can()`. A new mutating route with no permission gate is an access-control bug.
     Permissions live in the JWT, so role edits take effect on next login (≤30m TTL).
+11. **Savings is per-loan, not pooled at the member level.** Each loan has its
+    own savings sub-account (`${client.savingsAccount}_${loan.loanAccount}`);
+    every deposit is tagged with the `loanId` it came from
+    (`SavingsTxn.loanId`). The moment *that* loan closes — foreclosed or fully
+    repaid — its own savings balance refunds automatically in the same
+    transaction (see `refundLoanSavings()` in
+    `backend/src/collections/collections.service.ts`). Never revert to a
+    single pooled member-level balance or hold refunds until every loan of a
+    client closes — that was tried and explicitly reversed.
 
 **Conventions:** DB `snake_case`, API `camelCase`; deploy is git push→pull (secrets
 live only in the server's `backend/.env`, never in git). **Schema changes** use
@@ -134,17 +151,16 @@ and collecting repayments.
 > screens, styling, or wording. We replicate the *microfinance domain*, not their
 > interface. (See §6.4 for our design direction.)
 
-The software has **three kinds of users** (we build them one at a time):
+The software has **three kinds of users**, all live in production today:
 
 | User | Tamil / local name | What they do |
 |------|--------------------|--------------|
-| **Field Officer (FDO)** | Field Development Officer | Goes to villages, enrolls members, applies for loans, collects weekly repayments. **← We build this portal FIRST.** |
-| **Branch Manager (BM)** | Branch admin | Manages one branch: approves/verifies, closes the day (EOD), monitors collections, maintains master data. *(Later.)* |
-| **Head Office (HO) / Company** | Company login | Sees all branches, company-wide reports. *(Later.)* |
+| **Field Officer (FDO)** | Field Development Officer | Goes to villages, enrolls members, applies for loans, collects weekly repayments. |
+| **Branch Manager (BM)** | Branch admin | Manages one branch: verifies/disburses, closes the day (EOD), monitors collections, maintains master data. |
+| **Head Office (HO) / Company** | Company login | Sees all branches, company-wide reports. |
 
-> **Build order (decided):** **Employee (Field Officer) portal first.**
-> Branch Manager and Head Office come later. But we design the database and
-> security for all three from day one, so nothing has to be rebuilt.
+> Built in that order (FDO portal first, see §7 for history), with the
+> database/security designed for all three from day one so nothing was rebuilt.
 
 ---
 
@@ -200,8 +216,9 @@ this "joint liability" is what makes repayment reliable. Members must:
    **arrears**.
 6. **End of Day (EOD)** — the branch reconciles the cash collected each day
    (opening balance + receipts − payments = closing balance) and "closes" the day.
-7. **Closure** — when all instalments are paid, the loan is **CLOSED**. Good
-   members get a **repeat loan** (a new "cycle", e.g. loan account `PMF005179/2`).
+7. **Closure** — when all instalments are paid, the loan is **CLOSED** and its
+   savings account auto-refunds (invariant #11). Good members get a **repeat
+   loan** (a new "cycle", e.g. loan account `PMF005179_2`).
 
 ### 2.4 How the loan money is calculated (flat interest)
 
@@ -211,23 +228,26 @@ Example from a real member (VASSILA):
 - Interest added upfront: **₹12,000**
 - **Total to repay: ₹62,000**
 - Repaid in **62 weekly instalments of ₹1,000** each.
-- Each ₹1,000 instalment splits into **principal + interest** (e.g. ₹750 + ₹250).
+- Each ₹1,000 instalment splits **evenly**: principal = `loanAmount/62`,
+  interest = `interestAmount/62` (the last instalment absorbs any rounding
+  remainder). Confirmed with the client — see invariant #6.
 
 This is **flat-rate interest**: interest is calculated on the full loan up front
-and added to the total, then divided into equal instalments.
-
-> ⚠️ **TO CONFIRM with ASV Finance:** the exact rule for splitting each instalment
-> into principal vs interest, and the flat interest rate(s) per product. The
-> schedule generator needs this precise formula. Do not guess — ask.
+and added to the total, then divided into equal instalments. The flat rate
+itself is set **per loan product** (admin-managed master data), not hardcoded.
 
 ### 2.5 Key daily tools for the field officer
 
-- **Demand Sheet** — the list of "who owes how much today", per center or per member.
-- **Collection entry** — recording what was actually collected.
-- **Loan Ledger** — the full history of a loan: each instalment due vs collected,
-  with a running balance. Printable for the member.
-- **Monitoring reports** — Zero-Collection (who paid nothing), Collection Follow-up
-  (arrears), Advance Collection (upcoming dues).
+- **Demand Sheet / Demand Register** — the list of "who owes how much today",
+  per center or per member, with an optional pending savings deposit.
+- **Collection entry** — field/demand/arrear collection against what's due;
+  **Loan Advance** to pre-pay ahead of schedule; **Foreclosure** to close a
+  loan early under the tenant's configured interest/charge policy.
+- **Loan + Savings Ledger** — the full history of a loan: each instalment due
+  vs collected, its savings sub-account, running balances. Downloadable PDF.
+- **Monitoring reports** — Zero-Collection (who paid nothing), Collection
+  Follow-up (arrears), Advance Collection (banked pre-payments), Savings
+  Ledger, Disbursement Register, PAR/overdue aging.
 
 ---
 
@@ -344,7 +364,7 @@ Non-negotiable principles:
 | Auth | **JWT** (tenant_id + role in token) | Stateless; works for web and mobile |
 | Process manager | **pm2** | Matches the server's existing apps |
 | Web server | **nginx** | Serves the React build + reverse-proxies the API |
-| Reports/print | Server-side PDF/Excel export | Loan cards, schedules, ledgers |
+| Reports/print | **Client-side** PDF (`@react-pdf/renderer`) + Excel (`xlsx`) + CSV export | Loan cards, schedules, ledgers — no backend round-trip |
 
 ### 6.2 API-first principle
 
@@ -362,9 +382,12 @@ Every table below carries a `tenant_id` (company) and audit fields
 - **Employee** (FDO/BM/HO) with role; assigned to branch/centers
 - **KYC** + **KycDocument** (photo/ID uploads) + **CoApplicant/Nominee**
 - **LoanProduct**, **Purpose**, **Frequency**, **DocumentType** (master data)
-- **LoanApplication** → **Loan** (with cycle no, flat interest, totals)
+- **LoanApplication** (app no, editable while pending) → **Loan** (cycle no,
+  flat interest, totals)
 - **RepaymentSchedule** (each instalment: due vs collected + running balance)
-- **Collection** (daily cash posting) + **Demand** (what's due)
+- **Collection** (daily cash posting, kind = REGULAR/ADVANCE/FORECLOSURE/…) +
+  **Demand** (what's due)
+- **SavingsTxn** (per-loan DEPOSIT/REFUND; `Client.savingsBalance` is the cache)
 - **EODClosing** (daily cash reconciliation)
 - **AuditLog**
 
@@ -396,46 +419,37 @@ interface is designed fresh for ASV Finance:
 
 ### 6.5 Deployment (where it runs)
 
-- **Server:** VPS at `85.208.51.93`, Ubuntu 24.04, Node v20 (via nvm), pm2, nginx.
-- **Layout:** `/var/www/asvfinance-backend` (API under pm2) and
-  `/var/www/asvfinance-frontend` (React build served by nginx).
+- **Server:** VPS at `85.208.51.93`, Ubuntu 24.04, Node v20 (root's nvm), pm2, nginx.
+- **Layout:** single repo checkout at `/var/www/asv_finance_webapp` — `backend/`
+  (built, run under pm2 as `asvfinance-api`) and `frontend/` (built, `dist/`
+  served statically by nginx). Everything runs as **root** via `sudo`; see
+  `deploy/DEPLOYMENT.md` for the exact pull → build → restart commands.
 - **Domain:** `asvsmallfinance.com` → nginx → serves web app + proxies `/api`.
-- **Database:** a dedicated PostgreSQL database + user inside the server's shared
-  PostgreSQL instance (isolated from the other apps on the box).
+- **Database:** PostgreSQL `asvfinance` inside the server's shared PostgreSQL
+  instance (isolated from the other apps on the box) — see `deploy/db-setup.sql`.
 - **HTTPS:** TLS certificate (Let's Encrypt) for the domain.
 
 ---
 
-## 7. What we build first — Employee (Field Officer) Portal
+## 7. Build history (phase 1 shipped — kept for context)
 
-Scope for phase 1 (mirrors the screens already reviewed):
-
-1. **Login** + session timeout + role = FDO.
-2. **Dashboard** — my centers, my clients, disbursement, portfolio outstanding,
-   and my collection summary (opening arrear → demand → collection → closing arrear).
-3. **Client** — Enrollment, KYC Documents upload, KYC Update (with GPS locate),
-   Co-Applicant.
-4. **Client Search.**
-5. **Loan Module** — Loan Application (KYC panel, existing loans, eligibility
-   warnings, sanctioned amount).
-6. **Reports** — Demand Sheet; Client Application Form; Loan Schedule; Loan Ledger
-   (all printable).
-7. **Collections** — daily collection entry against demand. *(Screen still to be
-   reviewed — confirm before building.)*
-
-Foundations built alongside (used by every phase): tenant + RLS, roles, working
-date, audit trail, master data, the flat-interest **schedule engine**.
+Phase 1 was the Employee (FDO) portal only: login, dashboard, client
+enrollment/KYC/search, loan application, printable Demand Sheet/Loan Ledger,
+and daily collection entry — built on the shared foundations (tenant + RLS,
+roles, working date, audit trail, master data, the flat-interest schedule
+engine). BM and HO portals, collections (advance/foreclosure), savings, and
+the full Reports suite (§2.5) shipped after and are now equally live — see the
+**Project state** summary at the top of this file for what's current.
 
 ---
 
 ## 8. Open questions (confirm with ASV Finance before building those parts)
 
-1. **Loan interest:** exact flat rate(s) per product and the per-instalment
-   principal/interest split rule (the ₹750/₹250 pattern).
-2. **Collections posting** and **disbursement/approval** screens — not yet seen.
-3. **Master data / Transactions / Utilities** detail — not yet seen.
-4. Which **RBI guardrails** to hard-enforce vs warn (income limit, 50% cap).
-5. Whether **credit-bureau (CIBIL/CRIF)** and **UPI/BBPS** integrations are in
+1. Which **RBI guardrails** to hard-enforce vs warn: household income cap
+   (₹3,00,000/yr) and the 50% FOIR repayment cap are **not yet implemented**
+   even as soft warnings (no code currently checks `monthlyIncome`/FOIR in
+   `computeWarnings()`) — confirm before building.
+2. Whether **credit-bureau (CIBIL/CRIF)** and **UPI/BBPS** integrations are in
    scope now or later.
 
 ---
@@ -458,7 +472,9 @@ date, audit trail, master data, the flat-interest **schedule engine**.
 | EOD | End of Day — daily cash reconciliation |
 | Portfolio OS | Portfolio Outstanding — total loan money still to be recovered |
 | Disbursement | Giving out the loan money |
-| Cycle | Loan number for a repeat borrower (e.g. `/2` = second loan) |
+| Cycle | Loan number for a repeat borrower (e.g. `_2` = second loan) |
+| Savings a/c | Per-loan compulsory savings sub-account, auto-refunded at that loan's closure (invariant #11) |
+| PAR | Portfolio at Risk — overdue loans bucketed by days (1/7/30/90+) |
 
 ---
 
