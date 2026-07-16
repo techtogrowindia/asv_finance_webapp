@@ -144,7 +144,7 @@ export function EnrollMemberPage() {
 
       {error && <div className="alert-error">{error}</div>}
 
-      <form className="form-card" onSubmit={onSubmit}>
+      <form className="form-card" style={{ maxWidth: 'none' }} onSubmit={onSubmit}>
         <div className="form-section-title">Placement</div>
         <div className="form-grid">
           <Field label="Center *">
