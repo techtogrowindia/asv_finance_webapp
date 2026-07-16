@@ -377,7 +377,7 @@ export class LoansService {
       }
 
       const cycleNo = (await tx.loan.count({ where: { clientId: application.client.id } })) + 1;
-      const loanAccount = `${application.client.clientCode}/${cycleNo}`;
+      const loanAccount = `${application.client.clientCode}_${cycleNo}`;
 
       const loanAmount = Number(application.product.loanAmount);
       const interestAmount = Number(application.product.interestAmount);
