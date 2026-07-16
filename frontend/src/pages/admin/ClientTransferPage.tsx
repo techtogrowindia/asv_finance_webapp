@@ -101,7 +101,7 @@ export function ClientTransferPage() {
             className="input"
             value={q}
             onChange={(e) => { setQ(e.target.value); setSelected(null); }}
-            placeholder="e.g. Kaleeswari, PMF005392, 98765..."
+            placeholder="e.g. Kaleeswari, ASVLN005392, 98765..."
           />
         </div>
         {results.length > 0 && (

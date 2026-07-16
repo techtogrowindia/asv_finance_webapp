@@ -171,7 +171,6 @@ function EmployeeForm({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    code: initial?.code ?? '',
     name: initial?.name ?? '',
     login: initial?.login ?? '',
     password: '',
@@ -201,7 +200,6 @@ function EmployeeForm({
     try {
       if (initial) {
         await updateEmployee(initial.id, {
-          code: form.code.trim(),
           name: form.name.trim(),
           login: form.login.trim(),
           role: isBM ? undefined : form.role,
@@ -210,7 +208,6 @@ function EmployeeForm({
         });
       } else {
         const body: CreateEmployeeBody = {
-          code: form.code.trim(),
           name: form.name.trim(),
           login: form.login.trim(),
           password: form.password,
@@ -233,7 +230,11 @@ function EmployeeForm({
       <div className="form-section-title">{initial ? `Edit ${initial.name}` : 'New employee'}</div>
       {error && <div className="alert-error">{error}</div>}
       <div className="form-grid">
-        <Field label="Code *"><input className="input" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
+        {initial && (
+          <Field label="Code">
+            <input className="input" value={initial.code} disabled title="Auto-generated — cannot be changed" />
+          </Field>
+        )}
         <Field label="Full name *"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Login *"><input className="input" value={form.login} onChange={(e) => set('login', e.target.value)} /></Field>
         {!initial && (
@@ -270,7 +271,7 @@ function EmployeeForm({
         <strong> Role</strong> controls which actions they may perform — manage these on the Roles page.
       </div>
       <div className="hint">
-        {initial ? 'Leave password unchanged — use “Reset Password” in the table to set a new one.' : 'The employee signs in with this login and password.'}
+        {initial ? 'Leave password unchanged — use “Reset Password” in the table to set a new one.' : 'The employee signs in with this login and password. Their Code (ASVEMP###/ASVADM###) is assigned automatically.'}
       </div>
       <div className="form-actions">
         <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? <span className="spinner" /> : 'Save'}</button>

@@ -151,10 +151,10 @@ export class LoansService {
     });
   }
 
-  /** Next tenant-scoped application number, e.g. APP000123. */
+  /** Next tenant-scoped application number, e.g. ASVLA000123. */
   private async nextAppNo(tx: Prisma.TransactionClient, tenantId: string): Promise<string> {
     const n = (await tx.loanApplication.count({ where: { tenantId } })) + 1;
-    return `APP${String(n).padStart(6, '0')}`;
+    return `ASVLA${String(n).padStart(6, '0')}`;
   }
 
   /** Reviewer (BM/HO) note, added on the Loan Verification screen. Separate from
@@ -254,7 +254,7 @@ export class LoansService {
     });
   }
 
-  /** Resolve an application number (e.g. APP000123) to its member + the
+  /** Resolve an application number (e.g. ASVLA000123) to its member + the
    *  application id, so the Loan Application screen can open it for editing. */
   async findApplicationByNo(user: AuthUser, appNo: string) {
     return this.prisma.withTenant(user, async (tx) => {

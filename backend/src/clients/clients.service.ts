@@ -101,7 +101,7 @@ export class ClientsService {
       }
 
       const clientCode = await this.nextClientCode(tx);
-      const savingsAccount = `SB${clientCode.replace(/\D/g, '')}`;
+      const savingsAccount = `ASVS${clientCode.replace(/\D/g, '')}`;
 
       const created = await tx.client.create({
         data: {
@@ -433,7 +433,7 @@ export class ClientsService {
     });
   }
 
-  /** Next PMF code = highest existing + 1, starting at PMF005500. */
+  /** Next ASVLN code = highest existing + 1, starting at ASVLN005500. */
   private async nextClientCode(tx: Prisma.TransactionClient): Promise<string> {
     const last = await tx.client.findFirst({
       orderBy: { clientCode: 'desc' },
@@ -444,7 +444,7 @@ export class ClientsService {
       const parsed = parseInt(last.clientCode.replace(/\D/g, ''), 10);
       if (!Number.isNaN(parsed)) n = parsed + 1;
     }
-    return `PMF${String(n).padStart(6, '0')}`;
+    return `ASVLN${String(n).padStart(6, '0')}`;
   }
 
   private serialize(c: any, full = false) {

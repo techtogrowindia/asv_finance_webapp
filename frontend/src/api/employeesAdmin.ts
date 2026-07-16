@@ -23,7 +23,7 @@ export interface BranchLite {
 }
 
 export interface CreateEmployeeBody {
-  code: string;
+  // code is auto-generated server-side (ASVEMP###/ASVADM### by role).
   name: string;
   login: string;
   password: string;
@@ -33,7 +33,6 @@ export interface CreateEmployeeBody {
 }
 
 export interface UpdateEmployeeBody {
-  code?: string;
   name?: string;
   login?: string;
   role?: EmployeeRole;

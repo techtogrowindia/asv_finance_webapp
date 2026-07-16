@@ -60,7 +60,7 @@ async function main() {
     create: {
       tenantId: tenant.id,
       branchId: branch.id,
-      code: '45',
+      code: 'ASVEMP001',
       name: 'Kannan',
       login: 'kannan',
       passwordHash: password,
@@ -204,7 +204,7 @@ async function main() {
     create: {
       tenantId: tenant.id,
       branchId: branch.id,
-      code: 'BM-NATHAM',
+      code: 'ASVADM001',
       name: 'Branch Manager - Natham',
       login: 'bm-natham',
       passwordHash: password,

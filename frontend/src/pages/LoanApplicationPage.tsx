@@ -195,7 +195,7 @@ export function LoanApplicationPage() {
             <input
               className="input"
               style={{ maxWidth: 320 }}
-              placeholder="e.g. PMF005502/1 or APP000123"
+              placeholder="e.g. ASVLN005502_1 or ASVLA000123"
               value={loanSearch}
               onChange={(e) => setLoanSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onSearchLoan()}
