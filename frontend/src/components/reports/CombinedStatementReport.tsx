@@ -123,7 +123,7 @@ export function CombinedStatementReport() {
           <div className="panel-body">
             <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
               <table className="data">
-                <thead><tr><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Start Date</th><th>Closed Date</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                   {accounts?.map((a) => (
                     <tr key={a.loanId}>
@@ -131,11 +131,13 @@ export function CombinedStatementReport() {
                       <td>{a.clientName}</td>
                       <td className="mono">{a.loanAccount}</td>
                       <td className="mono">{a.savingsAccount}</td>
+                      <td>{date(a.disbursalDate)}</td>
+                      <td>{date(a.closedDate)}</td>
                       <td><span className={`badge ${a.loanType === 'OPEN' ? 'active' : 'closed'}`}>{a.loanType}</span></td>
                       <td><button className="btn btn-primary btn-sm" disabled={busy} onClick={() => view(a.loanId)}>View ledger</button></td>
                     </tr>
                   ))}
-                  {accounts && accounts.length === 0 && <tr><td colSpan={6} className="empty">No loans in this center.</td></tr>}
+                  {accounts && accounts.length === 0 && <tr><td colSpan={8} className="empty">No loans in this center.</td></tr>}
                 </tbody>
               </table>
             </div>

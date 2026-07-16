@@ -217,6 +217,8 @@ export interface CenterSavingsAccount {
   savingsAccount: string;
   clientName: string;
   displayId: string;
+  disbursalDate: string;
+  closedDate: string | null;
   loanType: 'OPEN' | 'CLOSED';
   balance: number;
 }

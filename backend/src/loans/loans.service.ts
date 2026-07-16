@@ -662,6 +662,8 @@ export class LoansService {
         savingsAccount: `${l.client.savingsAccount}_${l.loanAccount}`,
         clientName: l.client.name,
         displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${l.client.group.groupNo}.${l.client.memberNo}`,
+        disbursalDate: l.disbursalDate,
+        closedDate: l.closedDate,
         loanType: l.loanType,
         balance: net.get(l.id) ?? 0,
       }));
