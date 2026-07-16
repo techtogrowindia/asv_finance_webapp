@@ -147,11 +147,8 @@ export function MemberDetailPage() {
                       <td>{inr(String(l.priBalance))}</td>
                       <td>{inr(String(l.intBalance))}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/ledger`)}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/statement`)}>
                           View Ledger
-                        </button>{' '}
-                        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/savings`)}>
-                          Savings Ledger
                         </button>
                       </td>
                     </tr>
