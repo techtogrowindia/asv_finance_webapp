@@ -39,17 +39,21 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
     }
   }
 
+  const actions = (
+    <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+      <button className="btn btn-ghost btn-sm" disabled={shareBusy} onClick={sharePdf}>
+        {shareBusy ? <span className="spinner" /> : 'Share to WhatsApp'}
+      </button>
+      <button className="btn btn-primary btn-sm" disabled={pdfBusy} onClick={downloadPdf}>
+        {pdfBusy ? <span className="spinner" /> : 'Download PDF'}
+      </button>
+    </div>
+  );
+
   return (
     <div className="panel ledger-print">
-      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
-        <button className="btn btn-ghost btn-sm" disabled={shareBusy} onClick={sharePdf}>
-          {shareBusy ? <span className="spinner" /> : 'Share to WhatsApp'}
-        </button>
-        <button className="btn btn-primary btn-sm" disabled={pdfBusy} onClick={downloadPdf}>
-          {pdfBusy ? <span className="spinner" /> : 'Download PDF'}
-        </button>
-      </div>
+      <div className="panel-head">{actions}</div>
       <div className="panel-body">
         <h2 style={{ textAlign: 'center', margin: '0 0 4px' }}>ASV FINANCE</h2>
         <p style={{ textAlign: 'center', margin: '0 0 18px', color: 'var(--ink-500)' }}>Loan + Savings Statement</p>
@@ -108,6 +112,8 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
             </tbody>
           </table>
         </div>
+
+        <div style={{ marginTop: 18 }}>{actions}</div>
       </div>
     </div>
   );
