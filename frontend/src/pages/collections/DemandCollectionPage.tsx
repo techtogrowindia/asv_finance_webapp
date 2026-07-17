@@ -3,7 +3,7 @@ import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { getSettings } from '../../api/settings';
-import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
+import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
 import {
   bulkCollectDemand,
   CenterSummary,
@@ -108,6 +108,7 @@ export function DemandCollectionPage() {
 
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+      {closedLoanId && <InlineClosureReport loanId={closedLoanId} onDismiss={() => setClosedLoanId(null)} />}
 
       {summary && (
         <div className="cards">
@@ -160,7 +161,6 @@ export function DemandCollectionPage() {
         </>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see its demand.</div></div></div>}
-      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

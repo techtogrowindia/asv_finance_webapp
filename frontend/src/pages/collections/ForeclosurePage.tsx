@@ -3,7 +3,7 @@ import { CenterLite, listCenters, listMembers, MemberListItem } from '../../api/
 import { ExistingLoan, listExistingLoans } from '../../api/loans';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
-import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
+import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
 import { ForeclosureQuote, foreclose, getForeclosureQuote } from '../../api/collections';
 
 const inr = (v: number | string) =>
@@ -87,6 +87,7 @@ export function ForeclosurePage() {
 
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+      {closedLoanId && <InlineClosureReport loanId={closedLoanId} onDismiss={() => setClosedLoanId(null)} />}
 
       <div className="form-card" style={{ maxWidth: 'none' }}>
         <div className="form-grid">
@@ -163,7 +164,6 @@ export function ForeclosurePage() {
           </div>
         </div>
       )}
-      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

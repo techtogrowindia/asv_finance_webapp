@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useConfirm } from '../../components/ConfirmProvider';
-import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
+import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
 import { AdvanceLoan, applyAdvance, getAdvanceLoans } from '../../api/collections';
 
 const inr = (v: number) =>
@@ -50,6 +50,7 @@ export function LoanAdvancePage() {
 
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
+      {closedLoanId && <InlineClosureReport loanId={closedLoanId} onDismiss={() => setClosedLoanId(null)} />}
 
       <div className="table-wrap">
         <table className="data">
@@ -75,7 +76,6 @@ export function LoanAdvancePage() {
           </tbody>
         </table>
       </div>
-      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

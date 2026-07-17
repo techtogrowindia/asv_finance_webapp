@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DueRow, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
-import { ClosureReportModal } from '../components/reports/ClosureReportModal';
+import { InlineClosureReport } from '../components/reports/InlineClosureReport';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -102,6 +102,7 @@ export function CollectionsPage() {
           {success}
         </div>
       )}
+      {closedLoanId && <InlineClosureReport loanId={closedLoanId} onDismiss={() => setClosedLoanId(null)} />}
 
       {centerId && (
         <div className="table-wrap">
@@ -168,7 +169,6 @@ export function CollectionsPage() {
         </div>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see who owes money today.</div></div></div>}
-      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }
