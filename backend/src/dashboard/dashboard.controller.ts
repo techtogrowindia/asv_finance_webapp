@@ -11,4 +11,9 @@ export class DashboardController {
   summary(@CurrentUser() user: AuthUser) {
     return this.dashboard.summary(user);
   }
+
+  @Get('recent-closures')
+  recentClosures(@CurrentUser() user: AuthUser) {
+    return this.dashboard.recentClosures(user);
+  }
 }

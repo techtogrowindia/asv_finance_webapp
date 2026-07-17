@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { api } from '../../lib/api';
 import { useAuth } from '../../auth/AuthContext';
+import { RecentClosuresWidget } from '../../components/RecentClosuresWidget';
 
 interface CenterReportRow {
   centerId: string;
@@ -92,14 +93,7 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="panel" style={{ marginTop: 18 }}>
-        <div className="panel-body">
-          <div className="empty">
-            🚧 End-of-day cash reconciliation and daily monitoring reports (zero-collection,
-            follow-up, advance-collection) are scheduled next. Master data is under <b>Business Settings</b>.
-          </div>
-        </div>
-      </div>
+      <RecentClosuresWidget />
     </AdminLayout>
   );
 }

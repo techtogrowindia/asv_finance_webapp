@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { RecentClosuresWidget } from '../components/RecentClosuresWidget';
 
 interface CenterReportRow {
   centerId: string;
@@ -88,6 +89,8 @@ export function DashboardPage() {
           )}
         </div>
       </div>
+
+      <RecentClosuresWidget />
     </>
   );
 }

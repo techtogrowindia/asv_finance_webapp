@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types/auth-user';
+import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
 
 @Injectable()
@@ -107,6 +108,61 @@ export class DashboardService {
         },
         report,
       };
+    });
+  }
+
+  /**
+   * Last N loans closed in scope — the "just happened" feed for the dashboard
+   * notification widget (a loan closes -> its savings auto-refunds -> this
+   * shows up here so BM/HO/FDO see it without hunting through Reports).
+   */
+  async recentClosures(user: AuthUser, limit = 8) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loans = await tx.loan.findMany({
+        where: { loanType: 'CLOSED', client: { center: this.centerScope(user) } },
+        orderBy: { closedDate: 'desc' },
+        take: limit,
+        include: {
+          client: {
+            select: {
+              name: true,
+              memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+            },
+          },
+        },
+      });
+      if (loans.length === 0) return [];
+
+      const [audits, refunds] = await Promise.all([
+        tx.auditLog.findMany({
+          where: { entity: 'Loan', action: 'FORECLOSE', entityId: { in: loans.map((l) => l.id) } },
+          select: { entityId: true },
+        }),
+        tx.savingsTxn.groupBy({
+          by: ['loanId'],
+          where: { loanId: { in: loans.map((l) => l.id) }, kind: 'REFUND' },
+          _sum: { amount: true },
+        }),
+      ]);
+      const foreclosed = new Set(audits.map((a) => a.entityId));
+      const refundByLoan = new Map(refunds.map((r) => [r.loanId, Number(r._sum.amount ?? 0)]));
+
+      return loans.map((l) => {
+        const c = l.client;
+        return {
+          loanId: l.id,
+          loanAccount: l.loanAccount,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          clientName: c.name,
+          centerName: `${c.center.code} — ${c.center.name}`,
+          closedDate: l.closedDate,
+          foreclosed: foreclosed.has(l.id),
+          totalAmount: round2(Number(l.totalAmount)),
+          savingsRefunded: round2(refundByLoan.get(l.id) ?? 0),
+        };
+      });
     });
   }
 
