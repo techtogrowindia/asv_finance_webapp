@@ -3,6 +3,7 @@ import { CenterLite, listCenters, listMembers, MemberListItem } from '../../api/
 import { ExistingLoan, listExistingLoans } from '../../api/loans';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
+import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
 import { ForeclosureQuote, foreclose, getForeclosureQuote } from '../../api/collections';
 
 const inr = (v: number | string) =>
@@ -27,6 +28,7 @@ export function ForeclosurePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
   useEffect(() => {
@@ -68,6 +70,7 @@ export function ForeclosurePage() {
         `Loan closed. Payoff ${inr(res.payoffTotal)}, interest waived ${inr(res.interestWaived)}.`
         + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
       );
+      setClosedLoanId(res.loanId);
       setLoanId(''); setQuote(null); setWaive('');
       if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN')));
     } catch (e) {
@@ -160,6 +163,7 @@ export function ForeclosurePage() {
           </div>
         </div>
       )}
+      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

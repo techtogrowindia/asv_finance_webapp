@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DueRow, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
+import { ClosureReportModal } from '../components/reports/ClosureReportModal';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
@@ -18,6 +19,7 @@ export function CollectionsPage() {
   const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
@@ -63,6 +65,7 @@ export function CollectionsPage() {
           (res.loanClosed ? ' — loan fully closed!' : '') +
           (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
       );
+      if (res.loanClosed) setClosedLoanId(row.loanId);
       refresh(centerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collection failed');
@@ -165,6 +168,7 @@ export function CollectionsPage() {
         </div>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see who owes money today.</div></div></div>}
+      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

@@ -187,6 +187,7 @@ export interface StatementRow extends LedgerRow {
  *  the loan's savings passbook, and its savings account number. */
 export interface LoanStatement extends Omit<LoanLedger, 'schedule'> {
   savingsAccount: string;
+  clientMobile: string | null;
   schedule: StatementRow[];
   savings: SavingsLine[];
 }

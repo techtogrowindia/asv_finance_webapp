@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useConfirm } from '../../components/ConfirmProvider';
+import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
 import { AdvanceLoan, applyAdvance, getAdvanceLoans } from '../../api/collections';
 
 const inr = (v: number) =>
@@ -11,6 +12,7 @@ export function LoanAdvancePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   function refresh() {
     getAdvanceLoans().then(setRows).catch((e) => setError(e.message));
@@ -32,6 +34,7 @@ export function LoanAdvancePage() {
         + (res.loanClosed ? ' Loan fully closed!' : res.advanceRemaining > 0 ? ` ${inr(res.advanceRemaining)} advance still remaining.` : '')
         + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
       );
+      if (res.loanClosed) setClosedLoanId(row.loanId);
       refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Apply failed');
@@ -72,6 +75,7 @@ export function LoanAdvancePage() {
           </tbody>
         </table>
       </div>
+      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

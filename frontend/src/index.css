@@ -73,6 +73,11 @@ a { color: var(--brand-700); text-decoration: none; }
 .modal-title { margin: 0 0 8px; font-size: 18px; }
 .modal-message { margin: 0 0 22px; color: var(--ink-700); font-size: 15px; line-height: 1.5; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.modal-card-wide {
+  background: transparent; width: 100%; max-width: 960px; max-height: 90vh; overflow: auto;
+  padding: 0;
+}
+.modal-card-wide .panel { margin: 0; }
 
 /* ---- Inputs ---- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
@@ -435,4 +440,6 @@ table.data tbody tr:hover { background: #f8faf9; }
   .content { padding: 0; }
   .panel, .ledger-print { box-shadow: none; border: none; }
   body { background: #fff; }
+  .modal-overlay { position: static; background: none; padding: 0; display: block; }
+  .modal-card-wide { max-height: none; overflow: visible; max-width: none; }
 }

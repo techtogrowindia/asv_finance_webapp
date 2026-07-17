@@ -394,6 +394,9 @@ export const downloadLoanLedgerPdf = (l: LoanLedger) =>
 export const downloadLoanStatementPdf = (st: LoanStatement) =>
   download(<LoanStatementDoc st={st} />, `loan-savings-statement-${safe(st.loanAccount)}.pdf`);
 
+/** Blob-only variant (no download trigger) for sharing via the Web Share API. */
+export const loanStatementPdfBlob = (st: LoanStatement) => pdf(<LoanStatementDoc st={st} />).toBlob();
+
 export const downloadLoanSavingsPdf = (l: LoanSavingsLedger) =>
   download(<LoanSavingsDoc l={l} />, `savings-ledger-${safe(l.savingsAccount)}.pdf`);
 

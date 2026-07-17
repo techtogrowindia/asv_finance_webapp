@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { LoanStatement } from '../../api/loans';
+import { shareFileToWhatsApp } from '../../lib/shareFile';
 
 const inr = (v: number | string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
 
 /** Combined per-loan ledger: repayment schedule (with a savings column) + the
- *  loan's savings passbook, downloadable as one PDF. Shared by the Loan+Savings
- *  report and the member view. */
+ *  loan's savings passbook, downloadable/printable/WhatsApp-shareable as one
+ *  PDF. Shared by the Loan+Savings report, the member view, and the
+ *  "just closed" flow (Field/Demand Collection, Loan Advance, Foreclosure). */
 export function LoanStatementCard({ st }: { st: LoanStatement }) {
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
 
   async function downloadPdf() {
     setPdfBusy(true);
@@ -21,9 +24,28 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
     }
   }
 
+  async function sharePdf() {
+    setShareBusy(true);
+    try {
+      const m = await import('../../lib/pdf/reportPdf');
+      const blob = await m.loanStatementPdfBlob(st);
+      await shareFileToWhatsApp(blob, `loan-savings-statement-${st.loanAccount.replace(/\//g, '-')}.pdf`, {
+        title: 'Loan + Savings Statement',
+        text: `${st.clientName} — loan ${st.loanAccount} statement from ASV Finance.`,
+        phone: st.clientMobile,
+      });
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
   return (
     <div className="panel ledger-print">
-      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div className="panel-head no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => window.print()}>Print</button>
+        <button className="btn btn-ghost btn-sm" disabled={shareBusy} onClick={sharePdf}>
+          {shareBusy ? <span className="spinner" /> : 'Share to WhatsApp'}
+        </button>
         <button className="btn btn-primary btn-sm" disabled={pdfBusy} onClick={downloadPdf}>
           {pdfBusy ? <span className="spinner" /> : 'Download PDF'}
         </button>

@@ -3,6 +3,7 @@ import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { getSettings } from '../../api/settings';
+import { ClosureReportModal } from '../../components/reports/ClosureReportModal';
 import {
   bulkCollectDemand,
   CenterSummary,
@@ -27,6 +28,7 @@ export function DemandCollectionPage() {
   const [savings, setSavings] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   useEffect(() => {
     listCenters().then(setCenters).catch((e) => setError(e.message));
@@ -58,6 +60,7 @@ export function DemandCollectionPage() {
         + (res.loanClosed ? ' — loan closed!' : res.advanceBanked > 0 ? ` (₹${res.advanceBanked} banked as advance)` : '')
         + (res.savingsRefunded > 0 ? ` ${inr(res.savingsRefunded)} savings refunded to the client.` : ''),
       );
+      if (res.loanClosed) setClosedLoanId(row.loanId);
       refresh(centerId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collection failed');
@@ -157,6 +160,7 @@ export function DemandCollectionPage() {
         </>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see its demand.</div></div></div>}
+      {closedLoanId && <ClosureReportModal loanId={closedLoanId} onClose={() => setClosedLoanId(null)} />}
     </>
   );
 }

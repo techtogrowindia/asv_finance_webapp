@@ -519,7 +519,7 @@ export class LoansService {
         include: {
           client: {
             select: {
-              name: true, savingsAccount: true, memberNo: true,
+              name: true, mobile: true, savingsAccount: true, memberNo: true,
               group: { select: { groupNo: true } },
               center: { select: { code: true, branch: { select: { code: true } } } },
             },
@@ -559,6 +559,7 @@ export class LoansService {
         savingsAccount: `${c.savingsAccount}_${loan.loanAccount}`,
         clientDisplayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
         clientName: c.name,
+        clientMobile: c.mobile,
         disbursalDate: loan.disbursalDate,
         loanAmount: loan.loanAmount,
         interestAmount: loan.interestAmount,
