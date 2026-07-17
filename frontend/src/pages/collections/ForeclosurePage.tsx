@@ -117,7 +117,7 @@ export function ForeclosurePage() {
                 <div className="k">Foreclosure charge</div>
                 <div className="v">{inr(quote.foreclosureCharge)}
                   {(quote.chargePercent > 0 || quote.chargeFlat > 0) && (
-                    <span className="hint" style={{ display: 'block' }}>
+                    <span className="hint" style={{ display: 'block', marginTop: 2 }}>
                       {quote.chargePercent > 0 ? `${quote.chargePercent}% of principal` : ''}
                       {quote.chargePercent > 0 && quote.chargeFlat > 0 ? ' + ' : ''}
                       {quote.chargeFlat > 0 ? `${inr(quote.chargeFlat)} flat` : ''}
@@ -130,7 +130,7 @@ export function ForeclosurePage() {
                 <div className="k">Savings to be refunded</div>
                 <div className="v">{inr(quote.savingsToRefund)}
                   {quote.savingsToRefund > 0 && (
-                    <span className="hint" style={{ display: 'block' }}>Paid to the client automatically once foreclosed.</span>
+                    <span className="hint" style={{ display: 'block', marginTop: 2 }}>Paid to the client automatically once foreclosed.</span>
                   )}
                 </div>
               </div>
