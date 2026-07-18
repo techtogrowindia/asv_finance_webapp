@@ -91,11 +91,14 @@ export interface AdvanceLoan {
   loanAccount: string;
   clientName: string;
   displayId: string;
+  branchCode: string;
+  branchName: string;
   centerName: string;
   advanceBalance: number;
 }
 
-export const getAdvanceLoans = () => api<AdvanceLoan[]>('/collections/advances');
+export const getAdvanceLoans = (branchId?: string) =>
+  api<AdvanceLoan[]>(`/collections/advances${branchId ? `?branchId=${branchId}` : ''}`);
 
 export const applyAdvance = (loanId: string) =>
   api<{ applied: number; advanceRemaining: number; loanClosed: boolean; savingsRefunded: number }>(`/collections/${loanId}/apply-advance`, {

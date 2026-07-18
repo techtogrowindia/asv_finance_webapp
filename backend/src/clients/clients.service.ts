@@ -18,7 +18,7 @@ import { TransferClientDto } from './dto/transfer-client.dto';
 const GROUP_CAPACITY = 5;
 
 const FULL_INCLUDE = {
-  center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+  center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
   group: { select: { groupNo: true } },
   coApplicant: true,
   requestedProduct: { select: { id: true, name: true } },
@@ -35,11 +35,11 @@ export class ClientsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(user: AuthUser, opts: { centerId?: string; q?: string }) {
+  async list(user: AuthUser, opts: { centerId?: string; q?: string; branchId?: string }) {
     return this.prisma.withTenant(user, async (tx) => {
       const where: Prisma.ClientWhereInput = {
         isActive: true,
-        ...clientCenterScope(user),
+        ...clientCenterScope(user, opts.branchId),
         ...(opts.centerId ? { centerId: opts.centerId } : {}),
         ...(opts.q
           ? {
@@ -56,7 +56,7 @@ export class ClientsService {
         orderBy: [{ createdAt: 'desc' }],
         take: 200,
         include: {
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+          center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
           group: { select: { groupNo: true } },
         },
       });
@@ -191,13 +191,13 @@ export class ClientsService {
   }
 
   /** Clients in scope whose KYC isn't fully approved yet (the review queue). */
-  async kycPending(user: AuthUser) {
+  async kycPending(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const clients = await tx.client.findMany({
-        where: { isActive: true, status: { not: 'ACTIVE' }, ...clientCenterScope(user) },
+        where: { isActive: true, status: { not: 'ACTIVE' }, ...clientCenterScope(user, branchId) },
         orderBy: { createdAt: 'desc' },
         include: {
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+          center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
           group: { select: { groupNo: true } },
         },
       });
@@ -456,6 +456,8 @@ export class ClientsService {
       displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
       name: c.name,
       centerId: c.centerId,
+      branchCode: c.center.branch?.code ?? null,
+      branchName: c.center.branch?.name ?? null,
       centerCode: c.center.code,
       centerName: c.center.name,
       groupNo: c.group.groupNo,

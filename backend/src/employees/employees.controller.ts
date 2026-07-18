@@ -16,8 +16,8 @@ export class EmployeesController {
 
   @Roles('BM', 'HO')
   @Get('field-officers')
-  fieldOfficers(@CurrentUser() user: AuthUser) {
-    return this.employees.fieldOfficers(user);
+  fieldOfficers(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.employees.fieldOfficers(user, branchId);
   }
 
   @Roles('BM', 'HO')

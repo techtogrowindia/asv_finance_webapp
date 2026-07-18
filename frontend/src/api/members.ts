@@ -23,6 +23,8 @@ export interface MemberListItem {
   displayId: string;
   name: string;
   centerId: string;
+  branchCode: string | null;
+  branchName: string | null;
   centerCode: string;
   centerName: string;
   groupNo: number;
@@ -154,10 +156,11 @@ export const listCenters = (branchId?: string) =>
   api<CenterLite[]>(`/centers${branchId ? `?branchId=${branchId}` : ''}`);
 export const listGroups = (centerId: string) => api<GroupLite[]>(`/centers/${centerId}/groups`);
 
-export const listMembers = (params: { centerId?: string; q?: string }) => {
+export const listMembers = (params: { centerId?: string; q?: string; branchId?: string }) => {
   const qs = new URLSearchParams();
   if (params.centerId) qs.set('centerId', params.centerId);
   if (params.q) qs.set('q', params.q);
+  if (params.branchId) qs.set('branchId', params.branchId);
   const s = qs.toString();
   return api<MemberListItem[]>(`/clients${s ? `?${s}` : ''}`);
 };
@@ -165,7 +168,8 @@ export const listMembers = (params: { centerId?: string; q?: string }) => {
 export const getMember = (id: string) => api<MemberDetail>(`/clients/${id}`);
 
 /** Clients whose KYC isn't fully approved yet — the review queue (BM/HO, member.verify). */
-export const getKycPending = () => api<MemberListItem[]>('/clients/kyc-pending');
+export const getKycPending = (branchId?: string) =>
+  api<MemberListItem[]>(`/clients/kyc-pending${branchId ? `?branchId=${branchId}` : ''}`);
 
 /** Move a client to a different center/group (BM/HO only, member.transfer). */
 export const transferMember = (id: string, centerId: string, groupNo: number) =>

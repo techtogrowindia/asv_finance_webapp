@@ -61,8 +61,8 @@ export class CollectionsController {
   // ---- Loan Advance (BM/HO — collection.advance) ----
   @RequirePermission('collection.advance')
   @Get('advances')
-  advances(@CurrentUser() user: AuthUser) {
-    return this.collections.advanceLoans(user);
+  advances(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.collections.advanceLoans(user, branchId);
   }
 
   @RequirePermission('collection.advance')

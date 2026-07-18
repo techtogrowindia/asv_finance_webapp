@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import {
   CenterLite,
@@ -18,6 +19,7 @@ export function ClientTransferPage() {
   const [selected, setSelected] = useState<MemberListItem | null>(null);
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [groups, setGroups] = useState<GroupLite[]>([]);
+  const [destBranchId, setDestBranchId] = useState('');
   const [destCenterId, setDestCenterId] = useState('');
   const [destGroupNo, setDestGroupNo] = useState('');
   const [error, setError] = useState('');
@@ -25,8 +27,9 @@ export function ClientTransferPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    listCenters().then(setCenters).catch((e) => setError(e.message));
-  }, []);
+    setDestCenterId('');
+    listCenters(destBranchId).then(setCenters).catch((e) => setError(e.message));
+  }, [destBranchId]);
 
   useEffect(() => {
     if (!q.trim()) { setResults([]); return; }
@@ -112,6 +115,7 @@ export function ClientTransferPage() {
                   <tr key={m.id} onClick={() => pick(m)}>
                     <td className="mono">{m.displayId}</td>
                     <td>{m.name}</td>
+                    <td>{m.branchCode} — {m.branchName}</td>
                     <td>{m.centerCode} — {m.centerName}</td>
                     <td>Group {m.groupNo}</td>
                   </tr>
@@ -125,12 +129,14 @@ export function ClientTransferPage() {
           <>
             <div className="detail-grid" style={{ marginTop: 18 }}>
               <div className="detail-item"><div className="k">Current client ID</div><div className="v mono">{selected.displayId}</div></div>
+              <div className="detail-item"><div className="k">Current branch</div><div className="v">{selected.branchCode} — {selected.branchName}</div></div>
               <div className="detail-item"><div className="k">Current center</div><div className="v">{selected.centerCode} — {selected.centerName}</div></div>
               <div className="detail-item"><div className="k">Current group</div><div className="v">Group {selected.groupNo}</div></div>
             </div>
 
             <div className="form-section-title" style={{ marginTop: 22 }}>2. Choose the destination</div>
             <div className="form-grid">
+              <BranchScopeSelect value={destBranchId} onChange={setDestBranchId} />
               <div className="field">
                 <label>New center</label>
                 <select className="input" value={destCenterId} onChange={(e) => { setDestCenterId(e.target.value); setDestGroupNo(''); }}>

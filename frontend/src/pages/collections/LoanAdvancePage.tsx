@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useConfirm } from '../../components/ConfirmProvider';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
 import { AdvanceLoan, applyAdvance, getAdvanceLoans } from '../../api/collections';
 
@@ -8,6 +9,7 @@ const inr = (v: number) =>
 
 export function LoanAdvancePage() {
   const confirm = useConfirm();
+  const [branchId, setBranchId] = useState('');
   const [rows, setRows] = useState<AdvanceLoan[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -15,9 +17,9 @@ export function LoanAdvancePage() {
   const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   function refresh() {
-    getAdvanceLoans().then(setRows).catch((e) => setError(e.message));
+    getAdvanceLoans(branchId).then(setRows).catch((e) => setError(e.message));
   }
-  useEffect(refresh, []);
+  useEffect(refresh, [branchId]);
 
   async function onApply(row: AdvanceLoan) {
     const ok = await confirm({
@@ -48,6 +50,10 @@ export function LoanAdvancePage() {
       <h1 className="page-title">Loan Advance Adjustment</h1>
       <p className="page-sub">Members who paid more than their demand carry an advance. Apply it to upcoming installments.</p>
 
+      <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+        <BranchScopeSelect value={branchId} onChange={setBranchId} />
+      </div>
+
       {error && <div className="alert-error">{error}</div>}
       {success && <div className="alert-error" style={{ background: '#e3f5ee', color: '#157a5b', borderColor: '#bfe6d7' }}>{success}</div>}
       {closedLoanId && <InlineClosureReport loanId={closedLoanId} onDismiss={() => setClosedLoanId(null)} />}
@@ -55,13 +61,14 @@ export function LoanAdvancePage() {
       <div className="table-wrap">
         <table className="data">
           <thead>
-            <tr><th>Client ID</th><th>Name</th><th>Center</th><th>Loan A/c</th><th>Advance Balance</th><th></th></tr>
+            <tr><th>Client ID</th><th>Name</th><th>Branch</th><th>Center</th><th>Loan A/c</th><th>Advance Balance</th><th></th></tr>
           </thead>
           <tbody>
             {rows?.map((r) => (
               <tr key={r.loanId}>
                 <td className="mono">{r.displayId}</td>
                 <td>{r.clientName}</td>
+                <td>{r.branchCode} — {r.branchName}</td>
                 <td>{r.centerName}</td>
                 <td className="mono">{r.loanAccount}</td>
                 <td>{inr(r.advanceBalance)}</td>
@@ -72,7 +79,7 @@ export function LoanAdvancePage() {
                 </td>
               </tr>
             ))}
-            {rows && rows.length === 0 && <tr><td colSpan={6} className="empty">No members are carrying an advance right now.</td></tr>}
+            {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No members are carrying an advance right now.</td></tr>}
           </tbody>
         </table>
       </div>

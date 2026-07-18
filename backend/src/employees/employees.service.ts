@@ -13,13 +13,19 @@ import { ReassignCentersDto } from './dto/reassign-centers.dto';
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Field officers the admin can assign — scoped to their branch (BM) or tenant (HO). */
-  async fieldOfficers(user: AuthUser) {
+  /** Field officers the admin can assign — scoped to their branch (BM), or an
+   *  optionally requested branch (HO narrowing which branch's centers they're
+   *  assigning to), or the whole tenant if HO doesn't narrow. */
+  async fieldOfficers(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const where: Prisma.EmployeeWhereInput = {
         role: 'FDO',
         status: 'ACTIVE',
-        ...(user.role === 'BM' && user.branchId ? { branchId: user.branchId } : {}),
+        ...(user.role === 'BM' && user.branchId
+          ? { branchId: user.branchId }
+          : branchId
+            ? { branchId }
+            : {}),
       };
       const fdos = await tx.employee.findMany({ where, orderBy: { name: 'asc' } });
       return fdos.map((e) => ({ id: e.id, code: e.code, name: e.name }));

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CenterLite, listCenters, listMembers, MemberListItem } from '../../api/members';
 import { ExistingLoan, listExistingLoans } from '../../api/loans';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
 import { ForeclosureQuote, foreclose, getForeclosureQuote } from '../../api/collections';
@@ -17,6 +18,7 @@ const POLICY_LABEL: Record<string, string> = {
 
 export function ForeclosurePage() {
   const confirm = useConfirm();
+  const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [members, setMembers] = useState<MemberListItem[]>([]);
   const [loans, setLoans] = useState<ExistingLoan[]>([]);
@@ -30,7 +32,10 @@ export function ForeclosurePage() {
   const [success, setSuccess] = useState('');
   const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
-  useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
   useEffect(() => {
     setClientId(''); setMembers([]);
     if (centerId) listMembers({ centerId }).then(setMembers).catch((e) => setError(e.message));
@@ -91,6 +96,7 @@ export function ForeclosurePage() {
 
       <div className="form-card" style={{ maxWidth: 'none' }}>
         <div className="form-grid">
+          <BranchScopeSelect value={branchId} onChange={setBranchId} />
           <div className="field">
             <label>Center</label>
             <SearchableSelect options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))} value={centerId} onChange={setCenterId} placeholder="Select center…" />

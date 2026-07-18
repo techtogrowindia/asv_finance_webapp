@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../../auth/AuthContext';
 import { AdminLayout } from '../../components/AdminLayout';
 import { ActionMenu } from '../../components/ActionMenu';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
+import { BranchLite, listAdminBranches } from '../../api/employeesAdmin';
 import {
   AdminCenter,
   CenterBody,
@@ -22,14 +25,16 @@ export function CentersPage() {
   const [editing, setEditing] = useState<AdminCenter | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
+  const [branchId, setBranchId] = useState('');
 
   function refresh() {
-    listAdminCenters().then(setRows).catch((e) => setError(e.message));
+    listAdminCenters(branchId).then(setRows).catch((e) => setError(e.message));
   }
   useEffect(() => {
     refresh();
-    listFieldOfficers().then(setFdos).catch(() => {});
-  }, []);
+    listFieldOfficers(branchId).then(setFdos).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   async function onDelete(c: AdminCenter) {
     const ok = await confirm({
@@ -62,12 +67,17 @@ export function CentersPage() {
         </button>
       </div>
 
+      <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+        <BranchScopeSelect value={branchId} onChange={setBranchId} />
+      </div>
+
       {error && <div className="alert-error">{error}</div>}
 
       {(adding || editing) && (
         <CenterForm
           initial={editing}
           fdos={fdos}
+          defaultBranchId={branchId}
           onCancel={() => { setAdding(false); setEditing(null); }}
           onSaved={() => { setAdding(false); setEditing(null); refresh(); }}
         />
@@ -77,13 +87,14 @@ export function CentersPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Code</th><th>Name</th><th>Field Officer</th><th>Meeting Day</th>
+              <th>Branch</th><th>Code</th><th>Name</th><th>Field Officer</th><th>Meeting Day</th>
               <th>Members</th><th>Status</th><th></th>
             </tr>
           </thead>
           <tbody>
             {rows?.map((c) => (
               <tr key={c.id}>
+                <td>{c.branchCode} — {c.branchName}</td>
                 <td className="mono">{c.code}</td>
                 <td>{c.name}</td>
                 <td>{c.fdoName ?? <span style={{ color: 'var(--ink-500)' }}>Unassigned</span>}</td>
@@ -105,7 +116,7 @@ export function CentersPage() {
               </tr>
             ))}
             {rows && rows.length === 0 && (
-              <tr><td colSpan={7} className="empty">No centers yet. Click “Add Center”.</td></tr>
+              <tr><td colSpan={8} className="empty">No centers yet. Click “Add Center”.</td></tr>
             )}
           </tbody>
         </table>
@@ -117,18 +128,24 @@ export function CentersPage() {
 function CenterForm({
   initial,
   fdos,
+  defaultBranchId,
   onCancel,
   onSaved,
 }: {
   initial: AdminCenter | null;
   fdos: FieldOfficer[];
+  defaultBranchId: string;
   onCancel: () => void;
   onSaved: () => void;
 }) {
+  const { user } = useAuth();
+  const isHO = user?.role === 'HO';
+  const [branches, setBranches] = useState<BranchLite[]>([]);
   const [form, setForm] = useState({
     code: initial?.code ?? '',
     name: initial?.name ?? '',
     fdoId: initial?.fdoId ?? '',
+    branchId: defaultBranchId,
     address: initial?.address ?? '',
     meetingDay: initial?.meetingDay ?? '',
     meetingTime: initial?.meetingTime ?? '',
@@ -139,14 +156,20 @@ function CenterForm({
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
+  useEffect(() => {
+    if (!initial && isHO) listAdminBranches().then(setBranches).catch(() => {});
+  }, [initial, isHO]);
+
   async function save() {
     setError('');
+    if (!initial && isHO && !form.branchId) { setError('Select a branch for this center'); return; }
     setBusy(true);
     try {
       const body: CenterBody = {
         code: form.code.trim(),
         name: form.name.trim(),
         fdoId: form.fdoId || null,
+        branchId: !initial ? form.branchId || undefined : undefined,
         address: form.address || undefined,
         meetingDay: form.meetingDay || undefined,
         meetingTime: form.meetingTime || undefined,
@@ -168,6 +191,14 @@ function CenterForm({
       <div className="form-section-title">{initial ? `Edit center ${initial.code}` : 'New center'}</div>
       {error && <div className="alert-error">{error}</div>}
       <div className="form-grid">
+        {!initial && isHO && (
+          <Field label="Branch *">
+            <select className="input" value={form.branchId} onChange={(e) => set('branchId', e.target.value)}>
+              <option value="">Select branch</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.code} — {b.name}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label="Center code *"><input className="input" value={form.code} onChange={(e) => set('code', e.target.value)} /></Field>
         <Field label="Center name *"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Field officer">

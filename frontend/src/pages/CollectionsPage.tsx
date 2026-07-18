@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { DueRow, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
+import { BranchScopeSelect } from '../components/BranchScopeSelect';
 import { InlineClosureReport } from '../components/reports/InlineClosureReport';
 
 const inr = (v: number) =>
@@ -10,6 +11,7 @@ const inr = (v: number) =>
 
 export function CollectionsPage() {
   const { user } = useAuth();
+  const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
@@ -22,7 +24,10 @@ export function CollectionsPage() {
   const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   useEffect(() => {
-    listCenters().then(setCenters).catch((e) => setError(e.message));
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
+  useEffect(() => {
     getSettings().then((s) => setSavings(s.savingsPerCollection)).catch(() => {});
   }, []);
 
@@ -86,7 +91,8 @@ export function CollectionsPage() {
             Working date: {user ? new Date(user.workingDate).toLocaleDateString('en-IN') : '—'}
           </p>
         </div>
-        <div className="toolbar-actions">
+        <div className="toolbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <BranchScopeSelect value={branchId} onChange={setBranchId} />
           <select className="select" value={centerId} onChange={(e) => setCenterId(e.target.value)}>
             <option value="">Select center</option>
             {centers.map((c) => (

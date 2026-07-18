@@ -28,8 +28,9 @@ export class ClientsController {
     @CurrentUser() user: AuthUser,
     @Query('centerId') centerId?: string,
     @Query('q') q?: string,
+    @Query('branchId') branchId?: string,
   ) {
-    return this.clients.list(user, { centerId, q });
+    return this.clients.list(user, { centerId, q, branchId });
   }
 
   // Must be declared before ':id' — otherwise Express would try to match
@@ -37,8 +38,8 @@ export class ClientsController {
   @Roles('BM', 'HO')
   @RequirePermission('member.verify')
   @Get('kyc-pending')
-  kycPending(@CurrentUser() user: AuthUser) {
-    return this.clients.kycPending(user);
+  kycPending(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.clients.kycPending(user, branchId);
   }
 
   @RequirePermission('member.view')

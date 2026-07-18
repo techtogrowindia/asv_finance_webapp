@@ -262,17 +262,17 @@ export class CollectionsService {
   }
 
   /** Loans (in scope) that carry an unapplied advance balance. */
-  async advanceLoans(user: AuthUser) {
+  async advanceLoans(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { loanType: 'OPEN', advanceBalance: { gt: 0 }, client: clientCenterScope(user) },
+        where: { loanType: 'OPEN', advanceBalance: { gt: 0 }, client: clientCenterScope(user, branchId) },
         include: {
           client: {
             select: {
               name: true,
               memberNo: true,
               group: { select: { groupNo: true } },
-              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+              center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
             },
           },
         },
@@ -283,6 +283,8 @@ export class CollectionsService {
         loanAccount: l.loanAccount,
         clientName: l.client.name,
         displayId: `${stripLeadingZeros(l.client.center.branch.code)}.${stripLeadingZeros(l.client.center.code)}.${l.client.group.groupNo}.${l.client.memberNo}`,
+        branchCode: l.client.center.branch.code,
+        branchName: l.client.center.branch.name,
         centerName: `${l.client.center.code} — ${l.client.center.name}`,
         advanceBalance: round2(Number(l.advanceBalance)),
       }));

@@ -54,13 +54,13 @@ export class CentersService {
   // ---- Admin (BM/HO) management --------------------------------------------
 
   /** All centers in scope (incl. inactive), with FDO + member counts. */
-  async adminList(user: AuthUser) {
+  async adminList(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const centers = await tx.center.findMany({
-        where: centerScope(user),
+        where: centerScope(user, branchId),
         orderBy: { code: 'asc' },
         include: {
-          branch: { select: { code: true } },
+          branch: { select: { code: true, name: true } },
           fdo: { select: { id: true, code: true, name: true } },
           _count: { select: { clients: true } },
         },
@@ -108,7 +108,7 @@ export class CentersService {
           },
         },
         include: {
-          branch: { select: { code: true } },
+          branch: { select: { code: true, name: true } },
           fdo: { select: { id: true, code: true, name: true } },
           _count: { select: { clients: true } },
         },
@@ -146,7 +146,7 @@ export class CentersService {
           ...('status' in dto ? { status: dto.status } : {}),
         },
         include: {
-          branch: { select: { code: true } },
+          branch: { select: { code: true, name: true } },
           fdo: { select: { id: true, code: true, name: true } },
           _count: { select: { clients: true } },
         },
@@ -189,7 +189,7 @@ export class CentersService {
     code: string;
     name: string;
     address: string | null;
-    branch: { code: string };
+    branch: { code: string; name: string };
     fdo: { id: string; code: string; name: string } | null;
     meetingDay: string | null;
     meetingTime: string | null;
@@ -208,6 +208,7 @@ export class CentersService {
       name: c.name,
       address: c.address,
       branchCode: c.branch.code,
+      branchName: c.branch.name,
       fdoId: c.fdo?.id ?? null,
       fdoName: c.fdo ? `${c.fdo.code} - ${c.fdo.name}` : null,
       meetingDay: c.meetingDay,

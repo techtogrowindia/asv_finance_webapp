@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { CenterSummary, DueRow, getArrears, getCenterSummary, postCollection } from '../../api/collections';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
 export function ArrearCollectionPage() {
+  const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [summary, setSummary] = useState<CenterSummary | null>(null);
@@ -17,8 +19,9 @@ export function ArrearCollectionPage() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    listCenters().then(setCenters).catch((e) => setError(e.message));
-  }, []);
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
 
   function refresh(cid: string) {
     if (!cid) { setSummary(null); setRows(null); return; }
@@ -55,7 +58,8 @@ export function ArrearCollectionPage() {
           <h1 className="page-title">Arrear Collection</h1>
           <p className="page-sub" style={{ margin: 0 }}>Overdue members only. Collecting reduces the noted overdue.</p>
         </div>
-        <div className="toolbar-actions" style={{ minWidth: 260 }}>
+        <div className="toolbar-actions" style={{ minWidth: 260, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <BranchScopeSelect value={branchId} onChange={setBranchId} />
           <SearchableSelect
             options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))}
             value={centerId}

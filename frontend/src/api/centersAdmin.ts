@@ -6,6 +6,7 @@ export interface AdminCenter {
   name: string;
   address: string | null;
   branchCode: string;
+  branchName: string;
   fdoId: string | null;
   fdoName: string | null;
   meetingDay: string | null;
@@ -30,6 +31,7 @@ export interface CenterBody {
   code: string;
   name: string;
   fdoId?: string | null;
+  branchId?: string;
   address?: string;
   meetingDay?: string;
   meetingTime?: string;
@@ -42,8 +44,10 @@ export interface CenterBody {
   status?: 'ACTIVE' | 'INACTIVE';
 }
 
-export const listAdminCenters = () => api<AdminCenter[]>('/centers/manage');
-export const listFieldOfficers = () => api<FieldOfficer[]>('/employees/field-officers');
+export const listAdminCenters = (branchId?: string) =>
+  api<AdminCenter[]>(`/centers/manage${branchId ? `?branchId=${branchId}` : ''}`);
+export const listFieldOfficers = (branchId?: string) =>
+  api<FieldOfficer[]>(`/employees/field-officers${branchId ? `?branchId=${branchId}` : ''}`);
 export const createCenter = (body: CenterBody) =>
   api<AdminCenter>('/centers', { method: 'POST', body: JSON.stringify(body) });
 export const updateCenter = (id: string, body: Partial<CenterBody>) =>

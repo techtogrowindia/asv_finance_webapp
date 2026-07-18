@@ -30,8 +30,8 @@ export class CentersController {
   @Roles('BM', 'HO')
   @RequirePermission('center.view')
   @Get('manage')
-  adminList(@CurrentUser() user: AuthUser) {
-    return this.centers.adminList(user);
+  adminList(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.centers.adminList(user, branchId);
   }
 
   @Roles('BM', 'HO')

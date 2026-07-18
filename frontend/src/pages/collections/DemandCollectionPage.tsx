@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { BranchScopeSelect } from '../../components/BranchScopeSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { getSettings } from '../../api/settings';
 import { InlineClosureReport } from '../../components/reports/InlineClosureReport';
@@ -18,6 +19,7 @@ const inr = (v: number) =>
 
 export function DemandCollectionPage() {
   const confirm = useConfirm();
+  const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [summary, setSummary] = useState<CenterSummary | null>(null);
@@ -31,7 +33,10 @@ export function DemandCollectionPage() {
   const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
 
   useEffect(() => {
-    listCenters().then(setCenters).catch((e) => setError(e.message));
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
+  useEffect(() => {
     getSettings().then((s) => setSavings(s.savingsPerCollection)).catch(() => {});
   }, []);
 
@@ -96,7 +101,8 @@ export function DemandCollectionPage() {
           <h1 className="page-title">Demand Collection</h1>
           <p className="page-sub" style={{ margin: 0 }}>Center totals and one-tap "everyone paid" collection.</p>
         </div>
-        <div className="toolbar-actions" style={{ minWidth: 260 }}>
+        <div className="toolbar-actions" style={{ minWidth: 260, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+          <BranchScopeSelect value={branchId} onChange={setBranchId} />
           <SearchableSelect
             options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))}
             value={centerId}
