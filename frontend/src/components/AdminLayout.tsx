@@ -14,6 +14,7 @@ const ADMIN_NAV: SideNavItem[] = [
       { to: '/admin/roles', label: 'Roles', perm: ['role.manage'] },
     ],
   },
+  { to: '/admin/branches', label: 'Branches', icon: '▣', perm: ['branch.manage'] },
   { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
   { to: '/admin/kyc-verification', label: 'KYC Verification', icon: '⚿', perm: ['member.verify'] },

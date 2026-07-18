@@ -20,6 +20,7 @@ import { LoanStatementPage } from './pages/LoanStatementPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { MastersPage } from './pages/admin/MastersPage';
 import { CentersPage } from './pages/admin/CentersPage';
+import { BranchesPage } from './pages/admin/BranchesPage';
 import { EmployeesPage } from './pages/admin/EmployeesPage';
 import { LoanVerificationPage } from './pages/admin/LoanVerificationPage';
 import { EodPage } from './pages/admin/EodPage';
@@ -85,6 +86,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <EmployeesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/branches"
+          element={
+            <RequireAuth roles={['HO']} loginPath="/admin">
+              <BranchesPage />
             </RequireAuth>
           }
         />

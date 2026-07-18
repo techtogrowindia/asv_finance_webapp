@@ -10,6 +10,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CentersModule } from './centers/centers.module';
+import { BranchesModule } from './branches/branches.module';
 import { ClientsModule } from './clients/clients.module';
 import { MastersModule } from './masters/masters.module';
 import { LoansModule } from './loans/loans.module';
@@ -29,6 +30,7 @@ import { HealthController } from './health.controller';
     AuthModule,
     DashboardModule,
     CentersModule,
+    BranchesModule,
     ClientsModule,
     MastersModule,
     LoansModule,

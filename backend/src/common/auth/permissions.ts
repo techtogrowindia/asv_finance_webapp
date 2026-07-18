@@ -69,6 +69,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
   {
     group: 'Administration',
     permissions: [
+      { key: 'branch.manage', label: 'Create & manage branches' },
       { key: 'employee.manage', label: 'Manage employees' },
       { key: 'role.manage', label: 'Manage roles & permissions' },
       { key: 'master.manage', label: 'Manage master data' },
