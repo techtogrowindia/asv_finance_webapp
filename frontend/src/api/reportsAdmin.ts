@@ -2,6 +2,8 @@ import { api } from '../lib/api';
 
 export interface DemandRegisterRow {
   centerId: string;
+  branchCode: string;
+  branchName: string;
   centerCode: string;
   centerName: string;
   phone: string | null;
@@ -15,8 +17,10 @@ export interface DemandRegisterRow {
   collected: number;
 }
 
-export const getDemandRegister = (date: string) =>
-  api<DemandRegisterRow[]>(`/reports/demand-register?date=${date}`);
+const branchQs = (branchId?: string) => (branchId ? `&branchId=${branchId}` : '');
+
+export const getDemandRegister = (date: string, branchId?: string) =>
+  api<DemandRegisterRow[]>(`/reports/demand-register?date=${date}${branchQs(branchId)}`);
 
 export interface ZeroCollectionRow {
   branchCode: string;
@@ -100,6 +104,8 @@ export interface CenterWiseRow {
 }
 
 export interface GroupWiseRow {
+  branchCode: string;
+  branchName: string;
   centerCode: string;
   centerName: string;
   groupNo: number;
@@ -147,6 +153,8 @@ export interface ForeclosureReportRow {
   loanAccount: string;
   displayId: string;
   memberName: string;
+  branchCode: string;
+  branchName: string;
   centerCode: string;
   centerName: string;
   disbursalDate: string;
@@ -193,6 +201,8 @@ export interface ParAgingRow {
 
 export interface CollectionRegisterRow {
   date: string;
+  branchCode: string;
+  branchName: string;
   centerCode: string;
   centerName: string;
   displayId: string;
@@ -236,36 +246,36 @@ export interface LoanApplicationReportRow {
   fdoName: string | null;
 }
 
-const qs = (from: string, to: string) => `?from=${from}&to=${to}`;
+const qs = (from: string, to: string, branchId?: string) => `?from=${from}&to=${to}${branchQs(branchId)}`;
 
-export const getZeroCollection = (from: string, to: string) =>
-  api<ZeroCollectionRow[]>(`/reports/zero-collection${qs(from, to)}`);
+export const getZeroCollection = (from: string, to: string, branchId?: string) =>
+  api<ZeroCollectionRow[]>(`/reports/zero-collection${qs(from, to, branchId)}`);
 
-export const getCollectionFollowup = (from: string, to: string) =>
-  api<CollectionFollowupRow[]>(`/reports/collection-followup${qs(from, to)}`);
+export const getCollectionFollowup = (from: string, to: string, branchId?: string) =>
+  api<CollectionFollowupRow[]>(`/reports/collection-followup${qs(from, to, branchId)}`);
 
-export const getAdvanceCollection = (from: string, to: string) =>
-  api<AdvanceCollectionRow[]>(`/reports/advance-collection${qs(from, to)}`);
+export const getAdvanceCollection = (from: string, to: string, branchId?: string) =>
+  api<AdvanceCollectionRow[]>(`/reports/advance-collection${qs(from, to, branchId)}`);
 
-export const getBranchWise = (from: string, to: string) =>
-  api<BranchWiseRow[]>(`/reports/branch-wise${qs(from, to)}`);
-export const getCenterWise = (from: string, to: string) =>
-  api<CenterWiseRow[]>(`/reports/center-wise${qs(from, to)}`);
-export const getGroupWise = (from: string, to: string) =>
-  api<GroupWiseRow[]>(`/reports/group-wise${qs(from, to)}`);
-export const getClientWise = (from: string, to: string, q?: string) =>
-  api<ClientWiseRow[]>(`/reports/client-wise${qs(from, to)}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
-export const getEmployeePerformance = (from: string, to: string) =>
-  api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to)}`);
-export const getForeclosures = (from: string, to: string) =>
-  api<ForeclosureReportRow[]>(`/reports/foreclosures${qs(from, to)}`);
-export const getDisbursementRegister = (from: string, to: string) =>
-  api<DisbursementRow[]>(`/reports/disbursement-register${qs(from, to)}`);
-export const getParAging = (from: string, to: string) =>
-  api<ParAgingRow[]>(`/reports/par-aging${qs(from, to)}`);
-export const getCollectionRegister = (from: string, to: string) =>
-  api<CollectionRegisterRow[]>(`/reports/collection-register${qs(from, to)}`);
-export const getLoanClosures = (from: string, to: string) =>
-  api<ClosureRow[]>(`/reports/loan-closures${qs(from, to)}`);
-export const getLoanApplicationsReport = (from: string, to: string, status?: string) =>
-  api<LoanApplicationReportRow[]>(`/reports/loan-applications${qs(from, to)}${status ? `&status=${status}` : ''}`);
+export const getBranchWise = (from: string, to: string, branchId?: string) =>
+  api<BranchWiseRow[]>(`/reports/branch-wise${qs(from, to, branchId)}`);
+export const getCenterWise = (from: string, to: string, branchId?: string) =>
+  api<CenterWiseRow[]>(`/reports/center-wise${qs(from, to, branchId)}`);
+export const getGroupWise = (from: string, to: string, branchId?: string) =>
+  api<GroupWiseRow[]>(`/reports/group-wise${qs(from, to, branchId)}`);
+export const getClientWise = (from: string, to: string, q?: string, branchId?: string) =>
+  api<ClientWiseRow[]>(`/reports/client-wise${qs(from, to, branchId)}${q ? `&q=${encodeURIComponent(q)}` : ''}`);
+export const getEmployeePerformance = (from: string, to: string, branchId?: string) =>
+  api<EmployeePerformanceRow[]>(`/reports/employee-performance${qs(from, to, branchId)}`);
+export const getForeclosures = (from: string, to: string, branchId?: string) =>
+  api<ForeclosureReportRow[]>(`/reports/foreclosures${qs(from, to, branchId)}`);
+export const getDisbursementRegister = (from: string, to: string, branchId?: string) =>
+  api<DisbursementRow[]>(`/reports/disbursement-register${qs(from, to, branchId)}`);
+export const getParAging = (from: string, to: string, branchId?: string) =>
+  api<ParAgingRow[]>(`/reports/par-aging${qs(from, to, branchId)}`);
+export const getCollectionRegister = (from: string, to: string, branchId?: string) =>
+  api<CollectionRegisterRow[]>(`/reports/collection-register${qs(from, to, branchId)}`);
+export const getLoanClosures = (from: string, to: string, branchId?: string) =>
+  api<ClosureRow[]>(`/reports/loan-closures${qs(from, to, branchId)}`);
+export const getLoanApplicationsReport = (from: string, to: string, status?: string, branchId?: string) =>
+  api<LoanApplicationReportRow[]>(`/reports/loan-applications${qs(from, to, branchId)}${status ? `&status=${status}` : ''}`);

@@ -240,21 +240,23 @@ function Meta({ k, v }: { k: string; v: string }) {
 
 function DemandRegisterDoc({ rows, date }: { rows: DemandRegisterRow[]; date: string }) {
   const cols: Col[] = [
-    { key: 'sino', label: 'SI No', w: 5, align: 'center' },
-    { key: 'center', label: 'Center Name', w: 20 },
-    { key: 'phone', label: 'Phone', w: 9 },
-    { key: 'clients', label: 'Clients', w: 6, align: 'center' },
-    { key: 'pending', label: 'Pending', w: 7, align: 'center' },
-    { key: 'avg', label: 'Avg Due', w: 6, align: 'center' },
-    { key: 'meeting', label: 'Meeting', w: 9 },
-    { key: 'os', label: 'Loan OS', w: 11, align: 'right' },
-    { key: 'arrear', label: 'Arrear', w: 10, align: 'right' },
-    { key: 'demand', label: 'Demand', w: 10, align: 'right' },
-    { key: 'coll', label: 'Collected', w: 10, align: 'right' },
-    { key: 'sign', label: 'CL Sign', w: 10 },
+    { key: 'sino', label: 'SI No', w: 4, align: 'center' },
+    { key: 'branch', label: 'Branch', w: 12 },
+    { key: 'center', label: 'Center Name', w: 16 },
+    { key: 'phone', label: 'Phone', w: 8 },
+    { key: 'clients', label: 'Clients', w: 5, align: 'center' },
+    { key: 'pending', label: 'Pending', w: 6, align: 'center' },
+    { key: 'avg', label: 'Avg Due', w: 5, align: 'center' },
+    { key: 'meeting', label: 'Meeting', w: 8 },
+    { key: 'os', label: 'Loan OS', w: 10, align: 'right' },
+    { key: 'arrear', label: 'Arrear', w: 9, align: 'right' },
+    { key: 'demand', label: 'Demand', w: 9, align: 'right' },
+    { key: 'coll', label: 'Collected', w: 9, align: 'right' },
+    { key: 'sign', label: 'CL Sign', w: 9 },
   ];
   const body = rows.map((r, i) => ({
     sino: String(i + 1),
+    branch: `${r.branchCode}-${r.branchName}`,
     center: `${r.centerCode}-${r.centerName}`,
     phone: r.phone ?? '—',
     clients: String(r.clientCount),
@@ -268,7 +270,7 @@ function DemandRegisterDoc({ rows, date }: { rows: DemandRegisterRow[]; date: st
     { clients: 0, pending: 0, os: 0, arrear: 0, demand: 0, coll: 0 },
   );
   const total = {
-    sino: '', center: 'Grand Total', phone: '', clients: String(t.clients), pending: String(t.pending),
+    sino: '', branch: '', center: 'Grand Total', phone: '', clients: String(t.clients), pending: String(t.pending),
     avg: '', meeting: '', os: inr(t.os), arrear: inr(t.arrear), demand: inr(t.demand), coll: inr(t.coll), sign: '',
   };
 

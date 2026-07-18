@@ -55,13 +55,14 @@ export class ReportsService {
    * installment number reached, loan O/s, arrear, demand and same-day
    * collection, plus a blank signature column for the center's meeting.
    */
-  async demandRegister(user: AuthUser, asOf: Date) {
+  async demandRegister(user: AuthUser, asOf: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const centers = await tx.center.findMany({
-        where: centerScope(user),
+        where: centerScope(user, branchId),
         orderBy: { code: 'asc' },
         select: {
           id: true, code: true, name: true, mobile: true, meetingTime: true,
+          branch: { select: { code: true, name: true } },
           clients: {
             where: { isActive: true },
             select: {
@@ -104,6 +105,8 @@ export class ReportsService {
 
           return {
             centerId: center.id,
+            branchCode: center.branch.code,
+            branchName: center.branch.name,
             centerCode: center.code,
             centerName: center.name,
             phone: center.mobile,
@@ -129,10 +132,10 @@ export class ReportsService {
    * follow-up calling. One row per uncollected due, with opening arrear
    * (unpaid balance from before the window) and both phone numbers.
    */
-  async zeroCollection(user: AuthUser, from: Date, to: Date) {
+  async zeroCollection(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { loanType: 'OPEN', client: { center: centerScope(user) } },
+        where: { loanType: 'OPEN', client: { center: centerScope(user, branchId) } },
         include: LOAN_INCLUDE,
       });
 
@@ -174,10 +177,10 @@ export class ReportsService {
   }
 
   /** Per-loan arrears summary for dues within [from, to]: opening → demand → collected → closing arrear. */
-  async collectionFollowup(user: AuthUser, from: Date, to: Date) {
+  async collectionFollowup(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { client: { center: centerScope(user) } },
+        where: { client: { center: centerScope(user, branchId) } },
         include: LOAN_INCLUDE,
       });
 
@@ -218,10 +221,10 @@ export class ReportsService {
   }
 
   /** Upcoming (not-yet-due) installments within [from, to], so FDOs can plan ahead. */
-  async advanceCollection(user: AuthUser, from: Date, to: Date) {
+  async advanceCollection(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { loanType: 'OPEN', client: { center: centerScope(user) } },
+        where: { loanType: 'OPEN', client: { center: centerScope(user, branchId) } },
         include: LOAN_INCLUDE,
       });
 
@@ -263,9 +266,9 @@ export class ReportsService {
   // ---- Portfolio summary reports (disbursement/collection within [from, to],
   //      outstanding/arrear as of the window's end date) ----------------------
 
-  private async portfolioLoans(tx: Prisma.TransactionClient, user: AuthUser) {
+  private async portfolioLoans(tx: Prisma.TransactionClient, user: AuthUser, branchId?: string) {
     return tx.loan.findMany({
-      where: { client: { center: centerScope(user) } },
+      where: { client: { center: centerScope(user, branchId) } },
       select: {
         loanType: true,
         loanAmount: true,
@@ -299,17 +302,17 @@ export class ReportsService {
   }
 
   /** Branch-wise portfolio (mainly useful for HO; BM sees their one branch). */
-  async branchWise(user: AuthUser, from: Date, to: Date) {
+  async branchWise(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const branchWhere: Prisma.BranchWhereInput = user.role === 'BM' ? { id: user.branchId ?? undefined } : {};
       const [branches, centers, clients, allLoans] = await Promise.all([
         tx.branch.findMany({ where: branchWhere, orderBy: { code: 'asc' } }),
-        tx.center.findMany({ where: centerScope(user), select: { id: true, branchId: true } }),
+        tx.center.findMany({ where: centerScope(user, branchId), select: { id: true, branchId: true } }),
         tx.client.findMany({
-          where: { isActive: true, center: centerScope(user) },
+          where: { isActive: true, center: centerScope(user, branchId) },
           select: { id: true, center: { select: { branchId: true } } },
         }),
-        this.portfolioLoans(tx, user),
+        this.portfolioLoans(tx, user, branchId),
       ]);
       const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
@@ -342,11 +345,11 @@ export class ReportsService {
   }
 
   /** Center-wise portfolio, scoped like everything else (FDO/BM/HO). */
-  async centerWise(user: AuthUser, from: Date, to: Date) {
+  async centerWise(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const [centers, allLoans] = await Promise.all([
         tx.center.findMany({
-          where: centerScope(user),
+          where: centerScope(user, branchId),
           orderBy: { code: 'asc' },
           include: {
             branch: { select: { code: true, workingDate: true } },
@@ -354,7 +357,7 @@ export class ReportsService {
             _count: { select: { clients: true, groups: true } },
           },
         }),
-        this.portfolioLoans(tx, user),
+        this.portfolioLoans(tx, user, branchId),
       ]);
       const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
@@ -389,18 +392,18 @@ export class ReportsService {
   }
 
   /** Group-wise portfolio (JLG joint-liability unit — 5 members). */
-  async groupWise(user: AuthUser, from: Date, to: Date) {
+  async groupWise(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const [groups, allLoans] = await Promise.all([
         tx.groupUnit.findMany({
-          where: { center: centerScope(user) },
+          where: { center: centerScope(user, branchId) },
           orderBy: [{ center: { code: 'asc' } }, { groupNo: 'asc' }],
           include: {
-            center: { select: { code: true, name: true, branch: { select: { workingDate: true } } } },
+            center: { select: { code: true, name: true, branch: { select: { code: true, name: true, workingDate: true } } } },
             _count: { select: { clients: true } },
           },
         }),
-        this.portfolioLoans(tx, user),
+        this.portfolioLoans(tx, user, branchId),
       ]);
       const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
@@ -417,6 +420,8 @@ export class ReportsService {
           { disbursed: 0, outstanding: 0, arrear: 0 },
         );
         return {
+          branchCode: group.center.branch.code,
+          branchName: group.center.branch.name,
           centerCode: group.center.code,
           centerName: group.center.name,
           groupNo: group.groupNo,
@@ -431,9 +436,9 @@ export class ReportsService {
   }
 
   /** Client-wise loan book: one row per loan (disbursed on/before `to`), optionally filtered by search text. */
-  async clientWise(user: AuthUser, from: Date, to: Date, q?: string) {
+  async clientWise(user: AuthUser, from: Date, to: Date, q?: string, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
-      const allLoans = await this.portfolioLoans(tx, user);
+      const allLoans = await this.portfolioLoans(tx, user, branchId);
       const loans = allLoans.filter((l) => l.disbursalDate <= to);
       const needle = q?.trim().toLowerCase();
 
@@ -470,7 +475,7 @@ export class ReportsService {
   }
 
   /** Field-officer performance: portfolio managed + collection efficiency within [from, to]. */
-  async employeePerformance(user: AuthUser, from: Date, to: Date) {
+  async employeePerformance(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const fdoWhere: Prisma.EmployeeWhereInput = {
         role: 'FDO',
@@ -485,7 +490,7 @@ export class ReportsService {
             managing: { select: { id: true } },
           },
         }),
-        this.portfolioLoans(tx, user),
+        this.portfolioLoans(tx, user, branchId),
       ]);
       const loans = allLoans.filter((l) => l.disbursalDate <= to);
 
@@ -537,10 +542,10 @@ export class ReportsService {
   /** Foreclosed loans closed within [from, to] — closure certificates. Amounts
    *  (principal, interest charged/waived, charge, payoff) come from the FORECLOSE
    *  audit entry written at closure. */
-  async foreclosureReport(user: AuthUser, from: Date, to: Date) {
+  async foreclosureReport(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user, branchId) } },
         orderBy: { closedDate: 'desc' },
         include: {
           client: {
@@ -548,7 +553,7 @@ export class ReportsService {
               name: true,
               memberNo: true,
               group: { select: { groupNo: true } },
-              center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+              center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
             },
           },
         },
@@ -572,6 +577,8 @@ export class ReportsService {
             loanAccount: l.loanAccount,
             displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
             memberName: c.name,
+            branchCode: c.center.branch.code,
+            branchName: c.center.branch.name,
             centerCode: c.center.code,
             centerName: c.center.name,
             disbursalDate: l.disbursalDate,
@@ -589,10 +596,10 @@ export class ReportsService {
   }
 
   /** Loans disbursed within [from, to] — disbursement register. */
-  async disbursementRegister(user: AuthUser, from: Date, to: Date) {
+  async disbursementRegister(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { disbursalDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        where: { disbursalDate: { gte: from, lte: to }, client: { center: centerScope(user, branchId) } },
         orderBy: { disbursalDate: 'desc' },
         include: LOAN_INCLUDE,
       });
@@ -620,9 +627,9 @@ export class ReportsService {
 
   /** Portfolio-at-risk: open loans overdue as of the window end (`to`), bucketed
    *  by how long the oldest unpaid installment has been overdue (1–7/8–30/31–90/90+). */
-  async parAging(user: AuthUser, _from: Date, to: Date) {
+  async parAging(user: AuthUser, _from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
-      const loans = await this.portfolioLoans(tx, user);
+      const loans = await this.portfolioLoans(tx, user, branchId);
       const rows: unknown[] = [];
       for (const l of loans) {
         if (l.loanType !== 'OPEN') continue;
@@ -657,22 +664,22 @@ export class ReportsService {
 
   /** Day-book: every collection posting within [from, to], loan receipts and
    *  savings deposits/refunds interleaved, newest first. */
-  async collectionRegister(user: AuthUser, from: Date, to: Date) {
+  async collectionRegister(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const clientSel = {
         name: true,
         memberNo: true,
         group: { select: { groupNo: true } },
-        center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+        center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
       } as const;
 
       const [collections, savings] = await Promise.all([
         tx.collection.findMany({
-          where: { collectedOn: { gte: from, lte: to }, loan: { client: { center: centerScope(user) } } },
+          where: { collectedOn: { gte: from, lte: to }, loan: { client: { center: centerScope(user, branchId) } } },
           include: { loan: { select: { loanAccount: true, client: { select: clientSel } } } },
         }),
         tx.savingsTxn.findMany({
-          where: { collectedOn: { gte: from, lte: to }, client: { center: centerScope(user) } },
+          where: { collectedOn: { gte: from, lte: to }, client: { center: centerScope(user, branchId) } },
           include: { client: { select: clientSel } },
         }),
       ]);
@@ -685,6 +692,8 @@ export class ReportsService {
           const c = col.loan.client;
           return {
             date: col.collectedOn,
+            branchCode: c.center.branch.code,
+            branchName: c.center.branch.name,
             centerCode: c.center.code,
             centerName: c.center.name,
             displayId: disp(c),
@@ -701,6 +710,8 @@ export class ReportsService {
           const c = s.client;
           return {
             date: s.collectedOn,
+            branchCode: c.center.branch.code,
+            branchName: c.center.branch.name,
             centerCode: c.center.code,
             centerName: c.center.name,
             displayId: disp(c),
@@ -720,10 +731,10 @@ export class ReportsService {
   }
 
   /** Normally-closed loans (fully repaid, not foreclosed) closed within [from, to]. */
-  async closureReport(user: AuthUser, from: Date, to: Date) {
+  async closureReport(user: AuthUser, from: Date, to: Date, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loans = await tx.loan.findMany({
-        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user) } },
+        where: { loanType: 'CLOSED', closedDate: { gte: from, lte: to }, client: { center: centerScope(user, branchId) } },
         orderBy: { closedDate: 'desc' },
         include: LOAN_INCLUDE,
       });
@@ -761,13 +772,13 @@ export class ReportsService {
 
   /** Loan applications submitted within [from, to] across all in-scope branches
    *  & centers (BM: own branch, HO: whole tenant), with the disbursed loan a/c. */
-  async loanApplicationsReport(user: AuthUser, from: Date, to: Date, status?: 'PENDING' | 'APPROVED' | 'REJECTED') {
+  async loanApplicationsReport(user: AuthUser, from: Date, to: Date, status?: 'PENDING' | 'APPROVED' | 'REJECTED', branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const apps = await tx.loanApplication.findMany({
         where: {
           createdAt: { gte: from, lte: to },
           ...(status ? { status } : {}),
-          client: { center: centerScope(user) },
+          client: { center: centerScope(user, branchId) },
         },
         orderBy: { createdAt: 'desc' },
         include: {

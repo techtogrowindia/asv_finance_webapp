@@ -1,6 +1,7 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { useAuth } from '../../auth/AuthContext';
+import { BranchLite, listAdminBranches } from '../../api/employeesAdmin';
 import { downloadCsv } from '../../lib/csv';
 import { downloadXlsx } from '../../lib/xlsx';
 import { Preset, PRESETS, presetRange } from '../../lib/dateFilter';
@@ -68,15 +69,44 @@ const inr = (v: string | number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
 
+// Selected report branch filter, provided to every tab. '' = all branches (HO
+// only). For a BM the backend forces their own branch regardless, so the value
+// is informational — the selector is locked to their branch.
+const BranchFilterContext = createContext<string>('');
+const useReportBranch = () => useContext(BranchFilterContext);
+
 export function ReportsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const isBM = user?.role === 'BM';
   const tabs = TABS.filter((t) => can(t.perm));
   const [tab, setTab] = useState<Tab>(tabs[0]?.id ?? 'zero');
+  const [branches, setBranches] = useState<BranchLite[]>([]);
+  const [branchId, setBranchId] = useState('');
+
+  useEffect(() => {
+    listAdminBranches()
+      .then((bs) => {
+        setBranches(bs);
+        if (isBM && bs.length) setBranchId(bs[0].id); // BM: locked to their one branch
+      })
+      .catch(() => {});
+  }, [isBM]);
 
   return (
     <AdminLayout>
       <h1 className="page-title no-print">Reports</h1>
       <p className="page-sub no-print">Portfolio summaries and daily monitoring — filter by any period and export to CSV or Excel.</p>
+
+      <div className="form-card no-print" style={{ maxWidth: 'none', marginBottom: 16, padding: 16 }}>
+        <div className="field" style={{ marginBottom: 0, maxWidth: 340 }}>
+          <label>Branch</label>
+          <select className="input" value={branchId} disabled={isBM} onChange={(e) => setBranchId(e.target.value)}>
+            {!isBM && <option value="">All branches</option>}
+            {branches.map((b) => <option key={b.id} value={b.id}>{b.code} — {b.name}</option>)}
+          </select>
+          {isBM && <div className="hint" style={{ marginTop: 6 }}>Scoped to your branch.</div>}
+        </div>
+      </div>
 
       <div className="report-layout">
         <nav className="report-menu no-print">
@@ -91,11 +121,12 @@ export function ReportsPage() {
           ))}
         </nav>
 
+        <BranchFilterContext.Provider value={branchId}>
         <div className="report-content">
           {tab === 'demand' && <DemandRegisterTab />}
-          {tab === 'ledger' && <LoanLedgerTab />}
-          {tab === 'savingsledger' && <SavingsLedgerReport />}
-          {tab === 'statement' && <CombinedStatementReport />}
+          {tab === 'ledger' && <LoanLedgerTab branchId={branchId} />}
+          {tab === 'savingsledger' && <SavingsLedgerReport branchId={branchId} />}
+          {tab === 'statement' && <CombinedStatementReport branchId={branchId} />}
           {tab === 'zero' && <ZeroCollectionTab />}
           {tab === 'followup' && <CollectionFollowupTab />}
           {tab === 'advance' && <AdvanceCollectionTab />}
@@ -109,6 +140,7 @@ export function ReportsPage() {
           {tab === 'closure' && <ClosureTab />}
           {tab === 'savings' && <SavingsTab />}
         </div>
+        </BranchFilterContext.Provider>
       </div>
     </AdminLayout>
   );
@@ -182,6 +214,7 @@ function DateFilterBar({
 // Demand Register — printable centerwise register, single "as of" date.
 
 function DemandRegisterTab() {
+  const branchId = useReportBranch();
   const [date, setDate] = useState(presetRange('today').from);
   const [preset, setPreset] = useState<'today' | 'yesterday' | 'custom'>('today');
   const [rows, setRows] = useState<DemandRegisterRow[] | null>(null);
@@ -196,7 +229,7 @@ function DemandRegisterTab() {
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getDemandRegister(date)); }
+    try { setRows(await getDemandRegister(date, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -256,7 +289,7 @@ function DemandRegisterTab() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>SI No</th><th>Center Name</th><th>Phone</th><th>No. of Clients</th>
+                    <th>SI No</th><th>Branch</th><th>Center Name</th><th>Phone</th><th>No. of Clients</th>
                     <th>Pending Apps</th><th>Avg. Due No</th><th>Meeting Time</th>
                     <th>Loan OS</th><th>Arrear</th><th>Demand</th><th>Collected</th><th>CL Signature</th>
                   </tr>
@@ -265,6 +298,7 @@ function DemandRegisterTab() {
                   {rows.map((r, i) => (
                     <tr key={r.centerId}>
                       <td>{i + 1}</td>
+                      <td>{r.branchCode}-{r.branchName}</td>
                       <td>{r.centerCode}-{r.centerName}</td>
                       <td>{r.phone ?? '—'}</td>
                       <td>{r.clientCount}</td>
@@ -278,10 +312,10 @@ function DemandRegisterTab() {
                       <td></td>
                     </tr>
                   ))}
-                  {rows.length === 0 && <tr><td colSpan={12} className="empty">No centers in scope.</td></tr>}
+                  {rows.length === 0 && <tr><td colSpan={13} className="empty">No centers in scope.</td></tr>}
                   {rows.length > 0 && (
                     <tr style={{ fontWeight: 700 }}>
-                      <td colSpan={3}>Grand Total</td>
+                      <td colSpan={4}>Grand Total</td>
                       <td>{totals.clients}</td>
                       <td>{totals.pending}</td>
                       <td></td>
@@ -307,13 +341,14 @@ function DemandRegisterTab() {
 
 function ZeroCollectionTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<ZeroCollectionRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getZeroCollection(filter.from, filter.to)); }
+    try { setRows(await getZeroCollection(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -337,7 +372,7 @@ function ZeroCollectionTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Member</th><th>Client ID</th><th>Loan A/c</th><th>Loan Amt</th>
+                  <th>Branch</th><th>Center</th><th>Member</th><th>Client ID</th><th>Loan A/c</th><th>Loan Amt</th>
                   <th>Due Date</th><th>Freq</th><th>Opening Arr</th><th>Missed Dues</th><th>Demand</th>
                   <th>Balance</th><th>Phone</th><th>Nominee Phone</th><th>FDO</th>
                 </tr>
@@ -345,6 +380,7 @@ function ZeroCollectionTab() {
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
                     <td className="mono">{r.displayId}</td>
@@ -361,7 +397,7 @@ function ZeroCollectionTab() {
                     <td>{r.fdoName ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={14} className="empty">No zero-collection members in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={15} className="empty">No zero-collection members in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -375,13 +411,14 @@ function ZeroCollectionTab() {
 
 function CollectionFollowupTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<CollectionFollowupRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getCollectionFollowup(filter.from, filter.to)); }
+    try { setRows(await getCollectionFollowup(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -405,7 +442,7 @@ function CollectionFollowupTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th><th>Loan Amt</th>
+                  <th>Branch</th><th>Center</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th><th>Loan Amt</th>
                   <th>Opening Arr</th><th>Due Amt</th><th>Coll. Amt</th><th>Closing Arr</th>
                   <th>Comp. Dues</th><th>Coll. Dues</th><th>Total Dues</th><th>Status</th>
                 </tr>
@@ -413,6 +450,7 @@ function CollectionFollowupTab() {
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
                     <td className="mono">{r.loanAccount}</td>
@@ -428,7 +466,7 @@ function CollectionFollowupTab() {
                     <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={13} className="empty">No loans with dues in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={14} className="empty">No loans with dues in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -442,13 +480,14 @@ function CollectionFollowupTab() {
 
 function AdvanceCollectionTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<AdvanceCollectionRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getAdvanceCollection(filter.from, filter.to)); }
+    try { setRows(await getAdvanceCollection(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -472,13 +511,14 @@ function AdvanceCollectionTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Member</th><th>Loan A/c</th><th>Due Amt</th><th>To Be Collected</th>
+                  <th>Branch</th><th>Center</th><th>Member</th><th>Loan A/c</th><th>Due Amt</th><th>To Be Collected</th>
                   <th>Due Date</th><th>Paid Date</th><th>Status</th><th>Arrear</th><th>Loan OS</th><th>Meeting Day</th>
                 </tr>
               </thead>
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td>{r.memberName}</td>
                     <td className="mono">{r.loanAccount}</td>
@@ -492,7 +532,7 @@ function AdvanceCollectionTab() {
                     <td>{r.meetingDay ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={11} className="empty">No upcoming dues in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={12} className="empty">No upcoming dues in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -514,6 +554,7 @@ type PortfolioLevel = 'branch' | 'center' | 'group' | 'client';
  *  date filter and export, just a different aggregation grain and columns. */
 function PortfolioSummaryTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [level, setLevel] = useState<PortfolioLevel>('branch');
   const [q, setQ] = useState('');
   const [branchRows, setBranchRows] = useState<BranchWiseRow[] | null>(null);
@@ -526,10 +567,10 @@ function PortfolioSummaryTab() {
   async function show() {
     setError(''); setBusy(true);
     try {
-      if (level === 'branch') setBranchRows(await getBranchWise(filter.from, filter.to));
-      else if (level === 'center') setCenterRows(await getCenterWise(filter.from, filter.to));
-      else if (level === 'group') setGroupRows(await getGroupWise(filter.from, filter.to));
-      else setClientRows(await getClientWise(filter.from, filter.to, q || undefined));
+      if (level === 'branch') setBranchRows(await getBranchWise(filter.from, filter.to, branchId));
+      else if (level === 'center') setCenterRows(await getCenterWise(filter.from, filter.to, branchId));
+      else if (level === 'group') setGroupRows(await getGroupWise(filter.from, filter.to, branchId));
+      else setClientRows(await getClientWise(filter.from, filter.to, q || undefined, branchId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
@@ -652,13 +693,14 @@ function GroupWiseTable({ rows }: { rows: GroupWiseRow[] }) {
       <table className="data">
         <thead>
           <tr>
-            <th>Center</th><th>Group</th><th>Members</th><th>Open Loans</th>
+            <th>Branch</th><th>Center</th><th>Group</th><th>Members</th><th>Open Loans</th>
             <th>Disbursement</th><th>Portfolio OS</th><th>Arrear</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i}>
+              <td>{r.branchCode} — {r.branchName}</td>
               <td>{r.centerCode} — {r.centerName}</td>
               <td>Group {r.groupNo}</td>
               <td>{r.members}</td>
@@ -668,7 +710,7 @@ function GroupWiseTable({ rows }: { rows: GroupWiseRow[] }) {
               <td>{inr(r.arrear)}</td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={7} className="empty">No groups found.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={8} className="empty">No groups found.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -683,13 +725,14 @@ function ClientWiseTable({ rows }: { rows: ClientWiseRow[] }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
+              <th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Disb. Date</th>
               <th>Loan Amt</th><th>Total Dues</th><th>Portfolio OS</th><th>Arrear</th><th>Collected</th><th>Status</th>
             </tr>
           </thead>
           <tbody>
             {(p.pageRows ?? []).map((r, i) => (
               <tr key={i}>
+                <td>{r.branchCode}</td>
                 <td>{r.centerCode} — {r.centerName}</td>
                 <td className="mono">{r.displayId}</td>
                 <td>{r.memberName}</td>
@@ -703,7 +746,7 @@ function ClientWiseTable({ rows }: { rows: ClientWiseRow[] }) {
                 <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans found.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={12} className="empty">No loans found.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -714,13 +757,14 @@ function ClientWiseTable({ rows }: { rows: ClientWiseRow[] }) {
 
 function EmployeePerformanceTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<EmployeePerformanceRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getEmployeePerformance(filter.from, filter.to)); }
+    try { setRows(await getEmployeePerformance(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -777,6 +821,7 @@ function EmployeePerformanceTab() {
 
 function LoanApplicationsReportTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [status, setStatus] = useState('');
   const [rows, setRows] = useState<LoanApplicationReportRow[] | null>(null);
   const [error, setError] = useState('');
@@ -784,7 +829,7 @@ function LoanApplicationsReportTab() {
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getLoanApplicationsReport(filter.from, filter.to, status || undefined)); }
+    try { setRows(await getLoanApplicationsReport(filter.from, filter.to, status || undefined, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -818,7 +863,7 @@ function LoanApplicationsReportTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>App No</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Product</th>
+                  <th>App No</th><th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Product</th>
                   <th>Purpose</th><th>Amount</th><th>Applied</th><th>Status</th><th>FDO</th>
                 </tr>
               </thead>
@@ -826,6 +871,7 @@ function LoanApplicationsReportTab() {
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td className="mono">{r.appNo ?? '—'}</td>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -838,7 +884,7 @@ function LoanApplicationsReportTab() {
                     <td>{r.fdoName ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={11} className="empty">No applications in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={12} className="empty">No applications in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -852,13 +898,14 @@ function LoanApplicationsReportTab() {
 
 function DisbursementTab() {
   const filter = useDateFilter('month');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<DisbursementRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getDisbursementRegister(filter.from, filter.to)); }
+    try { setRows(await getDisbursementRegister(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -882,13 +929,14 @@ function DisbursementTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th><th>Product</th>
+                  <th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th><th>Product</th>
                   <th>Disb. Date</th><th>Loan Amt</th><th>Interest</th><th>Total</th><th>Dues</th><th>FDO</th>
                 </tr>
               </thead>
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -903,7 +951,7 @@ function DisbursementTab() {
                     <td>{r.fdoName ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={12} className="empty">No disbursements in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={13} className="empty">No disbursements in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -917,13 +965,14 @@ function DisbursementTab() {
 
 function ParAgingTab() {
   const filter = useDateFilter('today');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<ParAgingRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getParAging(filter.from, filter.to)); }
+    try { setRows(await getParAging(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -948,13 +997,14 @@ function ParAgingTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
+                  <th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
                   <th>Loan OS</th><th>Overdue</th><th>Days Overdue</th><th>Bucket</th><th>FDO</th>
                 </tr>
               </thead>
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -966,7 +1016,7 @@ function ParAgingTab() {
                     <td>{r.fdoName ?? '—'}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={9} className="empty">No overdue loans as of this date.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={10} className="empty">No overdue loans as of this date.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -980,13 +1030,14 @@ function ParAgingTab() {
 
 function CollectionRegisterTab() {
   const filter = useDateFilter('today');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<CollectionRegisterRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getCollectionRegister(filter.from, filter.to)); }
+    try { setRows(await getCollectionRegister(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -1011,7 +1062,7 @@ function CollectionRegisterTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Date</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
+                  <th>Date</th><th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th>
                   <th>Type</th><th>Kind</th><th>Principal</th><th>Interest</th><th>Amount</th>
                 </tr>
               </thead>
@@ -1019,6 +1070,7 @@ function CollectionRegisterTab() {
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
                     <td>{date(r.date)}</td>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -1030,9 +1082,9 @@ function CollectionRegisterTab() {
                     <td>{inr(r.amount)}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={10} className="empty">No receipts in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No receipts in this window.</td></tr>}
                 {rows.length > 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: 'right', fontWeight: 700 }}>Total received</td><td style={{ fontWeight: 700 }}>{inr(total)}</td></tr>
+                  <tr><td colSpan={10} style={{ textAlign: 'right', fontWeight: 700 }}>Total received</td><td style={{ fontWeight: 700 }}>{inr(total)}</td></tr>
                 )}
               </tbody>
             </table>
@@ -1047,13 +1099,14 @@ function CollectionRegisterTab() {
 
 function ClosureTab() {
   const filter = useDateFilter('year');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<ClosureRow[] | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getLoanClosures(filter.from, filter.to)); }
+    try { setRows(await getLoanClosures(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -1077,13 +1130,14 @@ function ClosureTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th>
+                  <th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Cycle</th>
                   <th>Disb. Date</th><th>Loan Amt</th><th>Total</th><th>Repaid</th><th>Closed On</th>
                 </tr>
               </thead>
               <tbody>
                 {(p.pageRows ?? []).map((r, i) => (
                   <tr key={i}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -1096,7 +1150,7 @@ function ClosureTab() {
                     <td>{date(r.closedDate)}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={10} className="empty">No loans closed in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={11} className="empty">No loans closed in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1110,6 +1164,7 @@ function ClosureTab() {
 
 function ForeclosureTab() {
   const filter = useDateFilter('year');
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<ForeclosureReportRow[] | null>(null);
   const [selected, setSelected] = useState<ForeclosureReportRow | null>(null);
   const [error, setError] = useState('');
@@ -1117,7 +1172,7 @@ function ForeclosureTab() {
 
   async function show() {
     setError(''); setBusy(true);
-    try { setRows(await getForeclosures(filter.from, filter.to)); }
+    try { setRows(await getForeclosures(filter.from, filter.to, branchId)); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setBusy(false); }
   }
@@ -1138,6 +1193,7 @@ function ForeclosureTab() {
             <div className="detail-grid" style={{ marginBottom: 20 }}>
               <Item k="Client ID" v={selected.displayId} />
               <Item k="Client Name" v={selected.memberName} />
+              <Item k="Branch" v={`${selected.branchCode} — ${selected.branchName}`} />
               <Item k="Center" v={`${selected.centerCode} — ${selected.centerName}`} />
               <Item k="Loan Account" v={selected.loanAccount} />
               <Item k="Disbursed" v={date(selected.disbursalDate)} />
@@ -1175,13 +1231,14 @@ function ForeclosureTab() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Closed On</th>
+                  <th>Branch</th><th>Center</th><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Closed On</th>
                   <th>Principal</th><th>Interest</th><th>Waived</th><th>Charge</th><th>Total Paid</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.loanId}>
+                    <td>{r.branchCode}</td>
                     <td>{r.centerCode} — {r.centerName}</td>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.memberName}</td>
@@ -1195,7 +1252,7 @@ function ForeclosureTab() {
                     <td><button className="btn btn-primary btn-sm" onClick={() => setSelected(r)}>Report</button></td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={11} className="empty">No foreclosures in this window.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={12} className="empty">No foreclosures in this window.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1206,10 +1263,11 @@ function ForeclosureTab() {
 }
 
 function SavingsTab() {
+  const branchId = useReportBranch();
   const [rows, setRows] = useState<SavingsBalance[] | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => { getSavingsBalances().then(setRows).catch((e) => setError(e.message)); }, []);
+  useEffect(() => { getSavingsBalances(branchId).then(setRows).catch((e) => setError(e.message)); }, [branchId]);
 
   return (
     <div className="panel">
@@ -1223,19 +1281,20 @@ function SavingsTab() {
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
-                <tr><th>Client ID</th><th>Member</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th></tr>
+                <tr><th>Client ID</th><th>Member</th><th>Branch</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.clientId}>
                     <td className="mono">{r.displayId}</td>
                     <td>{r.clientName}</td>
+                    <td>{r.branchCode} — {r.branchName}</td>
                     <td>{r.centerName}</td>
                     <td>{inr(r.savingsBalance)}</td>
                     <td>{r.hasOpenLoan ? <span className="badge active">Open loan</span> : <span className="badge closed">No open loan</span>}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={5} className="empty">No clients are holding savings.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={6} className="empty">No clients are holding savings.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -1256,7 +1315,7 @@ function Item({ k, v }: { k: string; v: string }) {
 // Loan Ledger — pick a center + type, list its loans, open a full ledger
 // (mirrors the employee portal's Client Loan Schedule).
 
-function LoanLedgerTab() {
+function LoanLedgerTab({ branchId }: { branchId: string }) {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [type, setType] = useState<'OPEN' | 'CLOSED' | 'ALL'>('OPEN');
@@ -1265,7 +1324,10 @@ function LoanLedgerTab() {
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
   useEffect(() => {
     setLedger(null);
     if (!centerId) { setLoans(null); return; }
@@ -1317,12 +1379,14 @@ function LoanLedgerTab() {
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
-                <tr><th>Client ID</th><th>Client Name</th><th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th></th></tr>
+                <tr><th>Client ID</th><th>Branch</th><th>Center</th><th>Client Name</th><th>Loan A/c</th><th>Disb. Date</th><th>Amount</th><th></th></tr>
               </thead>
               <tbody>
                 {loans.map((l) => (
                   <tr key={l.id}>
                     <td className="mono">{l.displayId}</td>
+                    <td>{l.branchCode} — {l.branchName}</td>
+                    <td>{l.centerCode} — {l.centerName}</td>
                     <td>{l.clientName}</td>
                     <td className="mono">{l.loanAccount}</td>
                     <td>{date(l.disbursalDate)}</td>
@@ -1330,7 +1394,7 @@ function LoanLedgerTab() {
                     <td><button className="btn btn-primary btn-sm" disabled={loadingLedger} onClick={() => viewLedger(l.id)}>View ledger</button></td>
                   </tr>
                 ))}
-                {loans.length === 0 && <tr><td colSpan={6} className="empty">No {type === 'ALL' ? '' : type.toLowerCase() + ' '}loans in this center.</td></tr>}
+                {loans.length === 0 && <tr><td colSpan={8} className="empty">No {type === 'ALL' ? '' : type.toLowerCase() + ' '}loans in this center.</td></tr>}
               </tbody>
             </table>
           </div>

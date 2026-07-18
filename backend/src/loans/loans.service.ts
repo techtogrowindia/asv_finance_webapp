@@ -72,7 +72,7 @@ export class LoansService {
     return this.prisma.withTenant(user, async (tx) => {
       const center = await tx.center.findFirst({
         where: { id: centerId, ...centerScope(user) },
-        include: { branch: { select: { code: true } } },
+        include: { branch: { select: { code: true, name: true } } },
       });
       if (!center) throw new ForbiddenException('Center not assigned to you');
 
@@ -91,6 +91,10 @@ export class LoansService {
         id: loan.id,
         loanAccount: loan.loanAccount,
         displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
+        branchCode: center.branch.code,
+        branchName: center.branch.name,
+        centerCode: center.code,
+        centerName: center.name,
         clientName: loan.client.name,
         disbursalDate: loan.disbursalDate,
         loanAmount: loan.loanAmount,
@@ -633,7 +637,7 @@ export class LoansService {
     return this.prisma.withTenant(user, async (tx) => {
       const center = await tx.center.findFirst({
         where: { id: centerId, ...centerScope(user) },
-        include: { branch: { select: { code: true } } },
+        include: { branch: { select: { code: true, name: true } } },
       });
       if (!center) throw new ForbiddenException('Center not assigned to you');
 
@@ -663,6 +667,10 @@ export class LoansService {
         savingsAccount: `${l.client.savingsAccount}_${l.loanAccount}`,
         clientName: l.client.name,
         displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${l.client.group.groupNo}.${l.client.memberNo}`,
+        branchCode: center.branch.code,
+        branchName: center.branch.name,
+        centerCode: center.code,
+        centerName: center.name,
         disbursalDate: l.disbursalDate,
         closedDate: l.closedDate,
         loanType: l.loanType,

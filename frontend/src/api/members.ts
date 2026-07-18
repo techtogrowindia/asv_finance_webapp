@@ -150,7 +150,8 @@ export interface CreateMemberBody {
   };
 }
 
-export const listCenters = () => api<CenterLite[]>('/centers');
+export const listCenters = (branchId?: string) =>
+  api<CenterLite[]>(`/centers${branchId ? `?branchId=${branchId}` : ''}`);
 export const listGroups = (centerId: string) => api<GroupLite[]>(`/centers/${centerId}/groups`);
 
 export const listMembers = (params: { centerId?: string; q?: string }) => {

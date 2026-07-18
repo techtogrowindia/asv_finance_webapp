@@ -15,6 +15,8 @@ function parseRange(from?: string, to?: string): [Date, Date] {
   return [fromDate, toDate];
 }
 
+// `branchId` narrows a report to one branch (HO only — for BM it's ignored and
+// forced to their own branch by centerScope; for HO, omitted = all branches).
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
@@ -23,34 +25,34 @@ export class ReportsController {
   @Roles('FDO', 'BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('demand-register')
-  demandRegister(@CurrentUser() user: AuthUser, @Query('date') date?: string) {
+  demandRegister(@CurrentUser() user: AuthUser, @Query('date') date?: string, @Query('branchId') branchId?: string) {
     const asOf = date ? new Date(date) : new Date();
     if (Number.isNaN(asOf.getTime())) throw new BadRequestException('Invalid date');
-    return this.reports.demandRegister(user, asOf);
+    return this.reports.demandRegister(user, asOf, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('zero-collection')
-  zeroCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  zeroCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.zeroCollection(user, f, t);
+    return this.reports.zeroCollection(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('collection-followup')
-  collectionFollowup(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  collectionFollowup(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.collectionFollowup(user, f, t);
+    return this.reports.collectionFollowup(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('advance-collection')
-  advanceCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  advanceCollection(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.advanceCollection(user, f, t);
+    return this.reports.advanceCollection(user, f, t, branchId);
   }
 
   // ---- Portfolio summary reports (disbursement/collection within [from, to],
@@ -59,25 +61,25 @@ export class ReportsController {
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('branch-wise')
-  branchWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  branchWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.branchWise(user, f, t);
+    return this.reports.branchWise(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('center-wise')
-  centerWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  centerWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.centerWise(user, f, t);
+    return this.reports.centerWise(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('group-wise')
-  groupWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  groupWise(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.groupWise(user, f, t);
+    return this.reports.groupWise(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
@@ -88,57 +90,58 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('q') q?: string,
+    @Query('branchId') branchId?: string,
   ) {
     const [f, t] = parseRange(from, to);
-    return this.reports.clientWise(user, f, t, q);
+    return this.reports.clientWise(user, f, t, q, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('employee-performance')
-  employeePerformance(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  employeePerformance(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.employeePerformance(user, f, t);
+    return this.reports.employeePerformance(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('foreclosures')
-  foreclosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  foreclosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.foreclosureReport(user, f, t);
+    return this.reports.foreclosureReport(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('disbursement-register')
-  disbursementRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  disbursementRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.disbursementRegister(user, f, t);
+    return this.reports.disbursementRegister(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('par-aging')
-  parAging(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  parAging(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.parAging(user, f, t);
+    return this.reports.parAging(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.monitoring')
   @Get('collection-register')
-  collectionRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  collectionRegister(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.collectionRegister(user, f, t);
+    return this.reports.collectionRegister(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
   @RequirePermission('report.portfolio')
   @Get('loan-closures')
-  loanClosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string) {
+  loanClosures(@CurrentUser() user: AuthUser, @Query('from') from?: string, @Query('to') to?: string, @Query('branchId') branchId?: string) {
     const [f, t] = parseRange(from, to);
-    return this.reports.closureReport(user, f, t);
+    return this.reports.closureReport(user, f, t, branchId);
   }
 
   @Roles('BM', 'HO')
@@ -149,8 +152,9 @@ export class ReportsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED',
+    @Query('branchId') branchId?: string,
   ) {
     const [f, t] = parseRange(from, to);
-    return this.reports.loanApplicationsReport(user, f, t, status);
+    return this.reports.loanApplicationsReport(user, f, t, status, branchId);
   }
 }

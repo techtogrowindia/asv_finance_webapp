@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../common/auth/current-user.decorator';
 import { Roles } from '../common/auth/roles.decorator';
@@ -21,8 +22,8 @@ export class CentersController {
 
   @RequirePermission('center.view')
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.centers.list(user);
+  list(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.centers.list(user, branchId);
   }
 
   // ---- Admin management (BM/HO) ----

@@ -73,12 +73,15 @@ export interface SavingsBalance {
   clientId: string;
   clientName: string;
   displayId: string;
+  branchCode: string;
+  branchName: string;
   centerName: string;
   savingsBalance: number;
   hasOpenLoan: boolean;
 }
 
-export const getSavingsBalances = () => api<SavingsBalance[]>('/collections/savings/balances');
+export const getSavingsBalances = (branchId?: string) =>
+  api<SavingsBalance[]>(`/collections/savings/balances${branchId ? `?branchId=${branchId}` : ''}`);
 
 export const refundSavings = (clientId: string) =>
   api<{ clientId: string; refunded: number }>(`/collections/savings/${clientId}/refund`, { method: 'POST' });

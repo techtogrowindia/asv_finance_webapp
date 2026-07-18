@@ -12,10 +12,10 @@ export class CentersService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Centers visible to the caller, with client counts. */
-  async list(user: AuthUser) {
+  async list(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const centers = await tx.center.findMany({
-        where: centerScope(user),
+        where: centerScope(user, branchId),
         orderBy: { code: 'asc' },
         include: {
           branch: { select: { code: true } },

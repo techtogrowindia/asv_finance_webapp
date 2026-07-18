@@ -454,14 +454,14 @@ export class CollectionsService {
   }
 
   /** Clients holding a savings balance (Savings report + refund list). */
-  async savingsBalances(user: AuthUser) {
+  async savingsBalances(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const clients = await tx.client.findMany({
-        where: { savingsBalance: { gt: 0 }, ...clientCenterScope(user) },
+        where: { savingsBalance: { gt: 0 }, ...clientCenterScope(user, branchId) },
         orderBy: [{ center: { code: 'asc' } }, { name: 'asc' }],
         include: {
           group: { select: { groupNo: true } },
-          center: { select: { code: true, name: true, branch: { select: { code: true } } } },
+          center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
           loans: { where: { loanType: 'OPEN' }, select: { id: true } },
         },
       });
@@ -469,6 +469,8 @@ export class CollectionsService {
         clientId: c.id,
         clientName: c.name,
         displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+        branchCode: c.center.branch.code,
+        branchName: c.center.branch.name,
         centerName: `${c.center.code} — ${c.center.name}`,
         savingsBalance: round2(Number(c.savingsBalance)),
         hasOpenLoan: c.loans.length > 0,

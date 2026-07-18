@@ -8,7 +8,7 @@ const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') 
 /** Loan + Savings report: pick a center → one row per loan account → View
  *  ledger opens that loan's full ledger (due / collected / savings / balance)
  *  plus its savings passbook, downloadable as one PDF. */
-export function CombinedStatementReport() {
+export function CombinedStatementReport({ branchId }: { branchId?: string } = {}) {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [accounts, setAccounts] = useState<CenterSavingsAccount[] | null>(null);
@@ -16,7 +16,10 @@ export function CombinedStatementReport() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { listCenters().then(setCenters).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    setCenterId('');
+    listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
+  }, [branchId]);
   useEffect(() => {
     setSt(null);
     if (!centerId) { setAccounts(null); return; }
@@ -63,11 +66,13 @@ export function CombinedStatementReport() {
           <div className="panel-body">
             <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
               <table className="data">
-                <thead><tr><th>Client ID</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Start Date</th><th>Closed Date</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Client ID</th><th>Branch</th><th>Center</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Start Date</th><th>Closed Date</th><th>Status</th><th></th></tr></thead>
                 <tbody>
                   {accounts?.map((a) => (
                     <tr key={a.loanId}>
                       <td className="mono">{a.displayId}</td>
+                      <td>{a.branchCode} — {a.branchName}</td>
+                      <td>{a.centerCode} — {a.centerName}</td>
                       <td>{a.clientName}</td>
                       <td className="mono">{a.loanAccount}</td>
                       <td className="mono">{a.savingsAccount}</td>
@@ -77,7 +82,7 @@ export function CombinedStatementReport() {
                       <td><button className="btn btn-primary btn-sm" disabled={busy} onClick={() => view(a.loanId)}>View ledger</button></td>
                     </tr>
                   ))}
-                  {accounts && accounts.length === 0 && <tr><td colSpan={8} className="empty">No loans in this center.</td></tr>}
+                  {accounts && accounts.length === 0 && <tr><td colSpan={10} className="empty">No loans in this center.</td></tr>}
                 </tbody>
               </table>
             </div>

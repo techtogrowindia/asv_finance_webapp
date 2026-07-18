@@ -222,6 +222,10 @@ export interface CenterSavingsAccount {
   closedDate: string | null;
   loanType: 'OPEN' | 'CLOSED';
   balance: number;
+  branchCode: string;
+  branchName: string;
+  centerCode: string;
+  centerName: string;
 }
 export const listCenterSavingsAccounts = (centerId: string) =>
   api<CenterSavingsAccount[]>(`/savings-accounts?centerId=${centerId}`);
@@ -236,6 +240,10 @@ export interface CenterLoanRow {
   disbursalDate: string;
   loanAmount: string;
   loanType: 'OPEN' | 'CLOSED';
+  branchCode: string;
+  branchName: string;
+  centerCode: string;
+  centerName: string;
 }
 
 export const listLoansByCenter = (centerId: string, type: 'OPEN' | 'CLOSED' | 'ALL') =>

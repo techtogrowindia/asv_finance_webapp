@@ -97,8 +97,8 @@ export class CollectionsController {
   // ---- Savings (view balances; refund is BM/HO — savings.refund) ----
   @RequirePermission('report.portfolio')
   @Get('savings/balances')
-  savingsBalances(@CurrentUser() user: AuthUser) {
-    return this.collections.savingsBalances(user);
+  savingsBalances(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.collections.savingsBalances(user, branchId);
   }
 
   @Roles('BM', 'HO')
