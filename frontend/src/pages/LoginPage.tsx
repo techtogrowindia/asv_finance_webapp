@@ -7,18 +7,16 @@ interface Props {
   portal: Portal;
 }
 
-const COPY: Record<Portal, { tag: string; title: string; sub: string; redirect: string }> = {
+const COPY: Record<Portal, { tag: string; title: string; sub: string }> = {
   employee: {
-    tag: 'Field Officer Portal',
+    tag: 'Field & Branch Portal',
     title: 'Serve your centers, on the ground.',
-    sub: 'Sign in to enroll members, apply for loans, and record collections.',
-    redirect: '/app',
+    sub: 'Sign in to enroll members, apply for loans, record collections, or manage your branch.',
   },
   admin: {
-    tag: 'Admin Portal',
-    title: 'Run your branch with confidence.',
-    sub: 'Sign in to verify, monitor collections, and close the day.',
-    redirect: '/admin/dashboard',
+    tag: 'Business Admin',
+    title: 'Run the business, company-wide.',
+    sub: 'Sign in to manage branches, employees, and see every branch\'s data.',
   },
 };
 
@@ -37,8 +35,10 @@ export function LoginPage({ portal }: Props) {
     setError('');
     setBusy(true);
     try {
-      await login(portal, loginId.trim(), password);
-      navigate(copy.redirect, { replace: true });
+      const user = await login(portal, loginId.trim(), password);
+      // FDO and BM both sign in via the employee door; BM still lands on the
+      // full admin portal (same as an HO/superadmin signing in at /admin).
+      navigate(user.role === 'FDO' ? '/app' : '/admin/dashboard', { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
@@ -112,8 +112,8 @@ export function LoginPage({ portal }: Props) {
 
           <p className="auth-foot">
             {portal === 'employee'
-              ? 'Branch staff? Use the admin portal at /admin'
-              : 'Field officer? Use the field portal at /login'}
+              ? 'Company/head office admin? Use the business admin portal at /admin'
+              : 'Field officer or branch admin? Sign in at /login'}
           </p>
         </div>
       </main>

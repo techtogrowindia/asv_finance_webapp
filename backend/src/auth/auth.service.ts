@@ -18,9 +18,13 @@ interface LoginLookupRow {
   permissions: string[] | null;
 }
 
+// 'employee' portal (/login) serves field officers AND branch admins (BM) —
+// a BM still lands on the full admin portal after signing in there, just
+// enters credentials at the same door as their FDOs. 'admin' portal (/admin)
+// is reserved for the tenant-wide superadmin (HO) only.
 const PORTAL_ROLES: Record<'employee' | 'admin', Role[]> = {
-  employee: ['FDO'],
-  admin: ['BM', 'HO'],
+  employee: ['FDO', 'BM'],
+  admin: ['HO'],
 };
 
 @Injectable()

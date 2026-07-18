@@ -212,6 +212,22 @@ async function main() {
     },
   });
 
+  // Superadmin (HO, sign in at /admin) — tenant-wide, sees every branch, can
+  // assign/reassign branches to BMs and manage the whole business.
+  await prisma.employee.upsert({
+    where: { login: 'businessadmin' },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      branchId: null,
+      code: 'ASVADM002',
+      name: 'Business Admin',
+      login: 'businessadmin',
+      passwordHash: password,
+      role: 'HO',
+    },
+  });
+
   // Assign default roles to any employee that has none yet (idempotent backfill,
   // covers both freshly-seeded and pre-existing production employees).
   await prisma.employee.updateMany({
