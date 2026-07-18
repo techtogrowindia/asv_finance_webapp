@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser } from '../common/types/auth-user';
 import { CreateBranchDto, UpdateBranchDto } from './dto/branch.dto';
@@ -7,10 +7,12 @@ import { CreateBranchDto, UpdateBranchDto } from './dto/branch.dto';
 export class BranchesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Every branch in the tenant (HO-only — branches are the top of the hierarchy). */
+  /** Every branch in the tenant for HO; a BM sees only their own branch — a
+   *  branch admin manages their own branch, never another one. */
   async list(user: AuthUser) {
     return this.prisma.withTenant(user, async (tx) => {
       const branches = await tx.branch.findMany({
+        where: user.role === 'BM' ? { id: user.branchId ?? undefined } : undefined,
         orderBy: { code: 'asc' },
         include: { _count: { select: { centers: true, employees: true } } },
       });
@@ -18,6 +20,7 @@ export class BranchesService {
     });
   }
 
+  /** Creating a new branch is HO-only (also enforced by @Roles at the route). */
   async create(user: AuthUser, dto: CreateBranchDto) {
     return this.prisma.withTenant(user, async (tx) => {
       const dup = await tx.branch.findFirst({ where: { tenantId: user.tenantId, code: dto.code } });
@@ -40,6 +43,17 @@ export class BranchesService {
     return this.prisma.withTenant(user, async (tx) => {
       const existing = await tx.branch.findFirst({ where: { id, tenantId: user.tenantId } });
       if (!existing) throw new NotFoundException('Branch not found');
+
+      if (user.role === 'BM') {
+        if (existing.id !== user.branchId) {
+          throw new ForbiddenException('Branch managers can only edit their own branch');
+        }
+        // A branch admin may rename their own branch, but not change its code
+        // or activate/deactivate it — that stays HO-only.
+        if (dto.code !== undefined || dto.isActive !== undefined) {
+          throw new ForbiddenException('Branch managers cannot change the branch code or status');
+        }
+      }
 
       if (dto.code && dto.code !== existing.code) {
         const dup = await tx.branch.findFirst({ where: { tenantId: user.tenantId, code: dto.code, id: { not: id } } });

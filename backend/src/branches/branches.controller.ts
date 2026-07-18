@@ -7,12 +7,14 @@ import { BranchesService } from './branches.service';
 import { CreateBranchDto, UpdateBranchDto } from './dto/branch.dto';
 
 // Branches are the top of the domain hierarchy (Tenant -> Branch -> Center ->
-// Group -> Client, invariant #3) — HO-only, tenant-wide, not branch-scoped.
+// Group -> Client, invariant #3). Creating a branch is HO-only; a BM (branch
+// admin) may view/rename only their OWN branch, never another one — enforced
+// again in the service (list/update scope + field restrictions).
 @Controller('branches')
 export class BranchesController {
   constructor(private readonly branches: BranchesService) {}
 
-  @Roles('HO')
+  @Roles('BM', 'HO')
   @RequirePermission('branch.manage')
   @Get()
   list(@CurrentUser() user: AuthUser) {
@@ -26,7 +28,7 @@ export class BranchesController {
     return this.branches.create(user, dto);
   }
 
-  @Roles('HO')
+  @Roles('BM', 'HO')
   @RequirePermission('branch.manage')
   @Patch(':id')
   update(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateBranchDto) {

@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { ActionMenu } from '../../components/ActionMenu';
+import { useAuth } from '../../auth/AuthContext';
 import { AdminBranch, createBranch, listBranches, updateBranch } from '../../api/branchesAdmin';
 
 const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') : '—');
 
 export function BranchesPage() {
+  const { user } = useAuth();
+  const isBM = user?.role === 'BM';
   const [rows, setRows] = useState<AdminBranch[] | null>(null);
   const [editing, setEditing] = useState<AdminBranch | null>(null);
   const [adding, setAdding] = useState(false);
@@ -30,14 +33,18 @@ export function BranchesPage() {
     <AdminLayout>
       <div className="toolbar">
         <div>
-          <h1 className="page-title">Branches</h1>
+          <h1 className="page-title">{isBM ? 'Your Branch' : 'Branches'}</h1>
           <p className="page-sub" style={{ margin: 0 }}>
-            Each branch is an office covering an area — centers, employees, and the working date are scoped per branch.
+            {isBM
+              ? 'You can rename your own branch. Adding branches or changing status is done by Head Office.'
+              : 'Each branch is an office covering an area — centers, employees, and the working date are scoped per branch.'}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setAdding(true); setEditing(null); }}>
-          + Add Branch
-        </button>
+        {!isBM && (
+          <button className="btn btn-primary" onClick={() => { setAdding(true); setEditing(null); }}>
+            + Add Branch
+          </button>
+        )}
       </div>
 
       {error && <div className="alert-error">{error}</div>}
@@ -45,6 +52,7 @@ export function BranchesPage() {
       {(adding || editing) && (
         <BranchForm
           initial={editing}
+          isBM={isBM}
           onCancel={() => { setAdding(false); setEditing(null); }}
           onSaved={() => { setAdding(false); setEditing(null); refresh(); }}
         />
@@ -70,14 +78,14 @@ export function BranchesPage() {
                   <ActionMenu
                     items={[
                       { label: 'Edit', onClick: () => { setEditing(b); setAdding(false); } },
-                      { label: b.isActive ? 'Deactivate' : 'Activate', onClick: () => onToggleStatus(b) },
+                      ...(isBM ? [] : [{ label: b.isActive ? 'Deactivate' : 'Activate', onClick: () => onToggleStatus(b) }]),
                     ]}
                   />
                 </td>
               </tr>
             ))}
             {rows && rows.length === 0 && (
-              <tr><td colSpan={7} className="empty">No branches yet. Click "Add Branch".</td></tr>
+              <tr><td colSpan={7} className="empty">{isBM ? 'Your branch is not set up yet.' : 'No branches yet. Click "Add Branch".'}</td></tr>
             )}
           </tbody>
         </table>
@@ -88,10 +96,12 @@ export function BranchesPage() {
 
 function BranchForm({
   initial,
+  isBM,
   onCancel,
   onSaved,
 }: {
   initial: AdminBranch | null;
+  isBM: boolean;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -114,7 +124,9 @@ function BranchForm({
     setBusy(true);
     try {
       if (initial) {
-        await updateBranch(initial.id, { code: form.code.trim(), name: form.name.trim() });
+        // A branch admin (BM) may only rename their own branch — never send
+        // code/status, which the backend would reject anyway.
+        await updateBranch(initial.id, isBM ? { name: form.name.trim() } : { code: form.code.trim(), name: form.name.trim() });
       } else {
         await createBranch({ code: form.code.trim(), name: form.name.trim(), workingDate: form.workingDate });
       }
@@ -132,8 +144,8 @@ function BranchForm({
       {error && <div className="alert-error">{error}</div>}
       <div className="form-grid">
         <div className="field">
-          <label>Code *</label>
-          <input className="input" value={form.code} onChange={(e) => set('code', e.target.value)} placeholder="e.g. 006" />
+          <label>Code {!isBM && '*'}</label>
+          <input className="input" value={form.code} disabled={isBM} onChange={(e) => set('code', e.target.value)} placeholder="e.g. 006" />
         </div>
         <div className="field">
           <label>Name *</label>
@@ -149,6 +161,7 @@ function BranchForm({
       {initial && (
         <div className="hint">
           Working date advances only via End of Day close, not from here.
+          {isBM && ' Branch code and active status are managed by Head Office.'}
         </div>
       )}
       <div className="form-actions">

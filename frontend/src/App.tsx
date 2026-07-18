@@ -92,7 +92,7 @@ export default function App() {
         <Route
           path="/admin/branches"
           element={
-            <RequireAuth roles={['HO']} loginPath="/admin">
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <BranchesPage />
             </RequireAuth>
           }
