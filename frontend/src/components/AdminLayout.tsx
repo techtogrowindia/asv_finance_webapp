@@ -31,6 +31,7 @@ const ADMIN_NAV: SideNavItem[] = [
       { to: '/admin/collections/pay-advance', label: 'Advance Collection', perm: ['collection.post'] },
       { to: '/admin/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
       { to: '/admin/collections/foreclose', label: 'Foreclosure', perm: ['collection.foreclose'] },
+      { to: '/admin/collection-corrections', label: 'Corrections', perm: ['collection.approveCorrection'] },
     ],
   },
   { to: '/admin/savings', label: 'Savings', icon: '◈', perm: ['member.view'] },

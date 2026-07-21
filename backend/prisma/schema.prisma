@@ -60,6 +60,13 @@ enum LoanApplicationStatus {
   REJECTED
 }
 
+// Maker-checker status for a field-collection correction request.
+enum CollectionCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LoanStatus {
   OPEN
   CLOSED
@@ -118,6 +125,7 @@ model Tenant {
   eodClosings      EodClosing[]
   accessRoles      AccessRole[]
   savingsTxns      SavingsTxn[]
+  collectionCorrections CollectionCorrection[]
 
   @@map("tenant")
 }
@@ -538,6 +546,7 @@ model Loan {
   application LoanApplication?    @relation(fields: [applicationId], references: [id])
   schedule    RepaymentSchedule[]
   collections Collection[]
+  corrections CollectionCorrection[]
 
   @@index([tenantId, clientId])
   @@map("loan")
@@ -581,7 +590,7 @@ model Collection {
   amount      Decimal  @db.Decimal(14, 2)
   pri         Decimal  @db.Decimal(14, 2)
   int         Decimal  @db.Decimal(14, 2)
-  kind        String   @default("REGULAR") // REGULAR | ADVANCE | FORECLOSURE | FORECLOSURE_CHARGE
+  kind        String   @default("REGULAR") // REGULAR | ADVANCE | FORECLOSURE | FORECLOSURE_CHARGE | CORRECTION_REVERSAL
   enteredBy   String   @map("entered_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -592,6 +601,42 @@ model Collection {
   @@index([tenantId, loanId])
   @@index([tenantId, scheduleId])
   @@map("collection")
+}
+
+// ---- Collection correction (maker-checker) ---------------------------------
+// An FDO who posted a wrong field-collection amount requests a correction here;
+// a BM/HO approves it. On approval the engine posts an adjusting reversal of the
+// original day's REGULAR collection and re-applies the corrected amount, both
+// stamped with the CURRENT working date (never rewriting a reconciled/closed EOD
+// day). Snapshot columns capture what was requested and what actually happened.
+model CollectionCorrection {
+  id             String                     @id @default(uuid()) @db.Uuid
+  tenantId       String                     @map("tenant_id") @db.Uuid
+  loanId         String                     @map("loan_id") @db.Uuid
+  clientId       String                     @map("client_id") @db.Uuid
+  // The past working date whose REGULAR field collection is being corrected.
+  collectedOn    DateTime                   @map("collected_on") @db.Date
+  // Loan (principal+interest) amount actually posted that day vs what it should be.
+  originalAmount Decimal                    @map("original_amount") @db.Decimal(14, 2)
+  correctedAmount Decimal                   @map("corrected_amount") @db.Decimal(14, 2)
+  reason         String
+  status         CollectionCorrectionStatus @default(PENDING)
+  // Did the original entry close the loan? / will the correction re-close it?
+  // Snapshotted at request time to drive the extra approval confirmation.
+  wouldReopen    Boolean                    @default(false) @map("would_reopen")
+  wouldClose     Boolean                    @default(false) @map("would_close")
+  approverNotes  String?                    @map("approver_notes")
+  requestedBy    String                     @map("requested_by") @db.Uuid
+  reviewedBy     String?                    @map("reviewed_by") @db.Uuid
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  reviewedAt     DateTime?                  @map("reviewed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  loan   Loan   @relation(fields: [loanId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, loanId])
+  @@map("collection_correction")
 }
 
 enum SavingsTxnKind {

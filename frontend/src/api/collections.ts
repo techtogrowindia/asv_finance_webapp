@@ -175,3 +175,65 @@ export const foreclose = (loanId: string, waiveInterest?: number) =>
     method: 'POST',
     body: JSON.stringify(waiveInterest ? { waiveInterest } : {}),
   });
+
+// ---- Collection corrections (maker-checker: FDO requests, BM/HO approves) --
+
+export interface CollectionDay {
+  collectedOn: string;
+  amount: number;
+}
+
+/** Days this loan has a live REGULAR field collection that could be corrected
+ *  (already-requested/approved days are excluded). */
+export const getLoanCollectionDays = (loanId: string) =>
+  api<CollectionDay[]>(`/collections/${loanId}/collection-days`);
+
+export const requestCorrection = (body: { loanId: string; collectedOn: string; correctedAmount: number; reason: string }) =>
+  api<{ id: string; status: string; originalAmount: number; correctedAmount: number; wouldReopen: boolean; wouldClose: boolean }>(
+    '/collections/corrections',
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+
+export interface CollectionCorrection {
+  id: string;
+  loanId: string;
+  loanAccount: string;
+  loanType: 'OPEN' | 'CLOSED';
+  clientName: string;
+  displayId: string;
+  branchCode: string;
+  branchName: string;
+  centerName: string;
+  collectedOn: string;
+  originalAmount: number;
+  correctedAmount: number;
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  wouldReopen: boolean;
+  wouldClose: boolean;
+  approverNotes: string | null;
+  requestedByName: string | null;
+  reviewedByName: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
+export const listCorrections = (status?: 'PENDING' | 'APPROVED' | 'REJECTED', branchId?: string) => {
+  const q = new URLSearchParams();
+  if (status) q.set('status', status);
+  if (branchId) q.set('branchId', branchId);
+  const qs = q.toString();
+  return api<CollectionCorrection[]>(`/collections/corrections${qs ? `?${qs}` : ''}`);
+};
+
+export const approveCorrection = (id: string, opts: { confirmClosure?: boolean; notes?: string } = {}) =>
+  api<{ id: string; status: string; applied: number; advanceBanked: number; loanClosed: boolean; reopened: boolean }>(
+    `/collections/corrections/${id}/approve`,
+    { method: 'POST', body: JSON.stringify(opts) },
+  );
+
+export const rejectCorrection = (id: string, notes?: string) =>
+  api<{ id: string; status: string }>(`/collections/corrections/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  });

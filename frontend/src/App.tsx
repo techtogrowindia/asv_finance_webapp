@@ -29,6 +29,7 @@ import { RolesPage } from './pages/admin/RolesPage';
 import { KycVerificationPage } from './pages/admin/KycVerificationPage';
 import { ClientTransferPage } from './pages/admin/ClientTransferPage';
 import { ImportLegacyLoanPage } from './pages/admin/ImportLegacyLoanPage';
+import { CollectionCorrectionsPage } from './pages/admin/CollectionCorrectionsPage';
 import { DemandCollectionPage } from './pages/collections/DemandCollectionPage';
 import { ArrearCollectionPage } from './pages/collections/ArrearCollectionPage';
 import { AdvanceCollectionPage } from './pages/collections/AdvanceCollectionPage';
@@ -127,6 +128,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <ImportLegacyLoanPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/collection-corrections"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <CollectionCorrectionsPage />
             </RequireAuth>
           }
         />

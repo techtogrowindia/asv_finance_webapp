@@ -8,6 +8,8 @@ import { PostCollectionDto } from './dto/post-collection.dto';
 import { CenterIdDto } from './dto/center-id.dto';
 import { ForecloseDto } from './dto/foreclose.dto';
 import { BulkImportCollectionDto } from './dto/bulk-import-collection.dto';
+import { RequestCorrectionDto } from './dto/request-correction.dto';
+import { ApproveCorrectionDto, RejectCorrectionDto } from './dto/review-correction.dto';
 
 @Controller('collections')
 export class CollectionsController {
@@ -67,6 +69,54 @@ export class CollectionsController {
   @Post('bulk-import')
   bulkImport(@CurrentUser() user: AuthUser, @Body() dto: BulkImportCollectionDto) {
     return this.collections.bulkImport(user, dto);
+  }
+
+  // ---- Corrections (maker-checker: FDO requests, BM/HO approves) ----
+  @Roles('FDO', 'BM')
+  @RequirePermission('collection.correct')
+  @Get(':loanId/collection-days')
+  loanCollectionDays(@CurrentUser() user: AuthUser, @Param('loanId', ParseUUIDPipe) loanId: string) {
+    return this.collections.loanCollectionDays(user, loanId);
+  }
+
+  @Roles('FDO', 'BM')
+  @RequirePermission('collection.correct')
+  @Post('corrections')
+  requestCorrection(@CurrentUser() user: AuthUser, @Body() dto: RequestCorrectionDto) {
+    return this.collections.requestCorrection(user, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('collection.approveCorrection')
+  @Get('corrections')
+  listCorrections(
+    @CurrentUser() user: AuthUser,
+    @Query('status') status?: 'PENDING' | 'APPROVED' | 'REJECTED',
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.collections.listCorrections(user, status, branchId);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('collection.approveCorrection')
+  @Post('corrections/:id/approve')
+  approveCorrection(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApproveCorrectionDto,
+  ) {
+    return this.collections.approveCorrection(user, id, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('collection.approveCorrection')
+  @Post('corrections/:id/reject')
+  rejectCorrection(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectCorrectionDto,
+  ) {
+    return this.collections.rejectCorrection(user, id, dto.notes);
   }
 
   // ---- Loan Advance (BM/HO — collection.advance) ----

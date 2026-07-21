@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/audit.service';
@@ -8,6 +8,8 @@ import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
 import { PostCollectionDto } from './dto/post-collection.dto';
 import { BulkImportCollectionDto } from './dto/bulk-import-collection.dto';
+import { RequestCorrectionDto } from './dto/request-correction.dto';
+import { ApproveCorrectionDto } from './dto/review-correction.dto';
 
 type ScheduleRow = {
   id: string;
@@ -879,6 +881,332 @@ export class CollectionsService {
       chargePercent: Number(tenant?.foreclosureChargePercent ?? 0),
       chargeFlat: Number(tenant?.foreclosureChargeFlat ?? 0),
     };
+  }
+
+  // ==== Collection corrections (maker-checker) ==============================
+
+  /** Days on which this loan has a live REGULAR field collection the FDO could
+   *  ask to correct (excludes days already pending/approved for correction). */
+  async loanCollectionDays(user: AuthUser, loanId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({ where: { id: loanId, client: clientCenterScope(user) } });
+      if (!loan) throw new NotFoundException('Loan not found');
+
+      const rows = await tx.collection.findMany({
+        where: { loanId, kind: 'REGULAR' },
+        orderBy: { collectedOn: 'desc' },
+      });
+      const corrs = await tx.collectionCorrection.findMany({
+        where: { loanId, status: { in: ['PENDING', 'APPROVED'] } },
+        select: { collectedOn: true },
+      });
+      const blocked = new Set(corrs.map((c) => c.collectedOn.toISOString().slice(0, 10)));
+
+      const byDay = new Map<string, number>();
+      for (const r of rows) {
+        const key = r.collectedOn.toISOString().slice(0, 10);
+        byDay.set(key, round2((byDay.get(key) ?? 0) + Number(r.amount)));
+      }
+      return [...byDay.entries()]
+        .filter(([day, amt]) => amt > 0 && !blocked.has(day))
+        .map(([collectedOn, amount]) => ({ collectedOn, amount }));
+    });
+  }
+
+  /** Snapshot the numbers a correction turns on: what the day actually applied,
+   *  the loan's outstanding now, and the resulting closure-state change. */
+  private async correctionContext(tx: Prisma.TransactionClient, loanId: string, collectedOn: Date) {
+    const origRows = await tx.collection.findMany({ where: { loanId, collectedOn, kind: 'REGULAR' } });
+    const originalApplied = round2(origRows.reduce((s, r) => s + Number(r.amount), 0));
+    const sched = await tx.repaymentSchedule.findMany({ where: { loanId } });
+    const outstandingNow = round2(sched.reduce((s, r) => s + Number(r.dueBalance), 0));
+    return { origRows, originalApplied, outstandingNow };
+  }
+
+  private closureFlags(wasClosed: boolean, correctedAmount: number, outstandingAfterReversal: number) {
+    const wouldReopen = wasClosed && correctedAmount < outstandingAfterReversal;
+    const wouldClose = !wasClosed && outstandingAfterReversal > 0 && correctedAmount >= outstandingAfterReversal;
+    return { wouldReopen, wouldClose, needsConfirm: wouldReopen || wouldClose || wasClosed };
+  }
+
+  /** FDO requests a correction to a past REGULAR field collection (→ approval queue). */
+  async requestCorrection(user: AuthUser, dto: RequestCorrectionDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: dto.loanId, client: clientCenterScope(user) },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+
+      const collectedOn = new Date(dto.collectedOn);
+      const dup = await tx.collectionCorrection.findFirst({
+        where: { loanId: dto.loanId, collectedOn, status: { in: ['PENDING', 'APPROVED'] } },
+      });
+      if (dup) {
+        throw new ConflictException(
+          dup.status === 'PENDING'
+            ? 'A correction for this loan and date is already awaiting approval.'
+            : "This day's collection was already corrected.",
+        );
+      }
+      const nonRegular = await tx.collection.findFirst({
+        where: { loanId: dto.loanId, collectedOn, kind: { notIn: ['REGULAR', 'CORRECTION_REVERSAL'] } },
+      });
+      if (nonRegular) {
+        throw new BadRequestException(
+          'That day had an advance or foreclosure entry — corrections cover regular field collections only.',
+        );
+      }
+
+      const { origRows, originalApplied, outstandingNow } = await this.correctionContext(tx, dto.loanId, collectedOn);
+      if (origRows.length === 0) throw new BadRequestException('No field collection was posted for this loan on that date.');
+      const correctedAmount = round2(dto.correctedAmount);
+      if (correctedAmount === originalApplied) throw new BadRequestException('The corrected amount is the same as what was entered.');
+
+      const wasClosed = loan.loanType === 'CLOSED';
+      const outstandingAfterReversal = round2(outstandingNow + originalApplied);
+      const { wouldReopen, wouldClose } = this.closureFlags(wasClosed, correctedAmount, outstandingAfterReversal);
+
+      const created = await tx.collectionCorrection.create({
+        data: {
+          tenantId: user.tenantId,
+          loanId: dto.loanId,
+          clientId: loan.clientId,
+          collectedOn,
+          originalAmount: originalApplied,
+          correctedAmount,
+          reason: dto.reason,
+          status: 'PENDING',
+          wouldReopen,
+          wouldClose,
+          requestedBy: user.employeeId,
+        },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'CollectionCorrection',
+        entityId: created.id,
+        action: 'CORRECTION_REQUEST',
+        employeeId: user.employeeId,
+        after: { loanId: dto.loanId, collectedOn: dto.collectedOn, originalApplied, correctedAmount, reason: dto.reason },
+      });
+      return { id: created.id, status: created.status, originalAmount: originalApplied, correctedAmount, wouldReopen, wouldClose };
+    });
+  }
+
+  /** BM/HO: list correction requests (optionally by status), scoped to their reach. */
+  async listCorrections(user: AuthUser, status?: 'PENDING' | 'APPROVED' | 'REJECTED', branchId?: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const rows = await tx.collectionCorrection.findMany({
+        where: { ...(status ? { status } : {}), loan: { client: clientCenterScope(user, branchId) } },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          loan: {
+            include: {
+              client: {
+                include: {
+                  group: { select: { groupNo: true } },
+                  center: { include: { branch: { select: { code: true, name: true } } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      const empIds = [...new Set(rows.flatMap((r) => [r.requestedBy, r.reviewedBy]).filter((x): x is string => !!x))];
+      const emps = empIds.length
+        ? await tx.employee.findMany({ where: { id: { in: empIds } }, select: { id: true, name: true } })
+        : [];
+      const empName = new Map(emps.map((e) => [e.id, e.name]));
+
+      return rows.map((r) => {
+        const c = r.loan.client;
+        return {
+          id: r.id,
+          loanId: r.loanId,
+          loanAccount: r.loan.loanAccount,
+          loanType: r.loan.loanType,
+          clientName: c.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          branchCode: c.center.branch.code,
+          branchName: c.center.branch.name,
+          centerName: `${c.center.code} — ${c.center.name}`,
+          collectedOn: r.collectedOn,
+          originalAmount: Number(r.originalAmount),
+          correctedAmount: Number(r.correctedAmount),
+          reason: r.reason,
+          status: r.status,
+          wouldReopen: r.wouldReopen,
+          wouldClose: r.wouldClose,
+          approverNotes: r.approverNotes,
+          requestedByName: empName.get(r.requestedBy) ?? null,
+          reviewedByName: r.reviewedBy ? empName.get(r.reviewedBy) ?? null : null,
+          createdAt: r.createdAt,
+          reviewedAt: r.reviewedAt,
+        };
+      });
+    });
+  }
+
+  /** BM/HO approves: reverse the original day's collection and re-apply the
+   *  corrected amount, both dated today (never rewriting a reconciled EOD day). */
+  async approveCorrection(user: AuthUser, id: string, dto: ApproveCorrectionDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const corr = await tx.collectionCorrection.findFirst({
+        where: { id, loan: { client: clientCenterScope(user) } },
+      });
+      if (!corr) throw new NotFoundException('Correction not found');
+      if (corr.status !== 'PENDING') throw new BadRequestException('This correction has already been reviewed.');
+      if (corr.requestedBy === user.employeeId) {
+        throw new ForbiddenException('You cannot approve your own correction request — ask another approver to review it.');
+      }
+
+      const loan = await tx.loan.findFirst({
+        where: { id: corr.loanId },
+        include: { client: { select: { id: true, center: { select: { branchId: true } } } } },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+      const today = await this.resolveWorkingDate(tx, loan.client.center.branchId);
+
+      const { origRows, originalApplied, outstandingNow } = await this.correctionContext(tx, corr.loanId, corr.collectedOn);
+      if (origRows.length === 0) throw new BadRequestException('The original collection is no longer present (already corrected?).');
+
+      const correctedAmount = round2(Number(corr.correctedAmount));
+      const wasClosed = loan.loanType === 'CLOSED';
+      const outstandingAfterReversal = round2(outstandingNow + originalApplied);
+      const { wouldReopen, wouldClose, needsConfirm } = this.closureFlags(wasClosed, correctedAmount, outstandingAfterReversal);
+      if (needsConfirm && !dto.confirmClosure) {
+        throw new ConflictException({
+          message: "This correction changes the loan's closure state — please double-check and confirm.",
+          code: 'CONFIRM_CLOSURE_REQUIRED',
+          wouldReopen,
+          wouldClose,
+          wasClosed,
+        });
+      }
+
+      // 1. Reverse the original day's REGULAR collections (adjusting entries, dated today).
+      for (const r of origRows) {
+        if (r.scheduleId) {
+          const sched = await tx.repaymentSchedule.findUnique({ where: { id: r.scheduleId } });
+          if (sched) {
+            const newCollAmt = round2(Number(sched.collAmt) - Number(r.amount));
+            await tx.repaymentSchedule.update({
+              where: { id: sched.id },
+              data: {
+                collAmt: newCollAmt,
+                collPri: round2(Number(sched.collPri) - Number(r.pri)),
+                collInt: round2(Number(sched.collInt) - Number(r.int)),
+                dueBalance: Math.max(0, round2(Number(sched.dueAmt) - newCollAmt)),
+                collDate: newCollAmt <= 0 ? null : sched.collDate,
+              },
+            });
+          }
+        }
+        await tx.collection.create({
+          data: {
+            tenantId: user.tenantId,
+            loanId: corr.loanId,
+            scheduleId: r.scheduleId,
+            collectedOn: today,
+            amount: round2(-Number(r.amount)),
+            pri: round2(-Number(r.pri)),
+            int: round2(-Number(r.int)),
+            kind: 'CORRECTION_REVERSAL',
+            enteredBy: user.employeeId,
+          },
+        });
+      }
+
+      // 2. If that day had closed the loan, re-open it and restore its auto savings-refund.
+      let refundRestored = 0;
+      if (wasClosed) {
+        await tx.loan.update({ where: { id: corr.loanId }, data: { loanType: 'OPEN', closedDate: null } });
+        const lastRefund = await tx.savingsTxn.findFirst({
+          where: { loanId: corr.loanId, kind: 'REFUND' },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (lastRefund) {
+          refundRestored = Number(lastRefund.amount);
+          await tx.savingsTxn.create({
+            data: {
+              tenantId: user.tenantId,
+              clientId: loan.clientId,
+              loanId: corr.loanId,
+              amount: refundRestored,
+              kind: 'DEPOSIT',
+              collectedOn: today,
+              enteredBy: user.employeeId,
+            },
+          });
+          await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { increment: refundRestored } } });
+        }
+      }
+
+      // 3. Re-apply the corrected amount (no new savings deposit; may re-close + refund).
+      let applied = 0;
+      let advanceBanked = 0;
+      let loanClosed = false;
+      let savingsRefunded = 0;
+      if (correctedAmount > 0) {
+        const res = await this.applyFifo(tx, user, corr.loanId, loan.clientId, correctedAmount, 'REGULAR', today, false, 0);
+        applied = res.applied;
+        loanClosed = res.loanClosed;
+        savingsRefunded = res.savingsRefunded;
+        if (res.remaining > 0 && !res.loanClosed) {
+          advanceBanked = res.remaining;
+          await tx.loan.update({ where: { id: corr.loanId }, data: { advanceBalance: { increment: advanceBanked } } });
+        }
+      } else {
+        const stillOwing = await tx.repaymentSchedule.findFirst({ where: { loanId: corr.loanId, dueBalance: { gt: 0 } } });
+        loanClosed = !stillOwing;
+      }
+
+      await tx.collectionCorrection.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          approverNotes: dto.notes ?? null,
+          reviewedBy: user.employeeId,
+          reviewedAt: new Date(),
+          wouldReopen,
+          wouldClose,
+        },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'CollectionCorrection',
+        entityId: id,
+        action: 'CORRECTION_APPROVE',
+        employeeId: user.employeeId,
+        before: { originalApplied, wasClosed },
+        after: { correctedAmount, applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed, refundRestored, savingsRefunded, eodDate: today },
+      });
+      return { id, status: 'APPROVED', applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed };
+    });
+  }
+
+  /** BM/HO rejects a pending correction (no money moves). */
+  async rejectCorrection(user: AuthUser, id: string, notes?: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const corr = await tx.collectionCorrection.findFirst({
+        where: { id, loan: { client: clientCenterScope(user) } },
+      });
+      if (!corr) throw new NotFoundException('Correction not found');
+      if (corr.status !== 'PENDING') throw new BadRequestException('This correction has already been reviewed.');
+      await tx.collectionCorrection.update({
+        where: { id },
+        data: { status: 'REJECTED', approverNotes: notes ?? null, reviewedBy: user.employeeId, reviewedAt: new Date() },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'CollectionCorrection',
+        entityId: id,
+        action: 'CORRECTION_REJECT',
+        employeeId: user.employeeId,
+        after: { notes: notes ?? null },
+      });
+      return { id, status: 'REJECTED' };
+    });
   }
 
   private async getScopedCenter(tx: Prisma.TransactionClient, user: AuthUser, centerId: string) {
