@@ -81,15 +81,20 @@ export function CollectionsPage() {
 
   /** A blank sample — not this center's real loans. Fill in the actual Loan
    *  A/c + Amount (+ Savings) for each collection you made, then re-upload. */
-  function downloadTemplate() {
-    downloadXlsx(
-      'collection-import-template.xlsx',
-      [
-        { 'Loan A/c': 'ASVLN000001_1', Amount: 500, Savings: 100 },
-        { 'Loan A/c': 'ASVLN000002_1', Amount: 700, Savings: 100 },
-      ],
-      'Collections',
-    );
+  async function downloadTemplate() {
+    setError('');
+    try {
+      await downloadXlsx(
+        'collection-import-template.xlsx',
+        [
+          { 'Loan A/c': 'ASVLN000001_1', Amount: 500, Savings: 100 },
+          { 'Loan A/c': 'ASVLN000002_1', Amount: 700, Savings: 100 },
+        ],
+        'Collections',
+      );
+    } catch (e) {
+      setError(e instanceof Error ? `Could not download the template: ${e.message}` : 'Could not download the template');
+    }
   }
 
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {

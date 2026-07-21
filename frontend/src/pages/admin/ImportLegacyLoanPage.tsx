@@ -140,16 +140,21 @@ export function ImportLegacyLoanPage() {
 
   /** A blank sample — not this loan's real schedule. Fill in the real
    *  Collected/Savings for each installment (matched by Due No), then upload. */
-  function downloadTemplate() {
-    downloadXlsx(
-      'legacy-loan-import-template.xlsx',
-      [
-        { 'Due No': 1, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
-        { 'Due No': 2, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
-        { 'Due No': 3, 'Due Date': '', 'Due Amount': '', Collected: '', Savings: '' },
-      ],
-      'History',
-    );
+  async function downloadTemplate() {
+    setError('');
+    try {
+      await downloadXlsx(
+        'legacy-loan-import-template.xlsx',
+        [
+          { 'Due No': 1, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
+          { 'Due No': 2, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
+          { 'Due No': 3, 'Due Date': '', 'Due Amount': '', Collected: '', Savings: '' },
+        ],
+        'History',
+      );
+    } catch (e) {
+      setError(e instanceof Error ? `Could not download the template: ${e.message}` : 'Could not download the template');
+    }
   }
 
   async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
