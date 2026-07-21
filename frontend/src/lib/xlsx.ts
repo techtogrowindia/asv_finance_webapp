@@ -11,3 +11,13 @@ export async function downloadXlsx(filename: string, rows: Record<string, unknow
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename);
 }
+
+/** Parse an uploaded .xlsx/.xls/.csv file's first sheet into row objects keyed
+ *  by header text (used for bulk-import flows, e.g. field collections). */
+export async function readXlsxFile(file: File): Promise<Record<string, unknown>[]> {
+  const XLSX = await import('xlsx');
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+}

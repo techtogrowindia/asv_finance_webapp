@@ -7,6 +7,7 @@ import { centerScope, clientCenterScope } from '../common/scope';
 import { stripLeadingZeros } from '../common/format.util';
 import { round2 } from '../loans/schedule.util';
 import { PostCollectionDto } from './dto/post-collection.dto';
+import { BulkImportCollectionDto } from './dto/bulk-import-collection.dto';
 
 type ScheduleRow = {
   id: string;
@@ -211,6 +212,91 @@ export class CollectionsService {
       return {
         loansCollected, totalCollected: round2(totalCollected), totalSavings: round2(totalSavings),
         totalSavingsRefunded: round2(totalSavingsRefunded),
+      };
+    });
+  }
+
+  /**
+   * Bulk-post a center's collections from an uploaded Excel sheet, matched by
+   * loan account. Each row is applied independently (same FIFO/advance/savings
+   * logic as `post()`) so one bad row doesn't block the rest — failures are
+   * reported back per row instead of aborting the whole import.
+   */
+  async bulkImport(user: AuthUser, dto: BulkImportCollectionDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const center = await this.getScopedCenter(tx, user, dto.centerId);
+      const workingDate = await this.resolveWorkingDate(tx, center.branchId);
+
+      const results: {
+        loanAccount: string;
+        clientName: string | null;
+        status: 'OK' | 'ERROR';
+        message: string | null;
+        applied: number;
+        advanceBanked: number;
+        savingsCollected: number;
+        loanClosed: boolean;
+      }[] = [];
+
+      let totalCollected = 0;
+      let totalSavings = 0;
+      let successCount = 0;
+
+      for (const row of dto.rows) {
+        const loanAccount = row.loanAccount.trim();
+        try {
+          const loan = await tx.loan.findFirst({
+            where: { loanAccount, client: { centerId: dto.centerId } },
+            include: { client: { select: { id: true, name: true } } },
+          });
+          if (!loan) throw new NotFoundException(`Loan account ${loanAccount} not found in this center`);
+          if (loan.loanType !== 'OPEN') throw new BadRequestException(`${loanAccount} is already closed`);
+
+          const { applied, remaining, loanClosed, savingsCollected } = await this.applyFifo(
+            tx, user, loan.id, loan.clientId, round2(row.amount), 'REGULAR', workingDate, true, row.savings,
+          );
+
+          let advanceBanked = 0;
+          if (remaining > 0 && !loanClosed) {
+            advanceBanked = remaining;
+            await tx.loan.update({ where: { id: loan.id }, data: { advanceBalance: { increment: advanceBanked } } });
+          }
+
+          totalCollected = round2(totalCollected + applied);
+          totalSavings = round2(totalSavings + savingsCollected);
+          successCount += 1;
+
+          results.push({
+            loanAccount, clientName: loan.client.name, status: 'OK', message: null,
+            applied, advanceBanked, savingsCollected, loanClosed,
+          });
+        } catch (e) {
+          results.push({
+            loanAccount, clientName: null, status: 'ERROR',
+            message: e instanceof Error ? e.message : 'Failed to post this row',
+            applied: 0, advanceBanked: 0, savingsCollected: 0, loanClosed: false,
+          });
+        }
+      }
+
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'Center',
+        entityId: dto.centerId,
+        action: 'BULK_IMPORT_COLLECT',
+        employeeId: user.employeeId,
+        after: {
+          rows: dto.rows.length, successCount, totalCollected: round2(totalCollected),
+          totalSavings: round2(totalSavings), eodDate: workingDate,
+        },
+      });
+
+      return {
+        successCount,
+        failCount: dto.rows.length - successCount,
+        totalCollected: round2(totalCollected),
+        totalSavings: round2(totalSavings),
+        results,
       };
     });
   }

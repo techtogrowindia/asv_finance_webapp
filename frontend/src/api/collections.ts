@@ -44,6 +44,39 @@ export const postCollection = (loanId: string, amount: number, savings?: number)
     body: JSON.stringify({ loanId, amount, ...(savings !== undefined ? { savings } : {}) }),
   });
 
+export interface BulkImportRow {
+  loanAccount: string;
+  amount: number;
+  savings?: number;
+}
+
+export interface BulkImportResultRow {
+  loanAccount: string;
+  clientName: string | null;
+  status: 'OK' | 'ERROR';
+  message: string | null;
+  applied: number;
+  advanceBanked: number;
+  savingsCollected: number;
+  loanClosed: boolean;
+}
+
+export interface BulkImportResult {
+  successCount: number;
+  failCount: number;
+  totalCollected: number;
+  totalSavings: number;
+  results: BulkImportResultRow[];
+}
+
+/** Post a whole center's collections from an uploaded Excel sheet in one call — each
+ *  row matched by loan account and applied independently (see collections.controller). */
+export const bulkImportCollections = (centerId: string, rows: BulkImportRow[]) =>
+  api<BulkImportResult>('/collections/bulk-import', {
+    method: 'POST',
+    body: JSON.stringify({ centerId, rows }),
+  });
+
 export interface CenterSummary {
   centerId: string;
   centerCode: string;

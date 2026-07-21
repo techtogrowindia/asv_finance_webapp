@@ -7,6 +7,7 @@ import { CollectionsService } from './collections.service';
 import { PostCollectionDto } from './dto/post-collection.dto';
 import { CenterIdDto } from './dto/center-id.dto';
 import { ForecloseDto } from './dto/foreclose.dto';
+import { BulkImportCollectionDto } from './dto/bulk-import-collection.dto';
 
 @Controller('collections')
 export class CollectionsController {
@@ -56,6 +57,15 @@ export class CollectionsController {
   @Post('bulk-demand')
   bulkDemand(@CurrentUser() user: AuthUser, @Body() dto: CenterIdDto) {
     return this.collections.bulkCollectDemand(user, dto.centerId);
+  }
+
+  // Excel-import bulk collection — one row per loan account, from a sheet the
+  // FDO fills out in the field and uploads back (parsed client-side).
+  @Roles('FDO', 'BM')
+  @RequirePermission('collection.post')
+  @Post('bulk-import')
+  bulkImport(@CurrentUser() user: AuthUser, @Body() dto: BulkImportCollectionDto) {
+    return this.collections.bulkImport(user, dto);
   }
 
   // ---- Loan Advance (BM/HO — collection.advance) ----
