@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { BulkImportResult, BulkImportRow, DueRow, bulkImportCollections, getDue, postCollection } from '../api/collections';
+import { BulkImportResult, BulkImportRow, DueRow, bulkImportCollections, getCenterRoster, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
 import { BranchScopeSelect } from '../components/BranchScopeSelect';
@@ -43,6 +43,7 @@ export function CollectionsPage() {
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
+  const [templateRows, setTemplateRows] = useState<DueRow[] | null>(null);
   const [advances, setAdvances] = useState<Record<string, string>>({});
   const [savingsInputs, setSavingsInputs] = useState<Record<string, string>>({});
   const [savings, setSavings] = useState(0);
@@ -68,19 +69,23 @@ export function CollectionsPage() {
     getDue(cid)
       .then((data) => { setRows(data); setAdvances({}); setSavingsInputs({}); })
       .catch((e) => setError(e.message));
+    setTemplateRows(null);
+    getCenterRoster(cid)
+      .then(setTemplateRows)
+      .catch((e) => setError(e.message));
   }
 
   useEffect(() => {
     setImportResult(null);
     if (centerId) refresh(centerId);
-    else setRows(null);
+    else { setRows(null); setTemplateRows(null); }
   }, [centerId]);
 
   function downloadTemplate() {
-    if (!rows || rows.length === 0) return;
+    if (!templateRows || templateRows.length === 0) return;
     downloadXlsx(
       `collection-${centerName?.code ?? centerId}-${user?.workingDate ? new Date(user.workingDate).toISOString().slice(0, 10) : ''}.xlsx`,
-      rows.map((r) => ({
+      templateRows.map((r) => ({
         'Client ID': r.displayId,
         'Client Name': r.clientName,
         'Loan A/c': r.loanAccount,
@@ -177,7 +182,7 @@ export function CollectionsPage() {
               <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
             ))}
           </select>
-          <button className="btn btn-ghost" disabled={!rows?.length} onClick={downloadTemplate}>
+          <button className="btn btn-ghost" disabled={!templateRows?.length} onClick={downloadTemplate}>
             Download template
           </button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onImportFile} />
@@ -186,6 +191,10 @@ export function CollectionsPage() {
           </button>
         </div>
       </div>
+
+      {centerId && templateRows && templateRows.length === 0 && (
+        <div className="hint" style={{ marginBottom: 12 }}>No open loans in this center yet — nothing to build a template from.</div>
+      )}
 
       {error && <div className="alert-error">{error}</div>}
       {success && (

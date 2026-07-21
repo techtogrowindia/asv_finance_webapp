@@ -19,8 +19,9 @@ export class CollectionsController {
     @CurrentUser() user: AuthUser,
     @Query('centerId', ParseUUIDPipe) centerId: string,
     @Query('date') date?: string,
+    @Query('includeAll') includeAll?: string,
   ) {
-    return this.collections.due(user, centerId, date);
+    return this.collections.due(user, centerId, date, includeAll === 'true');
   }
 
   @RequirePermission('collection.view')

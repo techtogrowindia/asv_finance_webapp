@@ -29,6 +29,12 @@ export interface DemandClientRow extends DueRow {
 export const getDue = (centerId: string, date?: string) =>
   api<DueRow[]>(`/collections/due?centerId=${centerId}${date ? `&date=${date}` : ''}`);
 
+/** Every open loan in the center, including ones with nothing due today
+ *  (totalDue 0) — the full roster for the bulk-import Excel template, as
+ *  opposed to getDue()'s "who owes right now" list. */
+export const getCenterRoster = (centerId: string, date?: string) =>
+  api<DueRow[]>(`/collections/due?centerId=${centerId}${date ? `&date=${date}` : ''}&includeAll=true`);
+
 export const getDemandCenterwise = (date?: string) =>
   api<DemandCenterRow[]>(`/collections/demand?type=CENTERWISE${date ? `&date=${date}` : ''}`);
 
