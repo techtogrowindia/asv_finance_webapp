@@ -32,15 +32,19 @@ export function CollectionCorrectionsPage() {
 
   async function onApprove(r: CollectionCorrection) {
     const needsDoubleCheck = r.wouldReopen || r.wouldClose || r.loanType === 'CLOSED';
+    const savingsNote = r.correctedSavings !== null
+      ? ` Savings that day also corrected from ${inr(r.originalSavings ?? 0)} to ${inr(r.correctedSavings)}.`
+      : '';
     const ok = await confirm({
       title: needsDoubleCheck ? 'Double-check before approving' : 'Approve this correction?',
-      message: needsDoubleCheck
+      message: (needsDoubleCheck
         ? (r.wouldReopen
             ? `This was the loan's closing payment. Approving will REOPEN loan ${r.loanAccount} and reverse its automatic savings refund, then re-apply the corrected amount of ${inr(r.correctedAmount)}. Continue?`
             : r.wouldClose
               ? `Approving will fully CLOSE loan ${r.loanAccount} with a corrected amount of ${inr(r.correctedAmount)} (was ${inr(r.originalAmount)}). Continue?`
               : `Loan ${r.loanAccount} is currently closed — approving touches its final settlement. Continue?`)
-        : `Correct ${r.clientName}'s ${fmtDate(r.collectedOn)} collection on ${r.loanAccount} from ${inr(r.originalAmount)} to ${inr(r.correctedAmount)}?`,
+        : `Correct ${r.clientName}'s ${fmtDate(r.collectedOn)} collection on ${r.loanAccount} from ${inr(r.originalAmount)} to ${inr(r.correctedAmount)}?`)
+        + savingsNote,
       confirmLabel: 'Approve',
       danger: needsDoubleCheck,
     });
@@ -51,6 +55,7 @@ export function CollectionCorrectionsPage() {
       setSuccess(
         `Corrected ${r.loanAccount} — ${inr(res.applied)} applied` +
           (res.advanceBanked > 0 ? `, ${inr(res.advanceBanked)} banked as advance` : '') +
+          (res.savingsCorrected !== null ? `, savings corrected to ${inr(res.savingsCorrected)}` : '') +
           (res.reopened ? '. Loan re-opened.' : res.loanClosed ? '. Loan closed.' : '') + '.',
       );
       refresh();
@@ -127,6 +132,11 @@ export function CollectionCorrectionsPage() {
                 <td>{inr(r.originalAmount)}</td>
                 <td style={{ fontWeight: 600 }}>
                   {inr(r.correctedAmount)}
+                  {r.correctedSavings !== null && (
+                    <div className="hint" style={{ marginTop: 2 }}>
+                      Savings {inr(r.originalSavings ?? 0)} → {inr(r.correctedSavings)}
+                    </div>
+                  )}
                   {(r.wouldReopen || r.wouldClose) && (
                     <div className="hint" style={{ marginTop: 2 }}>{r.wouldReopen ? 'Re-opens loan' : 'Closes loan'}</div>
                   )}

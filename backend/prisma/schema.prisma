@@ -619,6 +619,9 @@ model CollectionCorrection {
   // Loan (principal+interest) amount actually posted that day vs what it should be.
   originalAmount Decimal                    @map("original_amount") @db.Decimal(14, 2)
   correctedAmount Decimal                   @map("corrected_amount") @db.Decimal(14, 2)
+  // Savings deposited that day vs what it should be — null means "don't touch savings".
+  originalSavings  Decimal?                 @map("original_savings") @db.Decimal(14, 2)
+  correctedSavings Decimal?                 @map("corrected_savings") @db.Decimal(14, 2)
   reason         String
   status         CollectionCorrectionStatus @default(PENDING)
   // Did the original entry close the loan? / will the correction re-close it?
@@ -642,6 +645,9 @@ model CollectionCorrection {
 enum SavingsTxnKind {
   DEPOSIT
   REFUND
+  // Signed adjustment posted by a collection correction (see CollectionCorrection)
+  // — unlike DEPOSIT/REFUND, `amount` may be negative here.
+  CORRECTION_REVERSAL
 }
 
 /// Savings passbook: a DEPOSIT is banked with each collection; a REFUND returns
@@ -652,7 +658,7 @@ model SavingsTxn {
   tenantId    String         @map("tenant_id") @db.Uuid
   clientId    String         @map("client_id") @db.Uuid
   loanId      String?        @map("loan_id") @db.Uuid // the loan being collected (deposits); null for refunds
-  amount      Decimal        @db.Decimal(14, 2) // always positive; kind gives the direction
+  amount      Decimal        @db.Decimal(14, 2) // positive for DEPOSIT/REFUND (kind gives direction); may be negative for CORRECTION_REVERSAL
   kind        SavingsTxnKind
   collectedOn DateTime       @map("collected_on") @db.Date // branch working_date at time of entry
   enteredBy   String         @map("entered_by") @db.Uuid

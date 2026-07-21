@@ -11,6 +11,7 @@ export function RequestCorrectionModal({ loanId, onClose }: { loanId: string; on
   const [days, setDays] = useState<CollectionDay[] | null>(null);
   const [collectedOn, setCollectedOn] = useState('');
   const [correctedAmount, setCorrectedAmount] = useState('');
+  const [correctedSavings, setCorrectedSavings] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -27,11 +28,21 @@ export function RequestCorrectionModal({ loanId, onClose }: { loanId: string; on
     if (!collectedOn || !selected) { setError('Pick which day\'s collection to correct'); return; }
     const amt = Number(correctedAmount);
     if (!Number.isFinite(amt) || amt < 0) { setError('Enter a valid corrected amount'); return; }
-    if (amt === selected.amount) { setError('That is the same amount already on record'); return; }
+    const savingsEntered = correctedSavings.trim() !== '';
+    const sav = savingsEntered ? Number(correctedSavings) : undefined;
+    if (savingsEntered && (!Number.isFinite(sav!) || sav! < 0)) { setError('Enter a valid corrected savings amount'); return; }
+    if (amt === selected.amount && (!savingsEntered || sav === selected.savings)) {
+      setError('Nothing to correct — change the amount and/or the savings');
+      return;
+    }
     if (reason.trim().length < 3) { setError('Enter a short reason for the correction'); return; }
     setBusy(true);
     try {
-      await requestCorrection({ loanId, collectedOn, correctedAmount: amt, reason: reason.trim() });
+      await requestCorrection({
+        loanId, collectedOn, correctedAmount: amt,
+        ...(savingsEntered ? { correctedSavings: sav } : {}),
+        reason: reason.trim(),
+      });
       setSuccess(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not submit the correction request');
@@ -56,7 +67,7 @@ export function RequestCorrectionModal({ loanId, onClose }: { loanId: string; on
         ) : (
           <>
             <p className="modal-message">
-              This corrects the loan repayment amount only — savings deposits for that day aren't affected.
+              Corrects the loan repayment amount for that day. Leave savings blank to leave it as recorded.
             </p>
             {error && <div className="alert-error">{error}</div>}
             {days && days.length === 0 && (
@@ -80,6 +91,15 @@ export function RequestCorrectionModal({ loanId, onClose }: { loanId: string; on
                   <input
                     className="input" type="number" min="0" placeholder="0"
                     value={correctedAmount} onChange={(e) => setCorrectedAmount(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label>
+                    Corrected savings {selected ? `(was ${inr(selected.savings)}, blank = unchanged)` : ''}
+                  </label>
+                  <input
+                    className="input" type="number" min="0" placeholder="Leave blank to leave unchanged"
+                    value={correctedSavings} onChange={(e) => setCorrectedSavings(e.target.value)}
                   />
                 </div>
                 <div className="field">

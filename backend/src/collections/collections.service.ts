@@ -896,6 +896,7 @@ export class CollectionsService {
         where: { loanId, kind: 'REGULAR' },
         orderBy: { collectedOn: 'desc' },
       });
+      const savingsRows = await tx.savingsTxn.findMany({ where: { loanId, kind: 'DEPOSIT' } });
       const corrs = await tx.collectionCorrection.findMany({
         where: { loanId, status: { in: ['PENDING', 'APPROVED'] } },
         select: { collectedOn: true },
@@ -907,20 +908,28 @@ export class CollectionsService {
         const key = r.collectedOn.toISOString().slice(0, 10);
         byDay.set(key, round2((byDay.get(key) ?? 0) + Number(r.amount)));
       }
+      const savingsByDay = new Map<string, number>();
+      for (const s of savingsRows) {
+        const key = s.collectedOn.toISOString().slice(0, 10);
+        savingsByDay.set(key, round2((savingsByDay.get(key) ?? 0) + Number(s.amount)));
+      }
       return [...byDay.entries()]
         .filter(([day, amt]) => amt > 0 && !blocked.has(day))
-        .map(([collectedOn, amount]) => ({ collectedOn, amount }));
+        .map(([collectedOn, amount]) => ({ collectedOn, amount, savings: savingsByDay.get(collectedOn) ?? 0 }));
     });
   }
 
-  /** Snapshot the numbers a correction turns on: what the day actually applied,
-   *  the loan's outstanding now, and the resulting closure-state change. */
+  /** Snapshot the numbers a correction turns on: what the day actually applied
+   *  (loan + savings), the loan's outstanding now, and the resulting
+   *  closure-state change. */
   private async correctionContext(tx: Prisma.TransactionClient, loanId: string, collectedOn: Date) {
     const origRows = await tx.collection.findMany({ where: { loanId, collectedOn, kind: 'REGULAR' } });
     const originalApplied = round2(origRows.reduce((s, r) => s + Number(r.amount), 0));
+    const origSavingsRows = await tx.savingsTxn.findMany({ where: { loanId, collectedOn, kind: 'DEPOSIT' } });
+    const originalSavings = round2(origSavingsRows.reduce((s, r) => s + Number(r.amount), 0));
     const sched = await tx.repaymentSchedule.findMany({ where: { loanId } });
     const outstandingNow = round2(sched.reduce((s, r) => s + Number(r.dueBalance), 0));
-    return { origRows, originalApplied, outstandingNow };
+    return { origRows, originalApplied, origSavingsRows, originalSavings, outstandingNow };
   }
 
   private closureFlags(wasClosed: boolean, correctedAmount: number, outstandingAfterReversal: number) {
@@ -973,10 +982,15 @@ export class CollectionsService {
         );
       }
 
-      const { origRows, originalApplied, outstandingNow } = await this.correctionContext(tx, dto.loanId, collectedOn);
+      const { origRows, originalApplied, originalSavings, outstandingNow } = await this.correctionContext(tx, dto.loanId, collectedOn);
       if (origRows.length === 0) throw new BadRequestException('No field collection was posted for this loan on that date.');
       const correctedAmount = round2(dto.correctedAmount);
-      if (correctedAmount === originalApplied) throw new BadRequestException('The corrected amount is the same as what was entered.');
+      const correctedSavings = dto.correctedSavings !== undefined ? round2(dto.correctedSavings) : undefined;
+      const amountChanged = correctedAmount !== originalApplied;
+      const savingsChanged = correctedSavings !== undefined && correctedSavings !== originalSavings;
+      if (!amountChanged && !savingsChanged) {
+        throw new BadRequestException('Nothing to correct — the amount (and savings, if entered) match what was already recorded.');
+      }
 
       const wasClosed = loan.loanType === 'CLOSED';
       const outstandingAfterReversal = round2(outstandingNow + originalApplied);
@@ -990,6 +1004,8 @@ export class CollectionsService {
           collectedOn,
           originalAmount: originalApplied,
           correctedAmount,
+          originalSavings: correctedSavings !== undefined ? originalSavings : null,
+          correctedSavings: correctedSavings ?? null,
           reason: dto.reason,
           status: 'PENDING',
           wouldReopen,
@@ -1003,9 +1019,16 @@ export class CollectionsService {
         entityId: created.id,
         action: 'CORRECTION_REQUEST',
         employeeId: user.employeeId,
-        after: { loanId: dto.loanId, collectedOn: dto.collectedOn, originalApplied, correctedAmount, reason: dto.reason },
+        after: {
+          loanId: dto.loanId, collectedOn: dto.collectedOn, originalApplied, correctedAmount,
+          originalSavings: correctedSavings !== undefined ? originalSavings : undefined, correctedSavings, reason: dto.reason,
+        },
       });
-      return { id: created.id, status: created.status, originalAmount: originalApplied, correctedAmount, wouldReopen, wouldClose };
+      return {
+        id: created.id, status: created.status, originalAmount: originalApplied, correctedAmount,
+        originalSavings: correctedSavings !== undefined ? originalSavings : null, correctedSavings: correctedSavings ?? null,
+        wouldReopen, wouldClose,
+      };
     });
   }
 
@@ -1049,6 +1072,8 @@ export class CollectionsService {
           collectedOn: r.collectedOn,
           originalAmount: Number(r.originalAmount),
           correctedAmount: Number(r.correctedAmount),
+          originalSavings: r.originalSavings !== null ? Number(r.originalSavings) : null,
+          correctedSavings: r.correctedSavings !== null ? Number(r.correctedSavings) : null,
           reason: r.reason,
           status: r.status,
           wouldReopen: r.wouldReopen,
@@ -1091,8 +1116,11 @@ export class CollectionsService {
         );
       }
 
-      const { origRows, originalApplied, outstandingNow } = await this.correctionContext(tx, corr.loanId, corr.collectedOn);
+      const { origRows, originalApplied, originalSavings, outstandingNow } =
+        await this.correctionContext(tx, corr.loanId, corr.collectedOn);
       if (origRows.length === 0) throw new BadRequestException('The original collection is no longer present (already corrected?).');
+      const correctingSavings = corr.correctedSavings !== null;
+      const correctedSavings = correctingSavings ? round2(Number(corr.correctedSavings)) : 0;
 
       const correctedAmount = round2(Number(corr.correctedAmount));
       const wasClosed = loan.loanType === 'CLOSED';
@@ -1141,7 +1169,25 @@ export class CollectionsService {
         });
       }
 
-      // 2. If that day had closed the loan, re-open it and restore its auto savings-refund.
+      // 2. Reverse that day's savings deposit, if it's part of this correction
+      //    (independent of loan closure — a signed CORRECTION_REVERSAL entry,
+      //    since SavingsTxn's DEPOSIT/REFUND kinds are always-positive by convention).
+      if (correctingSavings && originalSavings > 0) {
+        await tx.savingsTxn.create({
+          data: {
+            tenantId: user.tenantId,
+            clientId: loan.clientId,
+            loanId: corr.loanId,
+            amount: round2(-originalSavings),
+            kind: 'CORRECTION_REVERSAL',
+            collectedOn: today,
+            enteredBy: user.employeeId,
+          },
+        });
+        await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { decrement: originalSavings } } });
+      }
+
+      // 3. If that day had closed the loan, re-open it and restore its auto savings-refund.
       let refundRestored = 0;
       if (wasClosed) {
         await tx.loan.update({ where: { id: corr.loanId }, data: { loanType: 'OPEN', closedDate: null } });
@@ -1166,7 +1212,24 @@ export class CollectionsService {
         }
       }
 
-      // 3. Re-apply the corrected amount (no new savings deposit; may re-close + refund).
+      // 4. Deposit the corrected savings amount, if this correction includes one.
+      if (correctingSavings && correctedSavings > 0) {
+        await tx.savingsTxn.create({
+          data: {
+            tenantId: user.tenantId,
+            clientId: loan.clientId,
+            loanId: corr.loanId,
+            amount: correctedSavings,
+            kind: 'DEPOSIT',
+            collectedOn: today,
+            enteredBy: user.employeeId,
+          },
+        });
+        await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { increment: correctedSavings } } });
+      }
+
+      // 5. Re-apply the corrected loan amount (no new default savings deposit
+      //    here — savings was already handled in steps 2 & 4; may re-close + refund).
       let applied = 0;
       let advanceBanked = 0;
       let loanClosed = false;
@@ -1202,10 +1265,16 @@ export class CollectionsService {
         entityId: id,
         action: 'CORRECTION_APPROVE',
         employeeId: user.employeeId,
-        before: { originalApplied, wasClosed },
-        after: { correctedAmount, applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed, refundRestored, savingsRefunded, eodDate: today },
+        before: { originalApplied, originalSavings: correctingSavings ? originalSavings : undefined, wasClosed },
+        after: {
+          correctedAmount, applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed, refundRestored, savingsRefunded,
+          correctedSavings: correctingSavings ? correctedSavings : undefined, eodDate: today,
+        },
       });
-      return { id, status: 'APPROVED', applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed };
+      return {
+        id, status: 'APPROVED', applied, advanceBanked, loanClosed, reopened: wasClosed && !loanClosed,
+        savingsCorrected: correctingSavings ? correctedSavings : null,
+      };
     });
   }
 

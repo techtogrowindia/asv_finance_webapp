@@ -21,10 +21,17 @@ export function LoanStatementPage() {
 
   return (
     <>
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div
+        className="no-print"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}
+      >
         <button className="back-link" onClick={() => navigate(-1)}>← Back</button>
         {can('collection.correct') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setShowCorrection(true)}>
+          <button
+            className="btn btn-primary btn-sm"
+            style={{ whiteSpace: 'nowrap' }}
+            onClick={() => setShowCorrection(true)}
+          >
             Request correction
           </button>
         )}
