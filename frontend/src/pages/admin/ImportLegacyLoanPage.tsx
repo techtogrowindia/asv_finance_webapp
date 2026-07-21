@@ -1,16 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { listMembers, MemberListItem } from '../../api/members';
 import { Frequency, LoanProductLite, importLegacyLoan, listFrequencies, listLoanProducts } from '../../api/loans';
 import { getSettings } from '../../api/settings';
+import { downloadXlsx, readXlsxFile } from '../../lib/xlsx';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('en-IN');
+
+const normKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
+const DUE_NO_KEYS = ['dueno', 'no', 'installment', 'installmentno', 'sno', 'slno'];
+const COLLECTED_KEYS = ['collected', 'amount', 'amt', 'paid'];
+const SAVINGS_KEYS = ['savings', 'saving'];
 
 interface PreviewRow {
   dueNo: number;
@@ -58,8 +64,10 @@ export function ImportLegacyLoanPage() {
   const [savings, setSavings] = useState<Record<number, string>>({});
   const [paidCount, setPaidCount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     listLoanProducts().then(setProducts).catch((e) => setError(e.message));
@@ -129,6 +137,57 @@ export function ImportLegacyLoanPage() {
     setSavings(nextSav);
   }
 
+  function downloadTemplate() {
+    if (schedule.length === 0) return;
+    downloadXlsx(
+      `legacy-loan-${client?.displayId ?? 'template'}.xlsx`,
+      schedule.map((r) => ({
+        'Due No': r.dueNo,
+        'Due Date': fmtDate(r.dueDate),
+        'Due Amount': r.dueAmt,
+        Collected: '',
+        Savings: '',
+      })),
+      'History',
+    );
+  }
+
+  async function onImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!file) return;
+    setError(''); setSuccess(''); setImportBusy(true);
+    try {
+      const raw = await readXlsxFile(file);
+      const nextColl: Record<number, string> = {};
+      const nextSav: Record<number, string> = {};
+      let matched = 0;
+      for (const row of raw) {
+        const entries = Object.entries(row).map(([k, v]) => [normKey(k), v] as const);
+        const get = (keys: string[]) => entries.find(([k]) => keys.includes(k))?.[1];
+        const dueNoRaw = get(DUE_NO_KEYS);
+        const dueNo = Number(dueNoRaw);
+        if (dueNoRaw === undefined || dueNoRaw === '' || !Number.isFinite(dueNo) || dueNo < 1) continue;
+        const collectedRaw = get(COLLECTED_KEYS);
+        const savingsRaw = get(SAVINGS_KEYS);
+        if (collectedRaw !== undefined && collectedRaw !== '') nextColl[dueNo] = String(collectedRaw);
+        if (savingsRaw !== undefined && savingsRaw !== '') nextSav[dueNo] = String(savingsRaw);
+        matched += 1;
+      }
+      if (matched === 0) {
+        setError('No valid rows found — check the file has a "Due No" column matching the downloaded template.');
+        return;
+      }
+      setCollected((c) => ({ ...c, ...nextColl }));
+      setSavings((s) => ({ ...s, ...nextSav }));
+      setSuccess(`Loaded ${matched} row(s) from the file — review the table below, then Import loan.`);
+    } catch (e2) {
+      setError(e2 instanceof Error ? e2.message : 'Could not read that file');
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
   async function submit() {
     if (!client || !product || !disbursalDate || !dueStartDate) return;
     if (totals.coll <= 0) { setError('Enter at least one collected installment'); return; }
@@ -171,7 +230,8 @@ export function ImportLegacyLoanPage() {
       <p className="page-sub">
         Bring a loan a member took before this system existed (and is still repaying) into the app as an open loan.
         Pick the member and matching product, set the original disbursal &amp; due-start dates, then enter what was
-        actually collected — and any savings banked — for each past installment.
+        actually collected — and any savings banked — for each past installment (type it in directly, or download the
+        template and upload it back as Excel).
       </p>
 
       {error && <div className="alert-error">{error}</div>}
@@ -251,9 +311,19 @@ export function ImportLegacyLoanPage() {
                 <div className="field" style={{ marginBottom: 0 }}>
                   <button className="btn btn-ghost" onClick={fillPaid}>Fill as paid</button>
                 </div>
-                <div className="hint" style={{ marginBottom: 8 }}>
-                  Seeds the first N rows as fully paid{defaultSavings > 0 ? ` + ${inr(defaultSavings)} savings each` : ''}. Edit any row below.
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <button className="btn btn-ghost" onClick={downloadTemplate}>Download template</button>
                 </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onImportFile} />
+                  <button className="btn btn-primary" disabled={importBusy} onClick={() => fileInputRef.current?.click()}>
+                    {importBusy ? <span className="spinner" /> : 'Import Excel'}
+                  </button>
+                </div>
+              </div>
+              <div className="hint" style={{ marginTop: 8 }}>
+                Seeds the first N rows as fully paid{defaultSavings > 0 ? ` + ${inr(defaultSavings)} savings each` : ''}, or download the template, fill
+                in the real Collected/Savings for each installment offline, and re-upload. Either way, review and edit any row below before importing.
               </div>
             </div>
 

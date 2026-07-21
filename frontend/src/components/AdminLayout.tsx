@@ -75,8 +75,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
             <button
               className="btn btn-ghost"
               onClick={() => {
+                // BM signs in at /login (the /admin door only accepts HO —
+                // see PORTAL_ROLES in auth.service.ts), even though their
+                // session lives under /admin/* once signed in.
+                const loginPath = user?.role === 'HO' ? '/admin' : '/login';
                 logout();
-                navigate('/admin', { replace: true });
+                navigate(loginPath, { replace: true });
               }}
             >
               Sign out
