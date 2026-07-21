@@ -126,7 +126,7 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
           </table>
         </div>
         {st.foreclosureSettlement && (
-          <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
+          <p className="hint" style={{ margin: '10px 0 18px' }}>
             {st.foreclosureSettlement.installmentsSettled} remaining installment(s) were closed in one payment on{' '}
             {date(st.foreclosureSettlement.date)}
             {st.foreclosureSettlement.interestWaived > 0 ? ` (${inr(st.foreclosureSettlement.interestWaived)} interest waived)` : ''}
