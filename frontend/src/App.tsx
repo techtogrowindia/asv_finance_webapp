@@ -170,11 +170,20 @@ export default function App() {
             </RequireAuth>
           }
         />
-        {/* Reuses the same MemberDetailPage/LoanLedgerPage as the employee portal
-            (both are portal-aware — see MemberDetailPage's `base` and
-            LoanLedgerPage's navigate(-1)) so BM/HO can review KYC on the same
-            page; unlike the genuine admin pages these don't self-wrap in
-            AdminLayout, so the route supplies it here. */}
+        {/* Reuses the same MembersPage/MemberDetailPage/LoanLedgerPage as the
+            employee portal (all portal-aware — see MembersPage's/
+            MemberDetailPage's `base` and LoanLedgerPage's navigate(-1)) so
+            BM/HO can browse & review the same pages; unlike the genuine admin
+            pages these don't self-wrap in AdminLayout, so the route supplies
+            it here. */}
+        <Route
+          path="/admin/members"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <AdminLayout><MembersPage /></AdminLayout>
+            </RequireAuth>
+          }
+        />
         <Route
           path="/admin/clients/:id"
           element={
