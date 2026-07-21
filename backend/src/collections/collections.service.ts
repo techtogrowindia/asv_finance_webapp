@@ -929,6 +929,13 @@ export class CollectionsService {
     return { wouldReopen, wouldClose, needsConfirm: wouldReopen || wouldClose || wasClosed };
   }
 
+  /** True if this loan was ever foreclosed — its closure isn't a plain
+   *  full-repayment, so a regular-collection correction can't safely touch it. */
+  private async hasForeclosure(tx: Prisma.TransactionClient, loanId: string): Promise<boolean> {
+    const row = await tx.collection.findFirst({ where: { loanId, kind: { in: ['FORECLOSURE', 'FORECLOSURE_CHARGE'] } } });
+    return !!row;
+  }
+
   /** FDO requests a correction to a past REGULAR field collection (→ approval queue). */
   async requestCorrection(user: AuthUser, dto: RequestCorrectionDto) {
     return this.prisma.withTenant(user, async (tx) => {
@@ -954,6 +961,15 @@ export class CollectionsService {
       if (nonRegular) {
         throw new BadRequestException(
           'That day had an advance or foreclosure entry — corrections cover regular field collections only.',
+        );
+      }
+      // A foreclosed loan's closure involved waived interest and a foreclosure
+      // charge computed against the (then-uncorrected) balance — a plain reversal
+      // of one day's regular collection can't safely unwind that, so block it.
+      if (await this.hasForeclosure(tx, dto.loanId)) {
+        throw new BadRequestException(
+          'This loan was foreclosed — its closure involved waived interest and charges that a simple correction ' +
+            "can't safely unwind. Contact support for a manual adjustment.",
         );
       }
 
@@ -1066,6 +1082,14 @@ export class CollectionsService {
       });
       if (!loan) throw new NotFoundException('Loan not found');
       const today = await this.resolveWorkingDate(tx, loan.client.center.branchId);
+
+      // Re-check: the loan may have been foreclosed after this correction was
+      // requested but before it was approved (see requestCorrection).
+      if (await this.hasForeclosure(tx, corr.loanId)) {
+        throw new BadRequestException(
+          'This loan has since been foreclosed — this correction can no longer be safely applied. Reject it instead.',
+        );
+      }
 
       const { origRows, originalApplied, outstandingNow } = await this.correctionContext(tx, corr.loanId, corr.collectedOn);
       if (origRows.length === 0) throw new BadRequestException('The original collection is no longer present (already corrected?).');
