@@ -4,6 +4,7 @@ import { Public } from '../common/auth/public.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -14,6 +15,13 @@ export class AuthController {
   @HttpCode(200)
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
+  }
+
+  /** Self-service password change — any authenticated role (FDO/BM/HO), own account only. */
+  @Post('change-password')
+  @HttpCode(200)
+  changePassword(@CurrentUser() user: AuthUser, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(user, dto);
   }
 
   /** Current identity — used by the web app after login / on refresh. */

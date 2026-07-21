@@ -1,10 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUser, Role } from '../common/types/auth-user';
 import { JwtPayload } from '../common/auth/jwt.strategy';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 interface LoginLookupRow {
   id: string;
@@ -86,6 +87,21 @@ export class AuthService {
         branchId: emp.branch_id,
       },
     };
+  }
+
+  /** Self-service password change — any authenticated role, own account only. */
+  async changePassword(user: AuthUser, dto: ChangePasswordDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const emp = await tx.employee.findFirst({ where: { id: user.employeeId } });
+      if (!emp) throw new NotFoundException('Employee not found');
+
+      const ok = await argon2.verify(emp.passwordHash, dto.currentPassword).catch(() => false);
+      if (!ok) throw new UnauthorizedException('Current password is incorrect');
+
+      const passwordHash = await argon2.hash(dto.newPassword);
+      await tx.employee.update({ where: { id: user.employeeId }, data: { passwordHash } });
+      return { changed: true };
+    });
   }
 
   /** The operative business date (never real-world `now()` — invariant #4). */

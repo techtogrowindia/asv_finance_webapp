@@ -1,6 +1,7 @@
 import { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { Logo } from './Logo';
 import { SideNav, SideNavItem } from './SideNav';
 
@@ -30,6 +31,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const initials = (user?.name ?? '?').slice(0, 2).toUpperCase();
 
   return (
@@ -54,18 +56,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </div>
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              logout();
-              navigate('/login', { replace: true });
-            }}
-          >
-            Sign out
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setShowChangePassword(true)}>
+              Change password
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                logout();
+                navigate('/login', { replace: true });
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </header>
         <div className="content">{children}</div>
       </div>
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
   );
 }
