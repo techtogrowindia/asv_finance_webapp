@@ -56,13 +56,13 @@ export function ImportLegacyLoanPage() {
   const [client, setClient] = useState<MemberListItem | null>(null);
   const [products, setProducts] = useState<LoanProductLite[]>([]);
   const [frequencies, setFrequencies] = useState<Frequency[]>([]);
-  const [defaultSavings, setDefaultSavings] = useState(0);
   const [productId, setProductId] = useState('');
   const [disbursalDate, setDisbursalDate] = useState('');
   const [dueStartDate, setDueStartDate] = useState('');
   const [collected, setCollected] = useState<Record<number, string>>({});
   const [savings, setSavings] = useState<Record<number, string>>({});
   const [paidCount, setPaidCount] = useState('');
+  const [quickSavings, setQuickSavings] = useState('');
   const [busy, setBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [error, setError] = useState('');
@@ -72,7 +72,7 @@ export function ImportLegacyLoanPage() {
   useEffect(() => {
     listLoanProducts().then(setProducts).catch((e) => setError(e.message));
     listFrequencies().then(setFrequencies).catch(() => {});
-    getSettings().then((s) => setDefaultSavings(s.savingsPerCollection)).catch(() => {});
+    getSettings().then((s) => setQuickSavings(String(s.savingsPerCollection))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -122,32 +122,32 @@ export function ImportLegacyLoanPage() {
     setQ('');
   }
 
-  /** Seed the first N installments as fully paid (due amount + default savings). */
+  /** Seed the first N installments as fully paid (due amount + the entered savings). */
   function fillPaid() {
     const n = Math.max(0, Math.min(Number(paidCount) || 0, schedule.length));
+    const sav = Math.max(0, Number(quickSavings) || 0);
     const nextColl: Record<number, string> = {};
     const nextSav: Record<number, string> = {};
     for (const r of schedule) {
       if (r.dueNo <= n) {
         nextColl[r.dueNo] = String(r.dueAmt);
-        if (defaultSavings > 0) nextSav[r.dueNo] = String(defaultSavings);
+        if (sav > 0) nextSav[r.dueNo] = String(sav);
       }
     }
     setCollected(nextColl);
     setSavings(nextSav);
   }
 
+  /** A blank sample — not this loan's real schedule. Fill in the real
+   *  Collected/Savings for each installment (matched by Due No), then upload. */
   function downloadTemplate() {
-    if (schedule.length === 0) return;
     downloadXlsx(
-      `legacy-loan-${client?.displayId ?? 'template'}.xlsx`,
-      schedule.map((r) => ({
-        'Due No': r.dueNo,
-        'Due Date': fmtDate(r.dueDate),
-        'Due Amount': r.dueAmt,
-        Collected: '',
-        Savings: '',
-      })),
+      'legacy-loan-import-template.xlsx',
+      [
+        { 'Due No': 1, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
+        { 'Due No': 2, 'Due Date': '', 'Due Amount': '', Collected: 500, Savings: 100 },
+        { 'Due No': 3, 'Due Date': '', 'Due Amount': '', Collected: '', Savings: '' },
+      ],
       'History',
     );
   }
@@ -309,6 +309,10 @@ export function ImportLegacyLoanPage() {
                   <input type="number" className="input" min="0" max={schedule.length} value={paidCount} onChange={(e) => setPaidCount(e.target.value)} placeholder="e.g. 20" />
                 </div>
                 <div className="field" style={{ marginBottom: 0 }}>
+                  <label>Savings per installment</label>
+                  <input type="number" className="input" min="0" value={quickSavings} onChange={(e) => setQuickSavings(e.target.value)} placeholder="0" />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
                   <button className="btn btn-ghost" onClick={fillPaid}>Fill as paid</button>
                 </div>
                 <div className="field" style={{ marginBottom: 0 }}>
@@ -322,7 +326,7 @@ export function ImportLegacyLoanPage() {
                 </div>
               </div>
               <div className="hint" style={{ marginTop: 8 }}>
-                Seeds the first N rows as fully paid{defaultSavings > 0 ? ` + ${inr(defaultSavings)} savings each` : ''}, or download the template, fill
+                Seeds the first N rows as fully paid, plus the entered savings each — or download the template, fill
                 in the real Collected/Savings for each installment offline, and re-upload. Either way, review and edit any row below before importing.
               </div>
             </div>

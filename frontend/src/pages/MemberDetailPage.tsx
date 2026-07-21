@@ -132,7 +132,7 @@ export function MemberDetailPage() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Loan A/c</th><th>Savings A/c</th><th>Disb. Date</th><th>Amount</th><th>Status</th>
+                    <th>Loan A/c</th><th>Savings A/c</th><th>Disb. Date</th><th>Amount</th><th>No. of Dues</th><th>Status</th>
                     <th>Pri. Balance</th><th>Int. Balance</th><th></th>
                   </tr>
                 </thead>
@@ -143,6 +143,7 @@ export function MemberDetailPage() {
                       <td className="mono">{m.savingsAccount ? `${m.savingsAccount}_${l.loanAccount}` : '—'}</td>
                       <td>{date(l.disbursalDate)}</td>
                       <td>{inr(l.loanAmount)}</td>
+                      <td>{l.totalDues}</td>
                       <td><span className={`badge ${l.loanType === 'OPEN' ? 'active' : 'closed'}`}>{l.loanType}</span></td>
                       <td>{inr(String(l.priBalance))}</td>
                       <td>{inr(String(l.intBalance))}</td>

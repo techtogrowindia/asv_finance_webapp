@@ -241,6 +241,7 @@ export interface CenterSavingsAccount {
   disbursalDate: string;
   closedDate: string | null;
   loanType: 'OPEN' | 'CLOSED';
+  totalDues: number;
   balance: number;
   branchCode: string;
   branchName: string;

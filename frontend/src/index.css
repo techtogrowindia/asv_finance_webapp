@@ -158,7 +158,7 @@ a { color: var(--brand-700); text-decoration: none; }
 .side-group { display: flex; flex-direction: column; }
 .side-group-head { border: none; background: none; width: 100%; text-align: left; font: inherit; }
 .side-group-head.active-parent { color: #fff; }
-.side-chevron { margin-left: auto; font-size: 11px; transition: transform .15s; opacity: .8; }
+.side-chevron { margin-left: auto; font-size: 16px; transition: transform .15s; opacity: .8; }
 .side-chevron.open { transform: rotate(90deg); }
 .side-sub { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px; }
 .side-sublink {
@@ -271,8 +271,8 @@ a { color: var(--brand-700); text-decoration: none; }
 .combo-input-wrap { position: relative; }
 .combo-input-wrap .input { width: 100%; padding-right: 36px; }
 .combo-arrow {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px;
-  border: none; background: transparent; color: var(--ink-500); font-size: 12px; cursor: pointer;
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px;
+  border: none; background: transparent; color: var(--ink-500); font-size: 18px; cursor: pointer;
   border-radius: var(--radius-sm); display: grid; place-items: center;
 }
 .combo-arrow:hover { background: var(--brand-050); color: var(--brand-700); }

@@ -114,7 +114,7 @@ export function EmployeesPage() {
         <table className="data">
           <thead>
             <tr>
-              <th>Code</th><th>Name</th><th>Login</th><th>Access Level</th><th>Role</th><th>Branch</th>
+              <th>Employee ID</th><th>Name</th><th>Login</th><th>Access Level</th><th>Role</th><th>Branch</th>
               <th>Centers</th><th>Status</th><th></th>
             </tr>
           </thead>
@@ -231,8 +231,8 @@ function EmployeeForm({
       {error && <div className="alert-error">{error}</div>}
       <div className="form-grid">
         {initial && (
-          <Field label="Code">
-            <input className="input" value={initial.code} disabled title="Auto-generated — cannot be changed" />
+          <Field label="Employee ID">
+            <input className="input" value={initial.code} disabled title="Set from the login at creation — cannot be changed" />
           </Field>
         )}
         <Field label="Full name *"><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
@@ -271,7 +271,7 @@ function EmployeeForm({
         <strong> Role</strong> controls which actions they may perform — manage these on the Roles page.
       </div>
       <div className="hint">
-        {initial ? 'Leave password unchanged — use “Reset Password” in the table to set a new one.' : 'The employee signs in with this login and password. Their Code (ASVEMP###/ASVADM###) is assigned automatically.'}
+        {initial ? 'Leave password unchanged — use “Reset Password” in the table to set a new one.' : 'The employee signs in with this login and password. Their Employee ID is set to this login and stays fixed even if the login is changed later.'}
       </div>
       <div className="form-actions">
         <button className="btn btn-primary" disabled={busy} onClick={save}>{busy ? <span className="spinner" /> : 'Save'}</button>

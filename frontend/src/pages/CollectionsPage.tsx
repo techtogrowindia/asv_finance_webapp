@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { BulkImportResult, BulkImportRow, DueRow, bulkImportCollections, getCenterRoster, getDue, postCollection } from '../api/collections';
+import { BulkImportResult, BulkImportRow, DueRow, bulkImportCollections, getDue, postCollection } from '../api/collections';
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
 import { BranchScopeSelect } from '../components/BranchScopeSelect';
@@ -9,6 +10,7 @@ import { downloadXlsx, readXlsxFile } from '../lib/xlsx';
 
 const inr = (v: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleDateString('en-IN') : '—');
 
 const normKey = (k: string) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
 const LOAN_KEYS = ['loanac', 'loanaccount', 'loanacno', 'loanaccountno', 'loanno'];
@@ -39,11 +41,12 @@ function parseImportRows(raw: Record<string, unknown>[]): { rows: BulkImportRow[
 
 export function CollectionsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const base = user?.role === 'FDO' ? '/app' : '/admin';
   const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
-  const [templateRows, setTemplateRows] = useState<DueRow[] | null>(null);
   const [advances, setAdvances] = useState<Record<string, string>>({});
   const [savingsInputs, setSavingsInputs] = useState<Record<string, string>>({});
   const [savings, setSavings] = useState(0);
@@ -54,7 +57,6 @@ export function CollectionsPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const centerName = centers.find((c) => c.id === centerId);
 
   useEffect(() => {
     setCenterId('');
@@ -69,32 +71,23 @@ export function CollectionsPage() {
     getDue(cid)
       .then((data) => { setRows(data); setAdvances({}); setSavingsInputs({}); })
       .catch((e) => setError(e.message));
-    setTemplateRows(null);
-    getCenterRoster(cid)
-      .then(setTemplateRows)
-      .catch((e) => setError(e.message));
   }
 
   useEffect(() => {
     setImportResult(null);
     if (centerId) refresh(centerId);
-    else { setRows(null); setTemplateRows(null); }
+    else setRows(null);
   }, [centerId]);
 
+  /** A blank sample — not this center's real loans. Fill in the actual Loan
+   *  A/c + Amount (+ Savings) for each collection you made, then re-upload. */
   function downloadTemplate() {
-    if (!templateRows || templateRows.length === 0) return;
     downloadXlsx(
-      `collection-${centerName?.code ?? centerId}-${user?.workingDate ? new Date(user.workingDate).toISOString().slice(0, 10) : ''}.xlsx`,
-      templateRows.map((r) => ({
-        'Client ID': r.displayId,
-        'Client Name': r.clientName,
-        'Loan A/c': r.loanAccount,
-        'Arrear': r.arrear,
-        'Current Due': r.currentDue,
-        'Total Due': r.totalDue,
-        'Amount': r.totalDue,
-        'Savings': savings,
-      })),
+      'collection-import-template.xlsx',
+      [
+        { 'Loan A/c': 'ASVLN000001_1', Amount: 500, Savings: 100 },
+        { 'Loan A/c': 'ASVLN000002_1', Amount: 700, Savings: 100 },
+      ],
       'Collections',
     );
   }
@@ -163,7 +156,7 @@ export function CollectionsPage() {
   }
 
   const showSavings = savings > 0;
-  const cols = showSavings ? 9 : 8;
+  const cols = showSavings ? 13 : 12;
 
   return (
     <>
@@ -182,7 +175,7 @@ export function CollectionsPage() {
               <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
             ))}
           </select>
-          <button className="btn btn-ghost" disabled={!templateRows?.length} onClick={downloadTemplate}>
+          <button className="btn btn-ghost" onClick={downloadTemplate}>
             Download template
           </button>
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onImportFile} />
@@ -191,10 +184,6 @@ export function CollectionsPage() {
           </button>
         </div>
       </div>
-
-      {centerId && templateRows && templateRows.length === 0 && (
-        <div className="hint" style={{ marginBottom: 12 }}>No open loans in this center yet — nothing to build a template from.</div>
-      )}
 
       {error && <div className="alert-error">{error}</div>}
       {success && (
@@ -246,9 +235,10 @@ export function CollectionsPage() {
             <thead>
               <tr>
                 <th>Client ID</th><th>Name</th><th>Loan A/c</th>
+                <th>Disb. Date</th><th>Last Paid</th><th>Due Date</th>
                 <th>Arrear</th><th>Current Due</th><th>Advance (pre-pay)</th>
                 {showSavings && <th>Savings</th>}
-                <th>Total</th><th></th>
+                <th>Total</th><th></th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -257,6 +247,9 @@ export function CollectionsPage() {
                   <td className="mono">{r.displayId}</td>
                   <td>{r.clientName}</td>
                   <td className="mono">{r.loanAccount}</td>
+                  <td>{fmtDate(r.disbursalDate)}</td>
+                  <td>{fmtDate(r.lastPaidDate)}</td>
+                  <td>{fmtDate(r.nextDueDate)}</td>
                   <td>{inr(r.arrear)}</td>
                   <td>{inr(r.currentDue)}</td>
                   <td>
@@ -293,6 +286,11 @@ export function CollectionsPage() {
                       onClick={() => onCollect(r)}
                     >
                       {busyLoanId === r.loanId ? <span className="spinner" /> : 'Collect'}
+                    </button>
+                  </td>
+                  <td>
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${r.loanId}/statement`)}>
+                      View ledger
                     </button>
                   </td>
                 </tr>

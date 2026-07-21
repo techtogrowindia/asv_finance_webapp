@@ -29,9 +29,8 @@ export class CollectionsService {
   ) {}
 
   /** Per-member collectable amount for one center, as of a date (defaults to
-   *  working date). `includeAll` keeps every open loan (even ones with
-   *  nothing due today, totalDue 0) — used to build the full bulk-import
-   *  template roster rather than just "who owes right now". */
+   *  working date). `includeAll` keeps every open loan even if nothing is
+   *  due today (totalDue 0), instead of just "who owes right now". */
   async due(user: AuthUser, centerId: string, date?: string, includeAll = false) {
     return this.prisma.withTenant(user, async (tx) => {
       const center = await tx.center.findFirst({
@@ -49,7 +48,7 @@ export class CollectionsService {
           group: { select: { groupNo: true } },
           loans: {
             where: { loanType: 'OPEN' },
-            include: { schedule: { where: { dueDate: { lte: asOf } } } },
+            include: { schedule: { orderBy: { dueNo: 'asc' } } },
           },
         },
       });
@@ -57,7 +56,9 @@ export class CollectionsService {
       return clients.flatMap((c) =>
         c.loans
           .map((loan) => {
-            const unpaid = loan.schedule.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
+            // Demand is only installments due on/before the as-of date.
+            const dueSoFar = loan.schedule.filter((s) => s.dueDate <= asOf);
+            const unpaid = dueSoFar.filter((s) => Number(s.collAmt) < Number(s.dueAmt));
             const totalDue = unpaid.reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
             if (totalDue <= 0 && !includeAll) return null;
             // Split the demand into overdue (before today) vs the current period's
@@ -65,6 +66,9 @@ export class CollectionsService {
             const arrear = unpaid
               .filter((s) => s.dueDate < asOf)
               .reduce((sum, s) => sum + (Number(s.dueAmt) - Number(s.collAmt)), 0);
+            // Dates spanning the whole schedule, for the field-collection view.
+            const lastPaid = [...loan.schedule].reverse().find((s) => Number(s.collAmt) > 0 && s.collDate);
+            const nextDue = loan.schedule.find((s) => Number(s.collAmt) < Number(s.dueAmt));
             return {
               clientId: c.id,
               clientName: c.name,
@@ -76,6 +80,10 @@ export class CollectionsService {
               arrear: round2(arrear),
               currentDue: round2(totalDue - arrear),
               advanceBalance: round2(Number(loan.advanceBalance)),
+              disbursalDate: loan.disbursalDate,
+              totalDues: loan.totalDues,
+              lastPaidDate: lastPaid?.collDate ?? null,
+              nextDueDate: nextDue?.dueDate ?? null,
             };
           })
           .filter((row): row is NonNullable<typeof row> => row !== null),
@@ -553,19 +561,28 @@ export class CollectionsService {
         include: {
           group: { select: { groupNo: true } },
           center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
-          loans: { where: { loanType: 'OPEN' }, select: { id: true } },
+          loans: {
+            where: { loanType: 'OPEN' },
+            select: { id: true, loanAccount: true, disbursalDate: true, totalDues: true },
+          },
         },
       });
-      return clients.map((c) => ({
-        clientId: c.id,
-        clientName: c.name,
-        displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
-        branchCode: c.center.branch.code,
-        branchName: c.center.branch.name,
-        centerName: `${c.center.code} — ${c.center.name}`,
-        savingsBalance: round2(Number(c.savingsBalance)),
-        hasOpenLoan: c.loans.length > 0,
-      }));
+      return clients.map((c) => {
+        const openLoan = c.loans[0];
+        return {
+          clientId: c.id,
+          clientName: c.name,
+          displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+          branchCode: c.center.branch.code,
+          branchName: c.center.branch.name,
+          centerName: `${c.center.code} — ${c.center.name}`,
+          savingsBalance: round2(Number(c.savingsBalance)),
+          hasOpenLoan: c.loans.length > 0,
+          loanAccount: openLoan?.loanAccount ?? null,
+          disbursalDate: openLoan?.disbursalDate ?? null,
+          totalDues: openLoan?.totalDues ?? null,
+        };
+      });
     });
   }
 

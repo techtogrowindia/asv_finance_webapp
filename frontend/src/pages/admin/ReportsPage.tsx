@@ -1281,7 +1281,11 @@ function SavingsTab() {
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
             <table className="data">
               <thead>
-                <tr><th>Client ID</th><th>Member</th><th>Branch</th><th>Center</th><th>Savings Balance</th><th>Loan Status</th></tr>
+                <tr>
+                  <th>Client ID</th><th>Member</th><th>Branch</th><th>Center</th>
+                  <th>Loan A/c</th><th>Disb. Date</th><th>No. of Dues</th>
+                  <th>Savings Balance</th><th>Loan Status</th>
+                </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -1290,11 +1294,14 @@ function SavingsTab() {
                     <td>{r.clientName}</td>
                     <td>{r.branchCode} — {r.branchName}</td>
                     <td>{r.centerName}</td>
+                    <td className="mono">{r.loanAccount ?? '—'}</td>
+                    <td>{date(r.disbursalDate)}</td>
+                    <td>{r.totalDues ?? '—'}</td>
                     <td>{inr(r.savingsBalance)}</td>
                     <td>{r.hasOpenLoan ? <span className="badge active">Open loan</span> : <span className="badge closed">No open loan</span>}</td>
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={6} className="empty">No clients are holding savings.</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={9} className="empty">No clients are holding savings.</td></tr>}
               </tbody>
             </table>
           </div>

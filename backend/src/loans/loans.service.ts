@@ -851,6 +851,7 @@ export class LoansService {
         disbursalDate: l.disbursalDate,
         closedDate: l.closedDate,
         loanType: l.loanType,
+        totalDues: l.totalDues,
         balance: net.get(l.id) ?? 0,
       }));
     });

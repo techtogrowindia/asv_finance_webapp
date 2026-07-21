@@ -82,13 +82,15 @@ export class EmployeesService {
       if (dupLogin) throw new BadRequestException(`Login "${dto.login}" is already taken`);
 
       const passwordHash = await argon2.hash(dto.password);
-      const code = await this.nextEmployeeCode(tx, user.tenantId, dto.role);
 
       const created = await tx.employee.create({
         data: {
           tenantId: user.tenantId,
           branchId,
-          code,
+          // The employee ID shown throughout the app is their login — set once
+          // at creation and fixed thereafter (same as other system identifiers:
+          // clientCode, loanAccount, appNo), even if login is edited later.
+          code: dto.login,
           name: dto.name,
           login: dto.login,
           passwordHash,
@@ -264,16 +266,6 @@ export class EmployeesService {
     const role = await tx.accessRole.findFirst({ where: { id: requestedRoleId } });
     if (!role) throw new BadRequestException('Role not found');
     return role.id;
-  }
-
-  /** Next tenant-scoped employee code, by role: ASVEMP### for field officers,
-   *  ASVADM### for branch/head-office admins. Assigned once at creation and
-   *  never regenerated (fixed even if the employee's role later changes, same
-   *  as other system identifiers — clientCode, loanAccount, appNo). */
-  private async nextEmployeeCode(tx: Prisma.TransactionClient, tenantId: string, role: string): Promise<string> {
-    const prefix = role === 'FDO' ? 'ASVEMP' : 'ASVADM';
-    const n = (await tx.employee.count({ where: { tenantId, code: { startsWith: prefix } } })) + 1;
-    return `${prefix}${String(n).padStart(3, '0')}`;
   }
 
   /** BM may only create/edit FDOs; HO may manage any role. */

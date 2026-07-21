@@ -67,7 +67,7 @@ export function SavingsLedgerReport({ branchId }: { branchId?: string } = {}) {
           <div className="panel-body">
             <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
               <table className="data">
-                <thead><tr><th>Client ID</th><th>Branch</th><th>Center</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Start Date</th><th>Closed Date</th><th>Balance</th><th></th></tr></thead>
+                <thead><tr><th>Client ID</th><th>Branch</th><th>Center</th><th>Member</th><th>Loan A/c</th><th>Savings A/c</th><th>Start Date</th><th>No. of Dues</th><th>Closed Date</th><th>Balance</th><th></th></tr></thead>
                 <tbody>
                   {accounts?.map((a) => (
                     <tr key={a.loanId}>
@@ -78,12 +78,13 @@ export function SavingsLedgerReport({ branchId }: { branchId?: string } = {}) {
                       <td className="mono">{a.loanAccount}</td>
                       <td className="mono">{a.savingsAccount}</td>
                       <td>{date(a.disbursalDate)}</td>
+                      <td>{a.totalDues}</td>
                       <td>{date(a.closedDate)}</td>
                       <td>{inr(a.balance)}</td>
                       <td><button className="btn btn-primary btn-sm" disabled={busy} onClick={() => view(a.loanId)}>View ledger</button></td>
                     </tr>
                   ))}
-                  {accounts && accounts.length === 0 && <tr><td colSpan={10} className="empty">No loans (savings accounts) in this center.</td></tr>}
+                  {accounts && accounts.length === 0 && <tr><td colSpan={11} className="empty">No loans (savings accounts) in this center.</td></tr>}
                 </tbody>
               </table>
             </div>
