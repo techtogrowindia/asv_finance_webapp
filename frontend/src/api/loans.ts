@@ -53,6 +53,26 @@ export const listExistingLoans = (clientId: string) => api<ExistingLoan[]>(`/cli
 export const getEligibility = (clientId: string, productId: string) =>
   api<Eligibility>(`/loan-applications/eligibility?clientId=${clientId}&productId=${productId}`);
 
+export interface ImportLegacyRow {
+  dueNo: number;
+  collected: number;
+  savings: number;
+}
+
+/** Import a pre-existing (manually-run) loan as a live OPEN loan, reconstructing
+ *  its week-by-week repayment + savings history (BM/HO, loan.import). */
+export const importLegacyLoan = (body: {
+  clientId: string;
+  productId: string;
+  disbursalDate: string;
+  dueStartDate: string;
+  rows: ImportLegacyRow[];
+}) =>
+  api<{ id: string; loanAccount: string; totalCollected: number; totalSavings: number; remainingBalance: number }>(
+    '/loans/import',
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+
 export const createLoanApplication = (body: { clientId: string; productId: string; purposeId: string; notes?: string }) =>
   api<{ id: string; status: string; warnings: string[]; requestedAmount: string }>('/loan-applications', {
     method: 'POST',

@@ -18,6 +18,7 @@ const ADMIN_NAV: SideNavItem[] = [
   { to: '/admin/branches', label: 'Branches', icon: '▣', perm: ['branch.manage'] },
   { to: '/admin/centers', label: 'Centers', icon: '⌂', perm: ['center.view'] },
   { to: '/admin/loan-verification', label: 'Loan Verification', icon: '✓', perm: ['loan.approve'] },
+  { to: '/admin/import-loan', label: 'Import Legacy Loan', icon: '↧', perm: ['loan.import'] },
   { to: '/admin/kyc-verification', label: 'KYC Verification', icon: '⚿', perm: ['member.verify'] },
   { to: '/admin/client-transfer', label: 'Client Transfer', icon: '⇄', perm: ['member.transfer'] },
   {

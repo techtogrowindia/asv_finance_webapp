@@ -28,6 +28,7 @@ import { ReportsPage as AdminReportsPage } from './pages/admin/ReportsPage';
 import { RolesPage } from './pages/admin/RolesPage';
 import { KycVerificationPage } from './pages/admin/KycVerificationPage';
 import { ClientTransferPage } from './pages/admin/ClientTransferPage';
+import { ImportLegacyLoanPage } from './pages/admin/ImportLegacyLoanPage';
 import { DemandCollectionPage } from './pages/collections/DemandCollectionPage';
 import { ArrearCollectionPage } from './pages/collections/ArrearCollectionPage';
 import { AdvanceCollectionPage } from './pages/collections/AdvanceCollectionPage';
@@ -118,6 +119,14 @@ export default function App() {
           element={
             <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
               <LoanVerificationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin/import-loan"
+          element={
+            <RequireAuth roles={['BM', 'HO']} loginPath="/admin">
+              <ImportLegacyLoanPage />
             </RequireAuth>
           }
         />

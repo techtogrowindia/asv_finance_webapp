@@ -8,6 +8,7 @@ import { stripLeadingZeros } from '../common/format.util';
 import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { DisburseLoanDto } from './dto/disburse-loan.dto';
+import { ImportLegacyLoanDto } from './dto/import-legacy-loan.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 
 @Injectable()
@@ -440,6 +441,182 @@ export class LoansService {
       });
 
       return { id: loan.id, loanAccount, disbursalDate, dueStartDate, maturityDate };
+    });
+  }
+
+  /**
+   * Import a pre-existing (manually-run) loan as a live OPEN loan, reconstructing
+   * its week-by-week repayment + savings history. Terms come from the chosen
+   * product so the schedule stays flat-interest (invariant #6); the caller
+   * supplies, per past installment, how much was really collected and any
+   * savings banked with it. Each paid installment gets a Collection row (and a
+   * savings SavingsTxn) dated on the installment's due date, and the schedule
+   * cache columns are set to match — exactly as a live collection would leave
+   * them. The loan must still owe something (this screen is for open loans).
+   */
+  async importLegacyLoan(user: AuthUser, dto: ImportLegacyLoanDto) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const client = await tx.client.findFirst({
+        where: { id: dto.clientId, ...clientCenterScope(user) },
+        select: { id: true, clientCode: true, center: { select: { branchId: true } } },
+      });
+      if (!client) throw new NotFoundException('Member not found');
+
+      const product = await tx.loanProduct.findFirst({
+        where: { id: dto.productId },
+        include: { frequency: true },
+      });
+      if (!product) throw new BadRequestException('Loan product not found');
+
+      const branch = await tx.branch.findUnique({ where: { id: client.center.branchId } });
+      const workingDate = branch?.workingDate ?? new Date();
+
+      const disbursalDate = new Date(dto.disbursalDate);
+      const dueStartDate = new Date(dto.dueStartDate);
+      if (disbursalDate > workingDate) {
+        throw new BadRequestException("Disbursal date can't be after the branch's working date");
+      }
+      if (dueStartDate < disbursalDate) {
+        throw new BadRequestException("Due start date can't be before the disbursal date");
+      }
+
+      const loanAmount = Number(product.loanAmount);
+      const interestAmount = Number(product.interestAmount);
+      const totalDues = product.totalDues;
+      const rows = generateSchedule({
+        loanAmount,
+        interestAmount,
+        totalDues,
+        daysBetween: product.frequency.daysBetween,
+        dueStartDate,
+      });
+      const maturityDate = rows[rows.length - 1].dueDate;
+
+      // Index the supplied history by installment number; reject anything that
+      // can't line up with the generated schedule.
+      const history = new Map<number, { collected: number; savings: number }>();
+      for (const r of dto.rows) {
+        if (r.dueNo < 1 || r.dueNo > totalDues) {
+          throw new BadRequestException(`Installment ${r.dueNo} is outside 1..${totalDues}`);
+        }
+        if (history.has(r.dueNo)) {
+          throw new BadRequestException(`Installment ${r.dueNo} is listed more than once`);
+        }
+        history.set(r.dueNo, { collected: round2(r.collected), savings: round2(r.savings) });
+      }
+
+      const cycleNo = (await tx.loan.count({ where: { clientId: client.id } })) + 1;
+      const loanAccount = `${client.clientCode}_${cycleNo}`;
+
+      const loan = await tx.loan.create({
+        data: {
+          tenantId: user.tenantId,
+          clientId: client.id,
+          productId: product.id,
+          loanAccount,
+          cycleNo,
+          loanAmount,
+          interestAmount,
+          totalAmount: round2(loanAmount + interestAmount),
+          totalDues,
+          disbursalDate,
+          dueStartDate,
+          maturityDate,
+          loanType: 'OPEN',
+        },
+      });
+
+      let totalCollected = 0;
+      let totalSavings = 0;
+      let remaining = 0;
+
+      for (const row of rows) {
+        const hist = history.get(row.dueNo);
+        const collected = round2(Math.min(Math.max(0, hist?.collected ?? 0), row.dueAmt));
+        // Split the collected amount into principal/interest proportional to the
+        // row's due split — the same math the live collection engine uses.
+        const payPri = row.dueAmt > 0 ? round2((collected * row.duePri) / row.dueAmt) : 0;
+        const payInt = round2(collected - payPri);
+        const dueBalance = round2(row.dueAmt - collected);
+        remaining = round2(remaining + dueBalance);
+
+        const sched = await tx.repaymentSchedule.create({
+          data: {
+            tenantId: user.tenantId,
+            loanId: loan.id,
+            dueNo: row.dueNo,
+            dueDate: row.dueDate,
+            duePri: row.duePri,
+            dueInt: row.dueInt,
+            dueAmt: row.dueAmt,
+            collPri: payPri,
+            collInt: payInt,
+            collAmt: collected,
+            collDate: collected > 0 ? row.dueDate : null,
+            dueBalance,
+          },
+        });
+
+        if (collected > 0) {
+          await tx.collection.create({
+            data: {
+              tenantId: user.tenantId,
+              loanId: loan.id,
+              scheduleId: sched.id,
+              collectedOn: row.dueDate,
+              amount: collected,
+              pri: payPri,
+              int: payInt,
+              kind: 'REGULAR',
+              enteredBy: user.employeeId,
+            },
+          });
+          totalCollected = round2(totalCollected + collected);
+        }
+
+        const savings = round2(Math.max(0, hist?.savings ?? 0));
+        if (savings > 0) {
+          await tx.savingsTxn.create({
+            data: {
+              tenantId: user.tenantId,
+              clientId: client.id,
+              loanId: loan.id,
+              amount: savings,
+              kind: 'DEPOSIT',
+              collectedOn: row.dueDate,
+              enteredBy: user.employeeId,
+            },
+          });
+          totalSavings = round2(totalSavings + savings);
+        }
+      }
+
+      if (remaining <= 0) {
+        throw new BadRequestException(
+          'This loan is fully repaid — the legacy import screen is only for loans that are still open.',
+        );
+      }
+
+      if (totalSavings > 0) {
+        await tx.client.update({
+          where: { id: client.id },
+          data: { savingsBalance: { increment: totalSavings } },
+        });
+      }
+
+      await this.audit.record(tx, {
+        tenantId: user.tenantId,
+        entity: 'Loan',
+        entityId: loan.id,
+        action: 'IMPORT_LEGACY_LOAN',
+        employeeId: user.employeeId,
+        after: {
+          loanAccount, loanAmount, interestAmount, totalDues, disbursalDate, dueStartDate,
+          totalCollected, totalSavings, remainingBalance: remaining,
+        },
+      });
+
+      return { id: loan.id, loanAccount, totalCollected, totalSavings, remainingBalance: remaining };
     });
   }
 

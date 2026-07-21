@@ -5,6 +5,7 @@ import { RequirePermission } from '../common/auth/permissions.decorator';
 import { AuthUser } from '../common/types/auth-user';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { DisburseLoanDto } from './dto/disburse-loan.dto';
+import { ImportLegacyLoanDto } from './dto/import-legacy-loan.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { UpdateApplicationNotesDto } from './dto/update-application-notes.dto';
 import { LoansService } from './loans.service';
@@ -84,6 +85,13 @@ export class LoansController {
     @Body() dto: DisburseLoanDto,
   ) {
     return this.loans.disburse(user, id, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('loan.import')
+  @Post('loans/import')
+  importLegacyLoan(@CurrentUser() user: AuthUser, @Body() dto: ImportLegacyLoanDto) {
+    return this.loans.importLegacyLoan(user, dto);
   }
 
   @Roles('BM', 'HO')

@@ -30,6 +30,7 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'loan.view', label: 'View loans & ledger' },
       { key: 'loan.apply', label: 'Create loan application' },
       { key: 'loan.approve', label: 'Verify & disburse loans' },
+      { key: 'loan.import', label: 'Import legacy (pre-existing) loans' },
     ],
   },
   {
