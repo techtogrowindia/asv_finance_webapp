@@ -14,10 +14,14 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
 
-  const totalCollected = st.schedule.reduce((s, r) => s + Number(r.collAmt), 0);
+  // Settled installments are excluded from `schedule` (see foreclosureSettlement),
+  // so fold their totals back in here rather than under-counting.
+  const totalCollected = st.schedule.reduce((s, r) => s + Number(r.collAmt), 0)
+    + (st.foreclosureSettlement ? st.foreclosureSettlement.principal + st.foreclosureSettlement.interest : 0);
   const totalPending = st.schedule.reduce((s, r) => s + Number(r.dueBalance), 0);
-  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length;
-  const duesPending = st.schedule.length - duesPaid;
+  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length
+    + (st.foreclosureSettlement?.installmentsSettled ?? 0);
+  const duesPending = st.totalDues - duesPaid;
   const savingsBalance = st.savings.length ? st.savings[st.savings.length - 1].balance : 0;
   const savingsDeposited = st.savings.reduce((s, r) => s + r.deposit, 0);
   const savingsRefunded = st.savings.reduce((s, r) => s + r.refund, 0);
@@ -104,9 +108,31 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
                   <td>{inr(r.savings)}</td><td>{inr(r.dueBalance)}</td>
                 </tr>
               ))}
+              {st.foreclosureSettlement && (
+                <tr style={{ fontWeight: 700, background: 'var(--surface-100, #f4f6f5)' }}>
+                  <td colSpan={2}>Foreclosure Settlement</td>
+                  <td>{date(st.foreclosureSettlement.date)}</td>
+                  <td>{inr(st.foreclosureSettlement.principal)}</td>
+                  <td>{inr(st.foreclosureSettlement.interest)}</td>
+                  <td>{inr(st.foreclosureSettlement.principal + st.foreclosureSettlement.interest)}</td>
+                  <td>{inr(st.foreclosureSettlement.principal)}</td>
+                  <td>{inr(st.foreclosureSettlement.interest)}</td>
+                  <td>{inr(st.foreclosureSettlement.total)}</td>
+                  <td>—</td>
+                  <td>{inr(0)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        {st.foreclosureSettlement && (
+          <p className="hint" style={{ marginTop: -8, marginBottom: 16 }}>
+            {st.foreclosureSettlement.installmentsSettled} remaining installment(s) were closed in one payment on{' '}
+            {date(st.foreclosureSettlement.date)}
+            {st.foreclosureSettlement.interestWaived > 0 ? ` (${inr(st.foreclosureSettlement.interestWaived)} interest waived)` : ''}
+            {st.foreclosureSettlement.charge > 0 ? ` + ${inr(st.foreclosureSettlement.charge)} foreclosure charge` : ''} — not listed individually above.
+          </p>
+        )}
 
         <div className="panel-head" style={{ padding: '16px 0 8px', borderBottom: 'none' }}>Savings Passbook</div>
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>

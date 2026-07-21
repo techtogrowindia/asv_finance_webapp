@@ -177,6 +177,19 @@ export interface LedgerRow {
   dueBalance: string;
 }
 
+/** A foreclosure settles every remaining installment in one lump sum — this
+ *  summarizes that settlement instead of the ledger listing each (never
+ *  actually due) future installment individually as if paid progressively. */
+export interface ForeclosureSettlement {
+  date: string;
+  installmentsSettled: number;
+  principal: number;
+  interest: number;
+  interestWaived: number;
+  charge: number;
+  total: number;
+}
+
 export interface LoanLedger {
   loanAccount: string;
   clientDisplayId: string;
@@ -189,6 +202,7 @@ export interface LoanLedger {
   loanType: 'OPEN' | 'CLOSED';
   closedDate: string | null;
   schedule: LedgerRow[];
+  foreclosureSettlement: ForeclosureSettlement | null;
 }
 
 export const getLedger = (loanId: string) => api<LoanLedger>(`/loans/${loanId}/ledger`);

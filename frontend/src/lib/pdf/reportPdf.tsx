@@ -26,6 +26,7 @@ const s = StyleSheet.create({
   th: { padding: 4, fontFamily: 'Helvetica-Bold', fontSize: 7.5 },
   td: { padding: 4 },
   totalRow: { flexDirection: 'row', backgroundColor: '#f3f7f5', borderTopWidth: 1, borderColor: '#c9d6d1' },
+  hint: { fontSize: 7.5, color: '#5b6b66', marginTop: 6 },
   foot: { position: 'absolute', bottom: 14, left: 24, right: 24, flexDirection: 'row', justifyContent: 'space-between', color: '#8a9995', fontSize: 7 },
 });
 
@@ -82,6 +83,19 @@ const LEDGER_COLS: Col[] = [
 ];
 
 function LoanLedgerDoc({ l }: { l: LoanLedger }) {
+  const rows = l.schedule.map((r) => ({
+    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
+    duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
+    collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
+  }));
+  if (l.foreclosureSettlement) {
+    const fs = l.foreclosureSettlement;
+    rows.push({
+      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date),
+      duePri: inr(fs.principal), dueInt: inr(fs.interest), dueAmt: inr(fs.principal + fs.interest),
+      collPri: inr(fs.principal), collInt: inr(fs.interest), collAmt: inr(fs.total), dueBalance: inr(0),
+    });
+  }
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
@@ -98,14 +112,14 @@ function LoanLedgerDoc({ l }: { l: LoanLedger }) {
           <Meta k="Total Dues" v={String(l.totalDues)} />
           <Meta k="Status" v={`${l.loanType}${l.closedDate ? ` (${d(l.closedDate)})` : ''}`} />
         </View>
-        <Table
-          cols={LEDGER_COLS}
-          rows={l.schedule.map((r) => ({
-            dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
-            duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
-            collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
-          }))}
-        />
+        <Table cols={LEDGER_COLS} rows={rows} />
+        {l.foreclosureSettlement && (
+          <Text style={s.hint}>
+            {l.foreclosureSettlement.installmentsSettled} remaining installment(s) closed in one payment on {d(l.foreclosureSettlement.date)}
+            {l.foreclosureSettlement.interestWaived > 0 ? ` (${inr(l.foreclosureSettlement.interestWaived)} interest waived)` : ''}
+            {l.foreclosureSettlement.charge > 0 ? ` + ${inr(l.foreclosureSettlement.charge)} foreclosure charge` : ''}.
+          </Text>
+        )}
         <Foot />
       </Page>
     </Document>
@@ -134,6 +148,15 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
     collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt),
     savings: inr(r.savings), dueBalance: inr(r.dueBalance),
   }));
+  if (st.foreclosureSettlement) {
+    const fs = st.foreclosureSettlement;
+    rows.push({
+      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date),
+      duePri: inr(fs.principal), dueInt: inr(fs.interest), dueAmt: inr(fs.principal + fs.interest),
+      collPri: inr(fs.principal), collInt: inr(fs.interest), collAmt: inr(fs.total),
+      savings: '—', dueBalance: inr(0),
+    });
+  }
 
   const savCols: Col[] = [
     { key: 'date', label: 'Date', w: 22 },
@@ -156,9 +179,11 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
         balance: inr(st.savings[st.savings.length - 1].balance),
       }
     : undefined;
-  const totalCollected = st.schedule.reduce((a, r) => a + Number(r.collAmt), 0);
+  const totalCollected = st.schedule.reduce((a, r) => a + Number(r.collAmt), 0)
+    + (st.foreclosureSettlement ? st.foreclosureSettlement.principal + st.foreclosureSettlement.interest : 0);
   const totalPending = st.schedule.reduce((a, r) => a + Number(r.dueBalance), 0);
-  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length;
+  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length
+    + (st.foreclosureSettlement?.installmentsSettled ?? 0);
   const savingsBalance = st.savings.length ? st.savings[st.savings.length - 1].balance : 0;
 
   return (
@@ -184,6 +209,13 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
         </View>
         <Text style={s.section}>Repayment Schedule</Text>
         <Table cols={cols} rows={rows} />
+        {st.foreclosureSettlement && (
+          <Text style={s.hint}>
+            {st.foreclosureSettlement.installmentsSettled} remaining installment(s) closed in one payment on {d(st.foreclosureSettlement.date)}
+            {st.foreclosureSettlement.interestWaived > 0 ? ` (${inr(st.foreclosureSettlement.interestWaived)} interest waived)` : ''}
+            {st.foreclosureSettlement.charge > 0 ? ` + ${inr(st.foreclosureSettlement.charge)} foreclosure charge` : ''}.
+          </Text>
+        )}
         {st.savings.length > 0 && (
           <>
             <Text style={s.section}>Savings Passbook</Text>

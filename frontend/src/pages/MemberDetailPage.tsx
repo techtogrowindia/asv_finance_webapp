@@ -5,6 +5,8 @@ import { ExistingLoan, listExistingLoans } from '../api/loans';
 import { useAuth } from '../auth/AuthContext';
 import { KycNumbersSection } from '../components/KycNumbersSection';
 import { KycDocumentGrid } from '../components/KycDocumentGrid';
+import { ActionMenu } from '../components/ActionMenu';
+import { RequestCorrectionModal } from '../components/RequestCorrectionModal';
 
 const inr = (v: string | null) =>
   v == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -13,11 +15,12 @@ const date = (v: string | null) => (v ? new Date(v).toLocaleDateString('en-IN') 
 export function MemberDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const base = user?.role === 'FDO' ? '/app' : '/admin';
   const [m, setM] = useState<MemberDetail | null>(null);
   const [loans, setLoans] = useState<ExistingLoan[] | null>(null);
   const [error, setError] = useState('');
+  const [correctionLoanId, setCorrectionLoanId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -147,10 +150,15 @@ export function MemberDetailPage() {
                       <td><span className={`badge ${l.loanType === 'OPEN' ? 'active' : 'closed'}`}>{l.loanType}</span></td>
                       <td>{inr(String(l.priBalance))}</td>
                       <td>{inr(String(l.intBalance))}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>
+                      <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: 6, alignItems: 'center' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => navigate(`${base}/loans/${l.id}/statement`)}>
                           View Ledger
                         </button>
+                        {can('collection.correct') && (
+                          <ActionMenu
+                            items={[{ label: 'Request correction', onClick: () => setCorrectionLoanId(l.id) }]}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -163,6 +171,9 @@ export function MemberDetailPage() {
         </div>
       </div>
 
+      {correctionLoanId && (
+        <RequestCorrectionModal loanId={correctionLoanId} onClose={() => setCorrectionLoanId(null)} />
+      )}
     </>
   );
 }

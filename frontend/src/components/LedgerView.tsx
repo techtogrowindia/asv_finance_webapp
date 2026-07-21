@@ -66,9 +66,30 @@ export function LedgerView({ ledger }: { ledger: LoanLedger }) {
                   <td>{inr(s.dueBalance)}</td>
                 </tr>
               ))}
+              {ledger.foreclosureSettlement && (
+                <tr style={{ fontWeight: 700, background: 'var(--surface-100, #f4f6f5)' }}>
+                  <td colSpan={2}>Foreclosure Settlement</td>
+                  <td>{date(ledger.foreclosureSettlement.date)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.principal)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.interest)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.principal + ledger.foreclosureSettlement.interest)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.principal)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.interest)}</td>
+                  <td>{inr(ledger.foreclosureSettlement.total)}</td>
+                  <td>{inr(0)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        {ledger.foreclosureSettlement && (
+          <p className="hint" style={{ marginTop: 8 }}>
+            {ledger.foreclosureSettlement.installmentsSettled} remaining installment(s) were closed in one payment on{' '}
+            {date(ledger.foreclosureSettlement.date)}
+            {ledger.foreclosureSettlement.interestWaived > 0 ? ` (${inr(ledger.foreclosureSettlement.interestWaived)} interest waived)` : ''}
+            {ledger.foreclosureSettlement.charge > 0 ? ` + ${inr(ledger.foreclosureSettlement.charge)} foreclosure charge` : ''} — not listed individually above.
+          </p>
+        )}
       </div>
     </div>
   );

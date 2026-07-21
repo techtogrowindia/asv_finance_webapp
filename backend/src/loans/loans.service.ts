@@ -645,6 +645,38 @@ export class LoansService {
   }
 
   /** Full printable ledger for one loan: header + every due/collected row. */
+  /**
+   * A foreclosure settles every remaining installment in one lump sum, all
+   * dated the same day — but each row keeps its own original (fabricated,
+   * never-actually-due) future due date, so showing them individually in a
+   * ledger misleadingly reads as progressive payment. Pull those rows out of
+   * `schedule` and fold them into one summary instead.
+   */
+  private async foreclosureSettlement(tx: Prisma.TransactionClient, loanId: string, schedule: { id: string; dueInt: Prisma.Decimal; collPri: Prisma.Decimal; collInt: Prisma.Decimal; collDate: Date | null }[]) {
+    const forecCollections = await tx.collection.findMany({
+      where: { loanId, kind: { in: ['FORECLOSURE', 'FORECLOSURE_CHARGE'] } },
+    });
+    if (forecCollections.length === 0) return { settledIds: new Set<string>(), settlement: null as null | {
+      date: Date; installmentsSettled: number; principal: number; interest: number; interestWaived: number; charge: number; total: number;
+    } };
+
+    const settledIds = new Set(forecCollections.filter((c) => c.scheduleId).map((c) => c.scheduleId!));
+    const forecRows = schedule.filter((s) => settledIds.has(s.id));
+    const principal = round2(forecRows.reduce((a, r) => a + Number(r.collPri), 0));
+    const interest = round2(forecRows.reduce((a, r) => a + Number(r.collInt), 0));
+    const interestWaived = round2(forecRows.reduce((a, r) => a + (Number(r.dueInt) - Number(r.collInt)), 0));
+    const charge = round2(forecCollections.filter((c) => c.kind === 'FORECLOSURE_CHARGE').reduce((a, c) => a + Number(c.amount), 0));
+    const date = forecRows.find((r) => r.collDate)?.collDate ?? forecCollections[0].collectedOn;
+
+    return {
+      settledIds,
+      settlement: {
+        date, installmentsSettled: forecRows.length, principal, interest,
+        interestWaived, charge, total: round2(principal + interest + charge),
+      },
+    };
+  }
+
   async ledger(user: AuthUser, loanId: string) {
     return this.prisma.withTenant(user, async (tx) => {
       const loan = await tx.loan.findFirst({
@@ -664,6 +696,8 @@ export class LoansService {
       });
       if (!loan) throw new NotFoundException('Loan not found');
 
+      const { settledIds, settlement } = await this.foreclosureSettlement(tx, loanId, loan.schedule);
+
       return {
         loanAccount: loan.loanAccount,
         clientDisplayId: `${stripLeadingZeros(loan.client.center.branch.code)}.${stripLeadingZeros(loan.client.center.code)}.${loan.client.group.groupNo}.${loan.client.memberNo}`,
@@ -675,18 +709,21 @@ export class LoansService {
         totalDues: loan.totalDues,
         loanType: loan.loanType,
         closedDate: loan.closedDate,
-        schedule: loan.schedule.map((s) => ({
-          dueNo: s.dueNo,
-          dueDate: s.dueDate,
-          collDate: s.collDate,
-          duePri: s.duePri,
-          dueInt: s.dueInt,
-          dueAmt: s.dueAmt,
-          collPri: s.collPri,
-          collInt: s.collInt,
-          collAmt: s.collAmt,
-          dueBalance: s.dueBalance,
-        })),
+        schedule: loan.schedule
+          .filter((s) => !settledIds.has(s.id))
+          .map((s) => ({
+            dueNo: s.dueNo,
+            dueDate: s.dueDate,
+            collDate: s.collDate,
+            duePri: s.duePri,
+            dueInt: s.dueInt,
+            dueAmt: s.dueAmt,
+            collPri: s.collPri,
+            collInt: s.collInt,
+            collAmt: s.collAmt,
+            dueBalance: s.dueBalance,
+          })),
+        foreclosureSettlement: settlement,
       };
     });
   }
@@ -735,6 +772,8 @@ export class LoansService {
         return { date: t.collectedOn, kind: t.kind, deposit, refund, balance: bal };
       });
 
+      const { settledIds, settlement } = await this.foreclosureSettlement(tx, loanId, loan.schedule);
+
       return {
         loanAccount: loan.loanAccount,
         savingsAccount: `${c.savingsAccount}_${loan.loanAccount}`,
@@ -748,20 +787,23 @@ export class LoansService {
         totalDues: loan.totalDues,
         loanType: loan.loanType,
         closedDate: loan.closedDate,
-        schedule: loan.schedule.map((s) => {
-          let rowSavings = 0;
-          if (s.collDate) {
-            const list = depQueue.get(s.collDate.toISOString().slice(0, 10));
-            if (list && list.length) rowSavings = list.shift()!;
-          }
-          return {
-            dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
-            duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
-            collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt,
-            savings: rowSavings, dueBalance: s.dueBalance,
-          };
-        }),
+        schedule: loan.schedule
+          .filter((s) => !settledIds.has(s.id))
+          .map((s) => {
+            let rowSavings = 0;
+            if (s.collDate) {
+              const list = depQueue.get(s.collDate.toISOString().slice(0, 10));
+              if (list && list.length) rowSavings = list.shift()!;
+            }
+            return {
+              dueNo: s.dueNo, dueDate: s.dueDate, collDate: s.collDate,
+              duePri: s.duePri, dueInt: s.dueInt, dueAmt: s.dueAmt,
+              collPri: s.collPri, collInt: s.collInt, collAmt: s.collAmt,
+              savings: rowSavings, dueBalance: s.dueBalance,
+            };
+          }),
         savings,
+        foreclosureSettlement: settlement,
       };
     });
   }
