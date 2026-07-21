@@ -156,6 +156,10 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
         balance: inr(st.savings[st.savings.length - 1].balance),
       }
     : undefined;
+  const totalCollected = st.schedule.reduce((a, r) => a + Number(r.collAmt), 0);
+  const totalPending = st.schedule.reduce((a, r) => a + Number(r.dueBalance), 0);
+  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length;
+  const savingsBalance = st.savings.length ? st.savings[st.savings.length - 1].balance : 0;
 
   return (
     <Document>
@@ -167,10 +171,16 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
           <Meta k="Client Name" v={st.clientName} />
           <Meta k="Loan Account" v={st.loanAccount} />
           <Meta k="Savings A/c" v={st.savingsAccount} />
-          <Meta k="Loan Amount" v={inr(st.loanAmount)} />
+          <Meta k="Principal" v={inr(st.loanAmount)} />
           <Meta k="Total Amount" v={inr(st.totalAmount)} />
-          <Meta k="Total Dues" v={String(st.totalDues)} />
           <Meta k="Status" v={`${st.loanType}${st.closedDate ? ` (${d(st.closedDate)})` : ''}`} />
+        </View>
+        <View style={s.metaRow}>
+          <Meta k="Collected" v={inr(totalCollected)} />
+          <Meta k="Pending" v={inr(totalPending)} />
+          <Meta k="Dues Paid" v={`${duesPaid} / ${st.totalDues}`} />
+          <Meta k="Dues Pending" v={String(st.totalDues - duesPaid)} />
+          <Meta k="Savings Balance" v={inr(savingsBalance)} />
         </View>
         <Text style={s.section}>Repayment Schedule</Text>
         <Table cols={cols} rows={rows} />

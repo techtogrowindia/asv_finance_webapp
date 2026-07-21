@@ -14,6 +14,14 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
 
+  const totalCollected = st.schedule.reduce((s, r) => s + Number(r.collAmt), 0);
+  const totalPending = st.schedule.reduce((s, r) => s + Number(r.dueBalance), 0);
+  const duesPaid = st.schedule.filter((r) => Number(r.dueBalance) <= 0).length;
+  const duesPending = st.schedule.length - duesPaid;
+  const savingsBalance = st.savings.length ? st.savings[st.savings.length - 1].balance : 0;
+  const savingsDeposited = st.savings.reduce((s, r) => s + r.deposit, 0);
+  const savingsRefunded = st.savings.reduce((s, r) => s + r.refund, 0);
+
   async function downloadPdf() {
     setPdfBusy(true);
     try {
@@ -67,6 +75,19 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
           <div className="detail-item"><div className="k">Status</div><div className="v"><span className={`badge ${st.loanType === 'OPEN' ? 'active' : 'closed'}`}>{st.loanType}{st.closedDate ? ` (${date(st.closedDate)})` : ''}</span></div></div>
         </div>
 
+        <div className="cards" style={{ marginBottom: 18 }}>
+          <SummaryCard label="Principal" value={inr(st.loanAmount)} />
+          <SummaryCard label="Collected" value={inr(totalCollected)} />
+          <SummaryCard label="Pending" value={inr(totalPending)} />
+          <SummaryCard label="Dues Paid" value={`${duesPaid} / ${st.totalDues}`} />
+          <SummaryCard label="Dues Pending" value={String(duesPending)} />
+          <SummaryCard
+            label="Savings Balance"
+            value={inr(savingsBalance)}
+            hint={st.savings.length ? `Deposited ${inr(savingsDeposited)} · Refunded ${inr(savingsRefunded)}` : undefined}
+          />
+        </div>
+
         <div className="panel-head" style={{ padding: '0 0 8px', borderBottom: 'none' }}>Repayment Schedule</div>
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
@@ -114,6 +135,18 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
         </div>
 
         <div style={{ marginTop: 18 }}>{actions}</div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="card">
+      <div>
+        <div className="card-label">{label}</div>
+        <div className="card-value">{value}</div>
+        {hint && <div className="hint" style={{ marginTop: 2 }}>{hint}</div>}
       </div>
     </div>
   );
