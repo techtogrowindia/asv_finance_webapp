@@ -331,7 +331,7 @@ export function CollectionsPage() {
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see who owes money today.</div></div></div>}
 
-      {centerId && <RecentCollections centerId={centerId} groupNo={groupNo} refreshKey={recentKey} />}
+      {centerId && <RecentCollections centerId={centerId} groupNo={groupNo} kind="REGULAR" refreshKey={recentKey} />}
     </>
   );
 }

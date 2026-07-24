@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import type { LoanLedger, LoanStatement, LoanSavingsLedger } from '../../api/loans';
 import type { DemandRegisterRow } from '../../api/reportsAdmin';
 import type { ClientStatement, SavingsPassbook } from '../../api/members';
+import { installmentType } from '../installmentType';
 
 // react-pdf renders real, paginated PDFs (no cropping like the browser print).
 // This whole module is loaded on demand (dynamic import) so it stays out of the
@@ -70,28 +71,29 @@ function Foot() {
 // ---- Loan ledger (loan-only) ----------------------------------------------
 
 const LEDGER_COLS: Col[] = [
-  { key: 'dueNo', label: 'Due No', w: 6, align: 'center' },
-  { key: 'dueDate', label: 'Due Date', w: 11 },
-  { key: 'collDate', label: 'Coll Date', w: 11 },
-  { key: 'duePri', label: 'Due Pri', w: 10, align: 'right' },
-  { key: 'dueInt', label: 'Due Int', w: 10, align: 'right' },
-  { key: 'dueAmt', label: 'Due Amt', w: 10, align: 'right' },
-  { key: 'collPri', label: 'Coll Pri', w: 10, align: 'right' },
-  { key: 'collInt', label: 'Coll Int', w: 10, align: 'right' },
-  { key: 'collAmt', label: 'Coll Amt', w: 11, align: 'right' },
-  { key: 'dueBalance', label: 'Balance', w: 11, align: 'right' },
+  { key: 'dueNo', label: 'Due No', w: 5, align: 'center' },
+  { key: 'dueDate', label: 'Due Date', w: 10 },
+  { key: 'collDate', label: 'Coll Date', w: 10 },
+  { key: 'type', label: 'Type', w: 12 },
+  { key: 'duePri', label: 'Due Pri', w: 9, align: 'right' },
+  { key: 'dueInt', label: 'Due Int', w: 9, align: 'right' },
+  { key: 'dueAmt', label: 'Due Amt', w: 9, align: 'right' },
+  { key: 'collPri', label: 'Coll Pri', w: 9, align: 'right' },
+  { key: 'collInt', label: 'Coll Int', w: 9, align: 'right' },
+  { key: 'collAmt', label: 'Coll Amt', w: 9, align: 'right' },
+  { key: 'dueBalance', label: 'Balance', w: 9, align: 'right' },
 ];
 
 function LoanLedgerDoc({ l }: { l: LoanLedger }) {
   const rows = l.schedule.map((r) => ({
-    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
+    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate), type: installmentType(r),
     duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
     collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt), dueBalance: inr(r.dueBalance),
   }));
   if (l.foreclosureSettlement) {
     const fs = l.foreclosureSettlement;
     rows.push({
-      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date),
+      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date), type: 'Foreclosed',
       duePri: inr(fs.principal), dueInt: inr(fs.interest), dueAmt: inr(fs.principal + fs.interest),
       collPri: inr(fs.principal), collInt: inr(fs.interest), collAmt: inr(fs.total), dueBalance: inr(0),
     });
@@ -130,20 +132,21 @@ function LoanLedgerDoc({ l }: { l: LoanLedger }) {
 
 function LoanStatementDoc({ st }: { st: LoanStatement }) {
   const cols: Col[] = [
-    { key: 'dueNo', label: 'Due No', w: 6, align: 'center' },
-    { key: 'dueDate', label: 'Due Date', w: 10 },
-    { key: 'collDate', label: 'Coll Date', w: 10 },
-    { key: 'duePri', label: 'Due Pri', w: 9, align: 'right' },
-    { key: 'dueInt', label: 'Due Int', w: 9, align: 'right' },
+    { key: 'dueNo', label: 'Due No', w: 5, align: 'center' },
+    { key: 'dueDate', label: 'Due Date', w: 9 },
+    { key: 'collDate', label: 'Coll Date', w: 9 },
+    { key: 'type', label: 'Type', w: 11 },
+    { key: 'duePri', label: 'Due Pri', w: 8, align: 'right' },
+    { key: 'dueInt', label: 'Due Int', w: 8, align: 'right' },
     { key: 'dueAmt', label: 'Due Amt', w: 9, align: 'right' },
-    { key: 'collPri', label: 'Coll Pri', w: 9, align: 'right' },
-    { key: 'collInt', label: 'Coll Int', w: 9, align: 'right' },
-    { key: 'collAmt', label: 'Coll Amt', w: 10, align: 'right' },
-    { key: 'savings', label: 'Savings', w: 9, align: 'right' },
-    { key: 'dueBalance', label: 'Balance', w: 10, align: 'right' },
+    { key: 'collPri', label: 'Coll Pri', w: 8, align: 'right' },
+    { key: 'collInt', label: 'Coll Int', w: 8, align: 'right' },
+    { key: 'collAmt', label: 'Coll Amt', w: 9, align: 'right' },
+    { key: 'savings', label: 'Savings', w: 8, align: 'right' },
+    { key: 'dueBalance', label: 'Balance', w: 9, align: 'right' },
   ];
   const rows = st.schedule.map((r) => ({
-    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate),
+    dueNo: String(r.dueNo), dueDate: d(r.dueDate), collDate: d(r.collDate), type: installmentType(r),
     duePri: inr(r.duePri), dueInt: inr(r.dueInt), dueAmt: inr(r.dueAmt),
     collPri: inr(r.collPri), collInt: inr(r.collInt), collAmt: inr(r.collAmt),
     savings: inr(r.savings), dueBalance: inr(r.dueBalance),
@@ -151,7 +154,7 @@ function LoanStatementDoc({ st }: { st: LoanStatement }) {
   if (st.foreclosureSettlement) {
     const fs = st.foreclosureSettlement;
     rows.push({
-      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date),
+      dueNo: 'Settlement', dueDate: '—', collDate: d(fs.date), type: 'Foreclosed',
       duePri: inr(fs.principal), dueInt: inr(fs.interest), dueAmt: inr(fs.principal + fs.interest),
       collPri: inr(fs.principal), collInt: inr(fs.interest), collAmt: inr(fs.total),
       savings: '—', dueBalance: inr(0),

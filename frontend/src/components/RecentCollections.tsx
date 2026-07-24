@@ -19,7 +19,7 @@ const KIND_LABEL: Record<string, string> = {
 /** "Last 10 Collections" panel — the most recent money-in postings for the
  *  selected center (and group, when filtered), each with View ledger + Request
  *  correction. `refreshKey` re-fetches after a new collection is posted. */
-export function RecentCollections({ centerId, groupNo, refreshKey }: { centerId: string; groupNo?: string; refreshKey?: number }) {
+export function RecentCollections({ centerId, groupNo, kind, refreshKey }: { centerId: string; groupNo?: string; kind?: string; refreshKey?: number }) {
   const { can, user } = useAuth();
   const navigate = useNavigate();
   const base = user?.role === 'FDO' ? '/app' : '/admin';
@@ -30,8 +30,8 @@ export function RecentCollections({ centerId, groupNo, refreshKey }: { centerId:
   useEffect(() => {
     if (!centerId) { setRows(null); return; }
     setError('');
-    getRecentCollections(centerId, groupNo || undefined).then(setRows).catch((e) => setError(e.message));
-  }, [centerId, groupNo, refreshKey]);
+    getRecentCollections(centerId, groupNo || undefined, kind).then(setRows).catch((e) => setError(e.message));
+  }, [centerId, groupNo, kind, refreshKey]);
 
   if (!centerId) return null;
 

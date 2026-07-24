@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LoanStatement } from '../../api/loans';
 import { shareFileToWhatsApp } from '../../lib/shareFile';
+import { installmentType } from '../../lib/installmentType';
 
 const inr = (v: number | string) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -101,13 +102,13 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
             <thead><tr>
-              <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Due Pri</th><th>Due Int</th>
+              <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Type</th><th>Due Pri</th><th>Due Int</th>
               <th>Due Amt</th><th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Savings</th><th>Balance</th>
             </tr></thead>
             <tbody>
               {st.schedule.map((r) => (
                 <tr key={r.dueNo}>
-                  <td>{r.dueNo}</td><td>{date(r.dueDate)}</td><td>{date(r.collDate)}</td>
+                  <td>{r.dueNo}</td><td>{date(r.dueDate)}</td><td>{date(r.collDate)}</td><td>{installmentType(r)}</td>
                   <td>{inr(r.duePri)}</td><td>{inr(r.dueInt)}</td><td>{inr(r.dueAmt)}</td>
                   <td>{inr(r.collPri)}</td><td>{inr(r.collInt)}</td><td>{inr(r.collAmt)}</td>
                   <td>{inr(r.savings)}</td><td>{inr(r.dueBalance)}</td>
@@ -117,6 +118,7 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
                 <tr style={{ fontWeight: 700, background: 'var(--surface-100, #f4f6f5)' }}>
                   <td colSpan={2}>Foreclosure Settlement</td>
                   <td>{date(st.foreclosureSettlement.date)}</td>
+                  <td>Foreclosed</td>
                   <td>{inr(st.foreclosureSettlement.principal)}</td>
                   <td>{inr(st.foreclosureSettlement.interest)}</td>
                   <td>{inr(st.foreclosureSettlement.principal + st.foreclosureSettlement.interest)}</td>

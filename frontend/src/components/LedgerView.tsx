@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { LoanLedger } from '../api/loans';
+import { installmentType } from '../lib/installmentType';
 
 const inr = (v: string | number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(v));
@@ -46,7 +47,7 @@ export function LedgerView({ ledger }: { ledger: LoanLedger }) {
           <table className="data">
             <thead>
               <tr>
-                <th>Due No</th><th>Due Date</th><th>Coll Date</th>
+                <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Type</th>
                 <th>Due Pri</th><th>Due Int</th><th>Due Amt</th>
                 <th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Balance</th>
               </tr>
@@ -57,6 +58,7 @@ export function LedgerView({ ledger }: { ledger: LoanLedger }) {
                   <td>{s.dueNo}</td>
                   <td>{date(s.dueDate)}</td>
                   <td>{date(s.collDate)}</td>
+                  <td>{installmentType(s)}</td>
                   <td>{inr(s.duePri)}</td>
                   <td>{inr(s.dueInt)}</td>
                   <td>{inr(s.dueAmt)}</td>
@@ -70,6 +72,7 @@ export function LedgerView({ ledger }: { ledger: LoanLedger }) {
                 <tr style={{ fontWeight: 700, background: 'var(--surface-100, #f4f6f5)' }}>
                   <td colSpan={2}>Foreclosure Settlement</td>
                   <td>{date(ledger.foreclosureSettlement.date)}</td>
+                  <td>Foreclosed</td>
                   <td>{inr(ledger.foreclosureSettlement.principal)}</td>
                   <td>{inr(ledger.foreclosureSettlement.interest)}</td>
                   <td>{inr(ledger.foreclosureSettlement.principal + ledger.foreclosureSettlement.interest)}</td>

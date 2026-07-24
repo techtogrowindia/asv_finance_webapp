@@ -12,6 +12,7 @@ export function ArrearCollectionPage() {
   const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
+  const [groupNo, setGroupNo] = useState('');
   const [summary, setSummary] = useState<CenterSummary | null>(null);
   const [rows, setRows] = useState<DueRow[] | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -37,7 +38,10 @@ export function ArrearCollectionPage() {
       .catch((e) => setError(e.message));
   }
 
-  useEffect(() => { refresh(centerId); /* eslint-disable-next-line */ }, [centerId]);
+  useEffect(() => { setGroupNo(''); refresh(centerId); /* eslint-disable-next-line */ }, [centerId]);
+
+  const groups = [...new Set((rows ?? []).map((r) => r.groupNo))].sort((a, b) => a - b);
+  const visibleRows = rows?.filter((r) => !groupNo || String(r.groupNo) === groupNo) ?? null;
 
   async function onCollect(row: DueRow) {
     const amount = Number(amounts[row.loanId]);
@@ -61,7 +65,7 @@ export function ArrearCollectionPage() {
           <h1 className="page-title">Arrear Collection</h1>
           <p className="page-sub" style={{ margin: 0 }}>Overdue members only. Collecting reduces the noted overdue.</p>
         </div>
-        <div className="toolbar-actions" style={{ minWidth: 260, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <div className="toolbar-actions" style={{ minWidth: 260, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <BranchScopeSelect value={branchId} onChange={setBranchId} />
           <SearchableSelect
             options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))}
@@ -69,6 +73,10 @@ export function ArrearCollectionPage() {
             onChange={setCenterId}
             placeholder="Select center…"
           />
+          <select className="select" value={groupNo} disabled={!centerId || groups.length === 0} onChange={(e) => setGroupNo(e.target.value)}>
+            <option value="">All groups</option>
+            {groups.map((g) => <option key={g} value={String(g)}>Group {g}</option>)}
+          </select>
         </div>
       </div>
 
@@ -91,7 +99,7 @@ export function ArrearCollectionPage() {
               <tr><th>Client ID</th><th>Name</th><th>Loan A/c</th><th>Overdue Weeks</th><th>Overdue Amount</th><th>Collect</th><th></th></tr>
             </thead>
             <tbody>
-              {rows?.map((r) => (
+              {visibleRows?.map((r) => (
                 <tr key={r.loanId}>
                   <td className="mono">{r.displayId}</td>
                   <td>{r.clientName}</td>
@@ -109,14 +117,14 @@ export function ArrearCollectionPage() {
                   </td>
                 </tr>
               ))}
-              {rows && rows.length === 0 && <tr><td colSpan={7} className="empty">No overdue members in this center. 🎉</td></tr>}
+              {visibleRows && visibleRows.length === 0 && <tr><td colSpan={7} className="empty">No overdue members{groupNo ? ' in this group' : ' in this center'}. 🎉</td></tr>}
             </tbody>
           </table>
         </div>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see overdue members.</div></div></div>}
 
-      {centerId && <RecentCollections centerId={centerId} refreshKey={recentKey} />}
+      {centerId && <RecentCollections centerId={centerId} groupNo={groupNo} kind="REGULAR" refreshKey={recentKey} />}
     </>
   );
 }

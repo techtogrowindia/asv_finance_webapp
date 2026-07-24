@@ -45,9 +45,11 @@ export interface RecentCollection {
   kind: string;
 }
 
-/** The most recent money-in collections for a center (optionally one group). */
-export const getRecentCollections = (centerId: string, groupNo?: string) =>
-  api<RecentCollection[]>(`/collections/recent?centerId=${centerId}${groupNo ? `&groupNo=${groupNo}` : ''}`);
+/** The most recent money-in collections for a center (optionally one group / kind). */
+export const getRecentCollections = (centerId: string, groupNo?: string, kind?: string) =>
+  api<RecentCollection[]>(
+    `/collections/recent?centerId=${centerId}${groupNo ? `&groupNo=${groupNo}` : ''}${kind ? `&kind=${kind}` : ''}`,
+  );
 
 export const getDemandCenterwise = (date?: string) =>
   api<DemandCenterRow[]>(`/collections/demand?type=CENTERWISE${date ? `&date=${date}` : ''}`);

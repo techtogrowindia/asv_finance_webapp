@@ -182,14 +182,16 @@ export class CollectionsService {
     return this.due(user, centerId);
   }
 
-  /** The most recent money-in collections for a center (optionally one group) —
-   *  the "Last N Collections" panel on the collection screens. */
-  async recentCollections(user: AuthUser, centerId: string, groupNo?: number, limit = 10) {
+  /** The most recent money-in collections for a center (optionally one group,
+   *  optionally one kind) — the "Last N Collections" panel on the collection
+   *  screens. */
+  async recentCollections(user: AuthUser, centerId: string, groupNo?: number, kind?: string, limit = 10) {
     return this.prisma.withTenant(user, async (tx) => {
       const center = await this.getScopedCenter(tx, user, centerId);
       const rows = await tx.collection.findMany({
         where: {
           amount: { gt: 0 },
+          ...(kind ? { kind } : {}),
           loan: { client: { centerId, ...(groupNo ? { group: { groupNo } } : {}) } },
         },
         orderBy: [{ collectedOn: 'desc' }, { createdAt: 'desc' }],

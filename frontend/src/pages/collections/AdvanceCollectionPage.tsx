@@ -20,6 +20,7 @@ export function AdvanceCollectionPage() {
   const [members, setMembers] = useState<MemberListItem[]>([]);
   const [loans, setLoans] = useState<ExistingLoan[]>([]);
   const [centerId, setCenterId] = useState('');
+  const [groupNo, setGroupNo] = useState('');
   const [clientId, setClientId] = useState('');
   const [loanId, setLoanId] = useState('');
   const [amount, setAmount] = useState('');
@@ -33,9 +34,12 @@ export function AdvanceCollectionPage() {
     listCenters(branchId).then(setCenters).catch((e) => setError(e.message));
   }, [branchId]);
   useEffect(() => {
-    setClientId(''); setMembers([]);
+    setClientId(''); setMembers([]); setGroupNo('');
     if (centerId) listMembers({ centerId }).then(setMembers).catch((e) => setError(e.message));
   }, [centerId]);
+
+  const groups = [...new Set(members.map((m) => m.groupNo))].sort((a, b) => a - b);
+  const visibleMembers = members.filter((m) => !groupNo || String(m.groupNo) === groupNo);
   useEffect(() => {
     setLoanId(''); setLoans([]);
     if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN'))).catch((e) => setError(e.message));
@@ -80,8 +84,15 @@ export function AdvanceCollectionPage() {
             <SearchableSelect options={centers.map((c) => ({ id: c.id, label: `${c.code} — ${c.name}` }))} value={centerId} onChange={setCenterId} placeholder="Select center…" />
           </div>
           <div className="field">
+            <label>Group</label>
+            <select className="input" value={groupNo} disabled={!centerId || groups.length === 0} onChange={(e) => { setGroupNo(e.target.value); setClientId(''); }}>
+              <option value="">All groups</option>
+              {groups.map((g) => <option key={g} value={String(g)}>Group {g}</option>)}
+            </select>
+          </div>
+          <div className="field">
             <label>Member</label>
-            <SearchableSelect options={members.map((m) => ({ id: m.id, label: `${m.displayId} — ${m.name}` }))} value={clientId} onChange={setClientId} disabled={!centerId} placeholder="Select member…" />
+            <SearchableSelect options={visibleMembers.map((m) => ({ id: m.id, label: `${m.displayId} — ${m.name}` }))} value={clientId} onChange={setClientId} disabled={!centerId} placeholder="Select member…" />
           </div>
           <div className="field">
             <label>Loan</label>
@@ -104,7 +115,7 @@ export function AdvanceCollectionPage() {
         </div>
       </div>
 
-      {centerId && <RecentCollections centerId={centerId} refreshKey={recentKey} />}
+      {centerId && <RecentCollections centerId={centerId} groupNo={groupNo} kind="ADVANCE" refreshKey={recentKey} />}
     </>
   );
 }
