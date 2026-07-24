@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { CenterLite, listCenters, listMembers, MemberListItem } from '../api/members';
 import { BranchScopeSelect } from '../components/BranchScopeSelect';
+import { MemberBulkImport } from '../components/MemberBulkImport';
 import { Pager, usePagination } from '../components/Pager';
 
 export function MembersPage() {
@@ -15,6 +16,8 @@ export function MembersPage() {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<MemberListItem[] | null>(null);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = () => setReloadKey((k) => k + 1);
 
   useEffect(() => {
     setCenterId('');
@@ -29,7 +32,7 @@ export function MembersPage() {
         .catch((e) => setError(e.message));
     }, 250);
     return () => clearTimeout(t);
-  }, [centerId, q, branchId]);
+  }, [centerId, q, branchId, reloadKey]);
 
   const total = useMemo(() => rows?.length ?? 0, [rows]);
   const p = usePagination(rows);
@@ -59,6 +62,7 @@ export function MembersPage() {
               </option>
             ))}
           </select>
+          {can('member.create') && <MemberBulkImport onDone={reload} />}
           {base === '/app' && can('member.create') && (
             <button className="btn btn-primary" onClick={() => navigate('/app/enroll')}>
               + Enroll

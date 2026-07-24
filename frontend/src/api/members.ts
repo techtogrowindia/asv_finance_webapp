@@ -187,3 +187,32 @@ export const updateMemberKycNumbers = (id: string, party: 'CLIENT' | 'NOMINEE', 
     method: 'PATCH',
     body: JSON.stringify({ party, entries }),
   });
+
+// ---- Bulk member import (Excel) --------------------------------------------
+
+export interface BulkMemberRow {
+  centerCode: string;
+  groupNo: number;
+  name: string;
+  dob?: string;
+  gender?: string;
+  mobile?: string;
+  fatherName?: string;
+  presentAddress?: string;
+  pincode?: string;
+  district?: string;
+  state?: string;
+  monthlyIncome?: string;
+  monthlyExpense?: string;
+  kycNumbers?: KycNumberEntry[];
+  nominee?: { name: string; relation?: string; mobile?: string; kycNumbers?: KycNumberEntry[] };
+}
+
+export interface BulkMemberResult {
+  successCount: number;
+  failCount: number;
+  results: { row: number; name: string; centerCode: string; status: 'OK' | 'ERROR'; message: string | null; displayId: string | null }[];
+}
+
+export const bulkImportMembers = (rows: BulkMemberRow[]) =>
+  api<BulkMemberResult>('/clients/bulk-import', { method: 'POST', body: JSON.stringify({ rows }) });

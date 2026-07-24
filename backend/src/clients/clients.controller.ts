@@ -17,6 +17,7 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { UpdateKycNumbersDto } from './dto/kyc-number.dto';
 import { TransferClientDto } from './dto/transfer-client.dto';
+import { BulkImportMembersDto } from './dto/bulk-import-members.dto';
 
 @Controller('clients')
 export class ClientsController {
@@ -76,6 +77,12 @@ export class ClientsController {
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateClientDto) {
     return this.clients.create(user, dto);
+  }
+
+  @RequirePermission('member.create')
+  @Post('bulk-import')
+  bulkImport(@CurrentUser() user: AuthUser, @Body() dto: BulkImportMembersDto) {
+    return this.clients.bulkImport(user, dto);
   }
 
   @Roles('FDO', 'BM')

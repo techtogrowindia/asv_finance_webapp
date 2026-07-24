@@ -14,6 +14,7 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { KycNumberEntryDto, UpdateKycNumbersDto } from './dto/kyc-number.dto';
 import { TransferClientDto } from './dto/transfer-client.dto';
+import { BulkImportMembersDto } from './dto/bulk-import-members.dto';
 
 const GROUP_CAPACITY = 5;
 
@@ -155,6 +156,123 @@ export class ClientsService {
 
       return this.fetchFull(tx, user, created.id);
     });
+  }
+
+  /**
+   * Bulk-create members from an uploaded sheet. Each row runs in its own
+   * transaction (so one bad row never rolls back the rest), matching the
+   * center by code within the importer's scope, assigning the next free
+   * member slot in the given group, and mapping KYC number columns to the
+   * admin DocumentType masters. Mandatory ID proofs (per Settings) must be
+   * present or the row is reported as an error and skipped.
+   */
+  async bulkImport(user: AuthUser, dto: BulkImportMembersDto) {
+    // The mandatory client-side ID proofs configured in Settings — a row must
+    // supply a value for every one of these or it's rejected.
+    const mandatoryTypes = await this.prisma.withTenant(user, (tx) =>
+      tx.documentType.findMany({
+        where: {
+          tenantId: user.tenantId, isActive: true, isMandatory: true,
+          requiresNumber: true, appliesTo: { in: ['CLIENT', 'BOTH'] },
+        },
+        select: { id: true, name: true },
+      }),
+    );
+
+    const results: { row: number; name: string; centerCode: string; status: 'OK' | 'ERROR'; message: string | null; displayId: string | null }[] = [];
+    let successCount = 0;
+
+    for (let i = 0; i < dto.rows.length; i++) {
+      const row = dto.rows[i];
+      try {
+        const provided = new Set((row.kycNumbers ?? []).filter((k) => k.value.trim() !== '').map((k) => k.documentTypeId));
+        const missing = mandatoryTypes.filter((t) => !provided.has(t.id));
+        if (missing.length) {
+          throw new BadRequestException(`Missing required ID number(s): ${missing.map((m) => m.name).join(', ')}`);
+        }
+
+        const created = await this.prisma.withTenant(user, async (tx) => {
+          const center = await tx.center.findFirst({
+            where: { code: row.centerCode, ...centerScope(user) },
+            include: { branch: { select: { code: true } } },
+          });
+          if (!center) throw new NotFoundException(`Center ${row.centerCode} not found or not in your scope`);
+
+          const group = await tx.groupUnit.findFirst({ where: { centerId: center.id, groupNo: row.groupNo } });
+          if (!group) throw new BadRequestException(`Group ${row.groupNo} does not exist in center ${row.centerCode}`);
+
+          const memberCount = await tx.client.count({ where: { groupId: group.id, isActive: true } });
+          if (memberCount >= GROUP_CAPACITY) {
+            throw new BadRequestException(`Group ${row.groupNo} in center ${row.centerCode} is full (max ${GROUP_CAPACITY})`);
+          }
+
+          const clientCode = await this.nextClientCode(tx);
+          const savingsAccount = `ASVS${clientCode.replace(/\D/g, '')}`;
+          const num = (v?: string) => (v !== undefined && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : null);
+
+          const client = await tx.client.create({
+            data: {
+              tenantId: user.tenantId,
+              centerId: center.id,
+              groupId: group.id,
+              memberNo: memberCount + 1,
+              clientCode,
+              savingsAccount,
+              name: row.name.trim(),
+              dob: row.dob ? new Date(row.dob) : null,
+              gender: row.gender,
+              mobile: row.mobile,
+              presentAddress: row.presentAddress,
+              pincode: row.pincode,
+              district: row.district,
+              state: row.state,
+              monthlyIncome: num(row.monthlyIncome),
+              monthlyExpense: num(row.monthlyExpense),
+              fatherName: row.fatherName,
+              dateOfJoining: new Date(),
+              status: 'PENDING',
+              ...(row.nominee?.name
+                ? {
+                    coApplicant: {
+                      create: {
+                        tenantId: user.tenantId,
+                        name: row.nominee.name.trim(),
+                        relation: row.nominee.relation,
+                        mobile: row.nominee.mobile,
+                      },
+                    },
+                  }
+                : {}),
+            },
+          });
+
+          if (row.kycNumbers?.length) await this.upsertKycNumbers(tx, user, client.id, 'CLIENT', row.kycNumbers);
+          if (row.nominee?.kycNumbers?.length) await this.upsertKycNumbers(tx, user, client.id, 'NOMINEE', row.nominee.kycNumbers);
+
+          return {
+            displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${group.groupNo}.${memberCount + 1}`,
+          };
+        });
+
+        successCount += 1;
+        results.push({ row: i + 1, name: row.name, centerCode: row.centerCode, status: 'OK', message: null, displayId: created.displayId });
+      } catch (e) {
+        results.push({
+          row: i + 1, name: row.name, centerCode: row.centerCode, status: 'ERROR',
+          message: e instanceof Error ? e.message : 'Failed to import this row', displayId: null,
+        });
+      }
+    }
+
+    await this.prisma.withTenant(user, (tx) =>
+      this.audit.record(tx, {
+        tenantId: user.tenantId, entity: 'Client', entityId: user.tenantId,
+        action: 'BULK_IMPORT_MEMBERS', employeeId: user.employeeId,
+        after: { rows: dto.rows.length, successCount, failCount: dto.rows.length - successCount },
+      }),
+    );
+
+    return { successCount, failCount: dto.rows.length - successCount, results };
   }
 
   async update(user: AuthUser, id: string, dto: UpdateClientDto) {
