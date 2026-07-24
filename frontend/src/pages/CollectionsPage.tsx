@@ -5,6 +5,7 @@ import { BulkImportResult, BulkImportRow, DueRow, bulkImportCollections, getDue,
 import { CenterLite, listCenters } from '../api/members';
 import { getSettings } from '../api/settings';
 import { BranchScopeSelect } from '../components/BranchScopeSelect';
+import { RecentCollections } from '../components/RecentCollections';
 import { InlineClosureReport } from '../components/reports/InlineClosureReport';
 import { downloadXlsx, readXlsxFile } from '../lib/xlsx';
 
@@ -57,6 +58,7 @@ export function CollectionsPage() {
   const [closedLoanId, setClosedLoanId] = useState<string | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<BulkImportResult | null>(null);
+  const [recentKey, setRecentKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export function CollectionsPage() {
     getDue(cid)
       .then((data) => { setRows(data); setAdvances({}); setSavingsInputs({}); })
       .catch((e) => setError(e.message));
+    setRecentKey((k) => k + 1);
   }
 
   useEffect(() => {
@@ -327,6 +330,8 @@ export function CollectionsPage() {
         </div>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see who owes money today.</div></div></div>}
+
+      {centerId && <RecentCollections centerId={centerId} groupNo={groupNo} refreshKey={recentKey} />}
     </>
   );
 }

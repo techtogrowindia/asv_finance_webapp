@@ -44,6 +44,16 @@ export class CollectionsController {
   }
 
   @RequirePermission('collection.view')
+  @Get('recent')
+  recentCollections(
+    @CurrentUser() user: AuthUser,
+    @Query('centerId', ParseUUIDPipe) centerId: string,
+    @Query('groupNo') groupNo?: string,
+  ) {
+    return this.collections.recentCollections(user, centerId, groupNo ? Number(groupNo) : undefined);
+  }
+
+  @RequirePermission('collection.view')
   @Get('arrears')
   arrears(@CurrentUser() user: AuthUser, @Query('centerId', ParseUUIDPipe) centerId: string) {
     return this.collections.arrears(user, centerId);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CenterLite, listCenters } from '../../api/members';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { BranchScopeSelect } from '../../components/BranchScopeSelect';
+import { RecentCollections } from '../../components/RecentCollections';
 import { CenterSummary, DueRow, getArrears, getCenterSummary, postCollection } from '../../api/collections';
 
 const inr = (v: number) =>
@@ -15,6 +16,7 @@ export function ArrearCollectionPage() {
   const [rows, setRows] = useState<DueRow[] | null>(null);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [busyLoanId, setBusyLoanId] = useState<string | null>(null);
+  const [recentKey, setRecentKey] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -24,6 +26,7 @@ export function ArrearCollectionPage() {
   }, [branchId]);
 
   function refresh(cid: string) {
+    setRecentKey((k) => k + 1);
     if (!cid) { setSummary(null); setRows(null); return; }
     getCenterSummary(cid).then(setSummary).catch((e) => setError(e.message));
     getArrears(cid)
@@ -112,6 +115,8 @@ export function ArrearCollectionPage() {
         </div>
       )}
       {!centerId && <div className="panel"><div className="panel-body"><div className="empty">Select a center to see overdue members.</div></div></div>}
+
+      {centerId && <RecentCollections centerId={centerId} refreshKey={recentKey} />}
     </>
   );
 }

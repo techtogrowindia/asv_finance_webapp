@@ -28,6 +28,9 @@ export function SavingsRefundsPage() {
   const { can } = useAuth();
   const confirm = useConfirm();
   const [branchId, setBranchId] = useState('');
+  const [centerName, setCenterName] = useState('');
+  const [groupNo, setGroupNo] = useState('');
+  const [q, setQ] = useState('');
   const [rows, setRows] = useState<SavingsRefundRow[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -38,6 +41,16 @@ export function SavingsRefundsPage() {
     getSavingsRefunds(branchId || undefined).then(setRows).catch((e) => setError(e.message));
   }
   useEffect(refresh, [branchId]);
+
+  const groupOf = (displayId: string) => displayId.split('.')[2] ?? '';
+  const centerNames = [...new Set((rows ?? []).map((r) => r.centerName))].sort();
+  const groups = [...new Set((rows ?? []).map((r) => groupOf(r.displayId)).filter(Boolean))].sort();
+  const visible = (rows ?? []).filter(
+    (r) =>
+      (!centerName || r.centerName === centerName) &&
+      (!groupNo || groupOf(r.displayId) === groupNo) &&
+      (!q.trim() || r.clientName.toLowerCase().includes(q.trim().toLowerCase()) || r.displayId.includes(q.trim())),
+  );
 
   async function run(key: string, fn: () => Promise<unknown>, ok: string) {
     setError(''); setSuccess(''); setBusyId(key);
@@ -105,8 +118,17 @@ export function SavingsRefundsPage() {
             Savings is closed separately from the loan: a field officer initiates, a Branch Manager / Head Office approves, then the field officer pays out and closes the savings account.
           </p>
         </div>
-        <div className="toolbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+        <div className="toolbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <BranchScopeSelect value={branchId} onChange={setBranchId} />
+          <select className="select" value={centerName} onChange={(e) => { setCenterName(e.target.value); setGroupNo(''); }}>
+            <option value="">All centers</option>
+            {centerNames.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select className="select" value={groupNo} disabled={groups.length === 0} onChange={(e) => setGroupNo(e.target.value)}>
+            <option value="">All groups</option>
+            {groups.map((g) => <option key={g} value={g}>Group {g}</option>)}
+          </select>
+          <input className="input search" placeholder="Search member / client ID" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
       </div>
 
@@ -124,7 +146,7 @@ export function SavingsRefundsPage() {
             </tr>
           </thead>
           <tbody>
-            {rows?.map((r) => {
+            {visible.map((r) => {
               const key = r.requestId ?? r.loanId;
               const busy = busyId === key;
               return (
@@ -167,8 +189,8 @@ export function SavingsRefundsPage() {
                 </tr>
               );
             })}
-            {rows && rows.length === 0 && (
-              <tr><td colSpan={9} className="empty">No savings balances to close right now.</td></tr>
+            {rows && visible.length === 0 && (
+              <tr><td colSpan={9} className="empty">No savings balances to close{rows.length ? ' match the filter' : ' right now'}.</td></tr>
             )}
           </tbody>
         </table>

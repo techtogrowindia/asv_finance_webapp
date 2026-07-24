@@ -34,6 +34,20 @@ export interface DemandClientRow extends DueRow {
 export const getDue = (centerId: string, date?: string) =>
   api<DueRow[]>(`/collections/due?centerId=${centerId}${date ? `&date=${date}` : ''}`);
 
+export interface RecentCollection {
+  id: string;
+  collectedOn: string;
+  clientName: string;
+  displayId: string;
+  loanAccount: string;
+  amount: number;
+  kind: string;
+}
+
+/** The most recent money-in collections for a center (optionally one group). */
+export const getRecentCollections = (centerId: string, groupNo?: string) =>
+  api<RecentCollection[]>(`/collections/recent?centerId=${centerId}${groupNo ? `&groupNo=${groupNo}` : ''}`);
+
 export const getDemandCenterwise = (date?: string) =>
   api<DemandCenterRow[]>(`/collections/demand?type=CENTERWISE${date ? `&date=${date}` : ''}`);
 

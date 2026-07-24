@@ -182,6 +182,48 @@ export class CollectionsService {
     return this.due(user, centerId);
   }
 
+  /** The most recent money-in collections for a center (optionally one group) —
+   *  the "Last N Collections" panel on the collection screens. */
+  async recentCollections(user: AuthUser, centerId: string, groupNo?: number, limit = 10) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const center = await this.getScopedCenter(tx, user, centerId);
+      const rows = await tx.collection.findMany({
+        where: {
+          amount: { gt: 0 },
+          loan: { client: { centerId, ...(groupNo ? { group: { groupNo } } : {}) } },
+        },
+        orderBy: [{ collectedOn: 'desc' }, { createdAt: 'desc' }],
+        take: Math.min(Math.max(1, limit), 50),
+        include: {
+          loan: {
+            select: {
+              loanAccount: true,
+              client: {
+                select: {
+                  name: true, memberNo: true,
+                  group: { select: { groupNo: true } },
+                  center: { select: { code: true, branch: { select: { code: true } } } },
+                },
+              },
+            },
+          },
+        },
+      });
+      return rows.map((r) => {
+        const cl = r.loan.client;
+        return {
+          id: r.id,
+          collectedOn: r.collectedOn,
+          clientName: cl.name,
+          displayId: `${stripLeadingZeros(cl.center.branch.code)}.${stripLeadingZeros(cl.center.code)}.${cl.group.groupNo}.${cl.memberNo}`,
+          loanAccount: r.loan.loanAccount,
+          amount: round2(Number(r.amount)),
+          kind: r.kind,
+        };
+      });
+    });
+  }
+
   /** Bulk "everyone paid their demand" for a center — posts each member's current due. */
   async bulkCollectDemand(user: AuthUser, centerId: string) {
     return this.prisma.withTenant(user, async (tx) => {

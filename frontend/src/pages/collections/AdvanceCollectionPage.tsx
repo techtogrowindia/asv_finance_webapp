@@ -3,6 +3,7 @@ import { CenterLite, listCenters, listMembers, MemberListItem } from '../../api/
 import { ExistingLoan, listExistingLoans } from '../../api/loans';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { BranchScopeSelect } from '../../components/BranchScopeSelect';
+import { RecentCollections } from '../../components/RecentCollections';
 import { postCollection } from '../../api/collections';
 
 const inr = (v: number | string) =>
@@ -23,6 +24,7 @@ export function AdvanceCollectionPage() {
   const [loanId, setLoanId] = useState('');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
+  const [recentKey, setRecentKey] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -53,6 +55,7 @@ export function AdvanceCollectionPage() {
           (res.loanClosed ? ' — loan fully closed!' : ''),
       );
       setAmount('');
+      setRecentKey((k) => k + 1);
       if (clientId) listExistingLoans(clientId).then((ls) => setLoans(ls.filter((l) => l.loanType === 'OPEN')));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Collection failed');
@@ -100,6 +103,8 @@ export function AdvanceCollectionPage() {
           </button>
         </div>
       </div>
+
+      {centerId && <RecentCollections centerId={centerId} refreshKey={recentKey} />}
     </>
   );
 }
