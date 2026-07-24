@@ -12,8 +12,8 @@ searchable app number, editable/resubmittable while pending) → verification �
 disbursement (flat-interest schedule engine), daily collections (field/demand/
 arrear/advance-collection + loan advance pre-payment + configurable-policy
 foreclosure), a **compulsory per-loan savings** add-on (fixed amount collected
-alongside every instalment, auto-refunded the moment *that* loan closes — see
-invariant #11), End of Day cash reconciliation, admin masters/centers/
+alongside every instalment, closed/refunded separately via a maker-checker
+workflow — see invariant #11), End of Day cash reconciliation, admin masters/centers/
 employees, monitoring + portfolio **Reports** (client-side CSV/Excel/PDF
 export, preset date filters), and a configurable **Roles & Permissions** module
 (RBAC — see invariant #10). Both `/login` (employee/FDO) and `/admin` (BM/HO)
@@ -107,12 +107,19 @@ npm test                       # jest;  npm test -- path/to.spec.ts  for one fil
 11. **Savings is per-loan, not pooled at the member level.** Each loan has its
     own savings sub-account (`${client.savingsAccount}_${loan.loanAccount}`);
     every deposit is tagged with the `loanId` it came from
-    (`SavingsTxn.loanId`). The moment *that* loan closes — foreclosed or fully
-    repaid — its own savings balance refunds automatically in the same
-    transaction (see `refundLoanSavings()` in
-    `backend/src/collections/collections.service.ts`). Never revert to a
-    single pooled member-level balance or hold refunds until every loan of a
-    client closes — that was tried and explicitly reversed.
+    (`SavingsTxn.loanId`). Never revert to a single pooled member-level balance
+    — that was tried and explicitly reversed. **Savings is closed/refunded
+    separately from the loan, via a maker-checker workflow — it is NOT
+    auto-refunded at loan closure** (that earlier behaviour was reversed on the
+    client's request). When a loan closes (foreclosed or fully repaid) its
+    savings balance simply stays on the sub-account; an FDO **initiates** a
+    refund (`savings.refundInitiate`), a BM/HO **approves** it
+    (`savings.refundApprove`, approver ≠ initiator), then an FDO **settles** it
+    (`savings.refundSettle`) — which is the only point a `REFUND` `SavingsTxn`
+    is written. See `SavingsRefundRequest` (states INITIATED→APPROVED→SETTLED/
+    REJECTED) and the `initiate/approve/reject/settleSavingsRefund` methods in
+    `backend/src/collections/collections.service.ts`, surfaced on the
+    **Savings Closure** page. Do not re-add an automatic refund at closure.
 
 **Conventions:** DB `snake_case`, API `camelCase`; deploy is git push→pull (secrets
 live only in the server's `backend/.env`, never in git). **Schema changes** use
@@ -216,9 +223,10 @@ this "joint liability" is what makes repayment reliable. Members must:
    **arrears**.
 6. **End of Day (EOD)** — the branch reconciles the cash collected each day
    (opening balance + receipts − payments = closing balance) and "closes" the day.
-7. **Closure** — when all instalments are paid, the loan is **CLOSED** and its
-   savings account auto-refunds (invariant #11). Good members get a **repeat
-   loan** (a new "cycle", e.g. loan account `PMF005179_2`).
+7. **Closure** — when all instalments are paid, the loan is **CLOSED**. Its
+   savings account is closed/refunded **separately** through the maker-checker
+   Savings Closure workflow (invariant #11), not automatically. Good members
+   get a **repeat loan** (a new "cycle", e.g. loan account `PMF005179_2`).
 
 ### 2.4 How the loan money is calculated (flat interest)
 
@@ -473,7 +481,7 @@ the full Reports suite (§2.5) shipped after and are now equally live — see th
 | Portfolio OS | Portfolio Outstanding — total loan money still to be recovered |
 | Disbursement | Giving out the loan money |
 | Cycle | Loan number for a repeat borrower (e.g. `_2` = second loan) |
-| Savings a/c | Per-loan compulsory savings sub-account, auto-refunded at that loan's closure (invariant #11) |
+| Savings a/c | Per-loan compulsory savings sub-account, closed/refunded separately via the maker-checker Savings Closure workflow (invariant #11) |
 | PAR | Portfolio at Risk — overdue loans bucketed by days (1/7/30/90+) |
 
 ---
