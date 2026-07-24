@@ -46,6 +46,7 @@ export function CollectionsPage() {
   const [branchId, setBranchId] = useState('');
   const [centers, setCenters] = useState<CenterLite[]>([]);
   const [centerId, setCenterId] = useState('');
+  const [groupNo, setGroupNo] = useState('');
   const [rows, setRows] = useState<DueRow[] | null>(null);
   const [advances, setAdvances] = useState<Record<string, string>>({});
   const [savingsInputs, setSavingsInputs] = useState<Record<string, string>>({});
@@ -75,9 +76,14 @@ export function CollectionsPage() {
 
   useEffect(() => {
     setImportResult(null);
+    setGroupNo('');
     if (centerId) refresh(centerId);
     else setRows(null);
   }, [centerId]);
+
+  // Groups present in this center's due list, for the group filter.
+  const groups = [...new Set((rows ?? []).map((r) => r.groupNo))].sort((a, b) => a - b);
+  const visibleRows = rows?.filter((r) => !groupNo || String(r.groupNo) === groupNo) ?? null;
 
   /** A blank sample — not this center's real loans. Fill in the actual Loan
    *  A/c + Amount (+ Savings) for each collection you made, then re-upload. */
@@ -167,7 +173,7 @@ export function CollectionsPage() {
     <>
       <div className="toolbar">
         <div>
-          <h1 className="page-title">Collections</h1>
+          <h1 className="page-title">Demand Collection</h1>
           <p className="page-sub" style={{ margin: 0 }}>
             Working date: {user ? new Date(user.workingDate).toLocaleDateString('en-IN') : '—'}
           </p>
@@ -178,6 +184,17 @@ export function CollectionsPage() {
             <option value="">Select center</option>
             {centers.map((c) => (
               <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+            ))}
+          </select>
+          <select
+            className="select"
+            value={groupNo}
+            disabled={!centerId || groups.length === 0}
+            onChange={(e) => setGroupNo(e.target.value)}
+          >
+            <option value="">All groups</option>
+            {groups.map((g) => (
+              <option key={g} value={String(g)}>Group {g}</option>
             ))}
           </select>
           <button className="btn btn-ghost" onClick={downloadTemplate}>
@@ -247,7 +264,7 @@ export function CollectionsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows?.map((r) => (
+              {visibleRows?.map((r) => (
                 <tr key={r.loanId}>
                   <td className="mono">{r.displayId}</td>
                   <td>{r.clientName}</td>
@@ -300,8 +317,10 @@ export function CollectionsPage() {
                   </td>
                 </tr>
               ))}
-              {rows && rows.length === 0 && (
-                <tr><td colSpan={cols} className="empty">Nothing pending for this center. All caught up!</td></tr>
+              {visibleRows && visibleRows.length === 0 && (
+                <tr><td colSpan={cols} className="empty">
+                  {groupNo ? 'Nothing pending for this group.' : 'Nothing pending for this center. All caught up!'}
+                </td></tr>
               )}
             </tbody>
           </table>

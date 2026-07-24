@@ -75,6 +75,7 @@ export class CollectionsService {
               clientId: c.id,
               clientName: c.name,
               displayId: `${stripLeadingZeros(center.branch.code)}.${stripLeadingZeros(center.code)}.${c.group.groupNo}.${c.memberNo}`,
+              groupNo: c.group.groupNo,
               loanId: loan.id,
               loanAccount: loan.loanAccount,
               dueCount: unpaid.length,

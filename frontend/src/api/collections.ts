@@ -4,6 +4,7 @@ export interface DueRow {
   clientId: string;
   clientName: string;
   displayId: string;
+  groupNo: number;
   loanId: string;
   loanAccount: string;
   dueCount: number;

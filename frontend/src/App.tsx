@@ -30,7 +30,6 @@ import { KycVerificationPage } from './pages/admin/KycVerificationPage';
 import { ClientTransferPage } from './pages/admin/ClientTransferPage';
 import { ImportLegacyLoanPage } from './pages/admin/ImportLegacyLoanPage';
 import { CollectionCorrectionsPage } from './pages/admin/CollectionCorrectionsPage';
-import { DemandCollectionPage } from './pages/collections/DemandCollectionPage';
 import { ArrearCollectionPage } from './pages/collections/ArrearCollectionPage';
 import { AdvanceCollectionPage } from './pages/collections/AdvanceCollectionPage';
 import { LoanAdvancePage } from './pages/collections/LoanAdvancePage';
@@ -62,7 +61,6 @@ export default function App() {
         <Route path="/app/enroll" element={<EmployeeRoute><EnrollMemberPage /></EmployeeRoute>} />
         <Route path="/app/loans" element={<EmployeeRoute><LoanApplicationPage /></EmployeeRoute>} />
         <Route path="/app/collections" element={<EmployeeRoute><CollectionsPage /></EmployeeRoute>} />
-        <Route path="/app/collections/demand" element={<EmployeeRoute><DemandCollectionPage /></EmployeeRoute>} />
         <Route path="/app/collections/arrears" element={<EmployeeRoute><ArrearCollectionPage /></EmployeeRoute>} />
         <Route path="/app/collections/pay-advance" element={<EmployeeRoute><AdvanceCollectionPage /></EmployeeRoute>} />
         <Route path="/app/collections/advance" element={<EmployeeRoute><LoanAdvancePage /></EmployeeRoute>} />
@@ -243,7 +241,6 @@ export default function App() {
         />
         {/* Collections — shared pages, admin portal (BM/HO). Permission-gated in nav. */}
         <Route path="/admin/collections" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><CollectionsPage /></AdminLayout></RequireAuth>} />
-        <Route path="/admin/collections/demand" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><DemandCollectionPage /></AdminLayout></RequireAuth>} />
         <Route path="/admin/collections/arrears" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><ArrearCollectionPage /></AdminLayout></RequireAuth>} />
         <Route path="/admin/collections/pay-advance" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><AdvanceCollectionPage /></AdminLayout></RequireAuth>} />
         <Route path="/admin/collections/advance" element={<RequireAuth roles={['BM', 'HO']} loginPath="/admin"><AdminLayout><LoanAdvancePage /></AdminLayout></RequireAuth>} />

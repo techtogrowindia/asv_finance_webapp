@@ -25,8 +25,7 @@ const ADMIN_NAV: SideNavItem[] = [
   {
     label: 'Collections', icon: '₹', perm: ['collection.view'],
     children: [
-      { to: '/admin/collections', label: 'Field Collection', end: true, perm: ['collection.post'] },
-      { to: '/admin/collections/demand', label: 'Demand Collection', perm: ['collection.post'] },
+      { to: '/admin/collections', label: 'Demand Collection', end: true, perm: ['collection.post'] },
       { to: '/admin/collections/arrears', label: 'Arrear Collection', perm: ['collection.post'] },
       { to: '/admin/collections/pay-advance', label: 'Advance Collection', perm: ['collection.post'] },
       { to: '/admin/collections/advance', label: 'Loan Advance', perm: ['collection.advance'] },
