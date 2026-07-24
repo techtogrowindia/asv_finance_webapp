@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AdminLayout } from '../../components/AdminLayout';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { LegacyLoanBulkImport } from '../../components/LegacyLoanBulkImport';
 import { useConfirm } from '../../components/ConfirmProvider';
 import { listMembers, MemberListItem } from '../../api/members';
 import { Frequency, LoanProductLite, importLegacyLoan, listFrequencies, listLoanProducts } from '../../api/loans';
@@ -233,11 +234,13 @@ export function ImportLegacyLoanPage() {
     <AdminLayout>
       <h1 className="page-title">Import Legacy Loan</h1>
       <p className="page-sub">
-        Bring a loan a member took before this system existed (and is still repaying) into the app as an open loan.
-        Pick the member and matching product, set the original disbursal &amp; due-start dates, then enter what was
-        actually collected — and any savings banked — for each past installment (type it in directly, or download the
-        template and upload it back as Excel).
+        Bring loans members took before this system existed into the app. Import many at once from Excel below, or add a
+        single loan with full per-installment history using the form underneath.
       </p>
+
+      <LegacyLoanBulkImport onDone={resetClient} />
+
+      <div className="form-section-title" style={{ marginBottom: 12 }}>Or add one loan manually</div>
 
       {error && <div className="alert-error">{error}</div>}
       {success && (

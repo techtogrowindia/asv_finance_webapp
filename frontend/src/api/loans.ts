@@ -73,6 +73,30 @@ export const importLegacyLoan = (body: {
     { method: 'POST', body: JSON.stringify(body) },
   );
 
+export interface BulkLegacyLoanRow {
+  clientDisplayId: string;
+  memberName?: string;
+  mobile?: string;
+  productName: string;
+  loanAmount: number;
+  disbursalDate: string;
+  dueAmount?: number;
+  dueStartDate: string;
+  dueEndDate?: string;
+  totalDues: number;
+  duesPaid: number;
+}
+
+export interface BulkLegacyLoanResult {
+  successCount: number;
+  failCount: number;
+  results: { row: number; clientDisplayId: string; status: 'OK' | 'ERROR'; message: string | null; loanAccount: string | null }[];
+}
+
+/** Bulk-import pre-existing loans from a sheet (BM/HO, loan.import). */
+export const bulkImportLegacyLoans = (rows: BulkLegacyLoanRow[]) =>
+  api<BulkLegacyLoanResult>('/loans/bulk-import', { method: 'POST', body: JSON.stringify({ rows }) });
+
 export const createLoanApplication = (body: { clientId: string; productId: string; purposeId: string; notes?: string }) =>
   api<{ id: string; status: string; warnings: string[]; requestedAmount: string }>('/loan-applications', {
     method: 'POST',

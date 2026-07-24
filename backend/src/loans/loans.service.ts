@@ -9,6 +9,7 @@ import { generateSchedule, round2 } from './schedule.util';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { DisburseLoanDto } from './dto/disburse-loan.dto';
 import { ImportLegacyLoanDto } from './dto/import-legacy-loan.dto';
+import { BulkImportLoansDto } from './dto/bulk-import-loans.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 
 @Injectable()
@@ -618,6 +619,144 @@ export class LoansService {
 
       return { id: loan.id, loanAccount, totalCollected, totalSavings, remainingBalance: remaining };
     });
+  }
+
+  /**
+   * Bulk-import legacy loans from a sheet. Each row runs in its own transaction.
+   * The member is matched by Client ID (e.g. 5.29.1.1), the product by name.
+   * Explicit sheet amounts are trusted (interest = dueAmount × totalDues −
+   * loanAmount when an EMI is given), and `duesPaid` marks that many earliest
+   * installments fully collected — so a loan whose dues are all paid imports as
+   * CLOSED, otherwise OPEN with the correct outstanding balance.
+   */
+  async bulkImportLegacyLoans(user: AuthUser, dto: BulkImportLoansDto) {
+    const results: { row: number; clientDisplayId: string; status: 'OK' | 'ERROR'; message: string | null; loanAccount: string | null }[] = [];
+    let successCount = 0;
+
+    for (let i = 0; i < dto.rows.length; i++) {
+      const row = dto.rows[i];
+      try {
+        const loanAccount = await this.prisma.withTenant(user, async (tx) => {
+          // Resolve the member by their Client ID "branch.center.group.member".
+          const parts = row.clientDisplayId.trim().split('.');
+          if (parts.length !== 4) throw new BadRequestException(`Client ID "${row.clientDisplayId}" is not in the form branch.center.group.member`);
+          const [b, c, g, m] = parts;
+          const candidates = await tx.client.findMany({
+            where: { memberNo: Number(m), group: { groupNo: Number(g) }, ...clientCenterScope(user) },
+            select: { id: true, clientCode: true, name: true, center: { select: { code: true, branchId: true, branch: { select: { code: true } } } } },
+          });
+          const client = candidates.find(
+            (cl) => stripLeadingZeros(cl.center.branch.code) === stripLeadingZeros(b) && stripLeadingZeros(cl.center.code) === stripLeadingZeros(c),
+          );
+          if (!client) throw new NotFoundException(`No member found for Client ID ${row.clientDisplayId}`);
+
+          const product = await tx.loanProduct.findFirst({
+            where: { name: { equals: row.productName.trim(), mode: 'insensitive' } },
+            include: { frequency: true },
+          });
+          if (!product) throw new BadRequestException(`Loan product "${row.productName}" not found`);
+
+          const loanAmount = round2(row.loanAmount);
+          const totalDues = row.totalDues;
+          if (row.duesPaid > totalDues) throw new BadRequestException(`Dues paid (${row.duesPaid}) exceeds total dues (${totalDues})`);
+          const interestAmount = row.dueAmount != null
+            ? Math.max(0, round2(row.dueAmount * totalDues - loanAmount))
+            : round2(Number(product.interestAmount));
+
+          const disbursalDate = new Date(row.disbursalDate);
+          const dueStartDate = new Date(row.dueStartDate);
+          // Prefer the real cadence implied by the sheet's dates; fall back to the product frequency.
+          let daysBetween = product.frequency.daysBetween;
+          if (row.dueEndDate && totalDues > 1) {
+            const span = (new Date(row.dueEndDate).getTime() - dueStartDate.getTime()) / (86_400_000 * (totalDues - 1));
+            if (Number.isFinite(span) && span >= 1) daysBetween = Math.round(span);
+          }
+
+          const rows = generateSchedule({ loanAmount, interestAmount, totalDues, daysBetween, dueStartDate });
+          const maturityDate = rows[rows.length - 1].dueDate;
+
+          const cycleNo = (await tx.loan.count({ where: { clientId: client.id } })) + 1;
+          const account = `${client.clientCode}_${cycleNo}`;
+
+          let remaining = 0;
+          let lastPaidDate: Date | null = null;
+          const scheduleData = rows.map((r) => {
+            const paid = r.dueNo <= row.duesPaid;
+            const collected = paid ? r.dueAmt : 0;
+            const payPri = paid ? r.duePri : 0;
+            const payInt = paid ? round2(r.dueAmt - r.duePri) : 0;
+            const dueBalance = round2(r.dueAmt - collected);
+            remaining = round2(remaining + dueBalance);
+            if (paid) lastPaidDate = r.dueDate;
+            return { r, collected, payPri, payInt, dueBalance, paid };
+          });
+          const closed = remaining <= 0;
+
+          const loan = await tx.loan.create({
+            data: {
+              tenantId: user.tenantId,
+              clientId: client.id,
+              productId: product.id,
+              loanAccount: account,
+              cycleNo,
+              loanAmount,
+              interestAmount,
+              totalAmount: round2(loanAmount + interestAmount),
+              totalDues,
+              disbursalDate,
+              dueStartDate,
+              maturityDate,
+              loanType: closed ? 'CLOSED' : 'OPEN',
+              closedDate: closed ? lastPaidDate ?? maturityDate : null,
+            },
+          });
+
+          for (const s of scheduleData) {
+            const sched = await tx.repaymentSchedule.create({
+              data: {
+                tenantId: user.tenantId,
+                loanId: loan.id,
+                dueNo: s.r.dueNo,
+                dueDate: s.r.dueDate,
+                duePri: s.r.duePri,
+                dueInt: s.r.dueInt,
+                dueAmt: s.r.dueAmt,
+                collPri: s.payPri,
+                collInt: s.payInt,
+                collAmt: s.collected,
+                collDate: s.paid ? s.r.dueDate : null,
+                dueBalance: s.dueBalance,
+              },
+            });
+            if (s.collected > 0) {
+              await tx.collection.create({
+                data: {
+                  tenantId: user.tenantId, loanId: loan.id, scheduleId: sched.id, collectedOn: s.r.dueDate,
+                  amount: s.collected, pri: s.payPri, int: s.payInt, kind: 'REGULAR', enteredBy: user.employeeId,
+                },
+              });
+            }
+          }
+
+          await this.audit.record(tx, {
+            tenantId: user.tenantId, entity: 'Loan', entityId: loan.id, action: 'BULK_IMPORT_LEGACY_LOAN',
+            employeeId: user.employeeId,
+            after: { loanAccount: account, loanAmount, interestAmount, totalDues, duesPaid: row.duesPaid, remaining, closed },
+          });
+          return account;
+        });
+
+        successCount += 1;
+        results.push({ row: i + 1, clientDisplayId: row.clientDisplayId, status: 'OK', message: null, loanAccount });
+      } catch (e) {
+        results.push({
+          row: i + 1, clientDisplayId: row.clientDisplayId, status: 'ERROR',
+          message: e instanceof Error ? e.message : 'Failed to import this row', loanAccount: null,
+        });
+      }
+    }
+
+    return { successCount, failCount: dto.rows.length - successCount, results };
   }
 
   async reject(user: AuthUser, applicationId: string, dto: RejectApplicationDto) {

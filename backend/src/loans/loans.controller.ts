@@ -6,6 +6,7 @@ import { AuthUser } from '../common/types/auth-user';
 import { CreateLoanApplicationDto } from './dto/create-loan-application.dto';
 import { DisburseLoanDto } from './dto/disburse-loan.dto';
 import { ImportLegacyLoanDto } from './dto/import-legacy-loan.dto';
+import { BulkImportLoansDto } from './dto/bulk-import-loans.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { UpdateApplicationNotesDto } from './dto/update-application-notes.dto';
 import { LoansService } from './loans.service';
@@ -92,6 +93,13 @@ export class LoansController {
   @Post('loans/import')
   importLegacyLoan(@CurrentUser() user: AuthUser, @Body() dto: ImportLegacyLoanDto) {
     return this.loans.importLegacyLoan(user, dto);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('loan.import')
+  @Post('loans/bulk-import')
+  bulkImportLegacyLoans(@CurrentUser() user: AuthUser, @Body() dto: BulkImportLoansDto) {
+    return this.loans.bulkImportLegacyLoans(user, dto);
   }
 
   @Roles('BM', 'HO')
