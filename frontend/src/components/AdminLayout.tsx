@@ -37,7 +37,7 @@ const ADMIN_NAV: SideNavItem[] = [
     label: 'Savings', icon: '◈', perm: ['member.view', 'savings.refundApprove', 'savings.refundInitiate'],
     children: [
       { to: '/admin/savings', label: 'Passbooks', end: true, perm: ['member.view'] },
-      { to: '/admin/savings/refunds', label: 'Savings Refunds', perm: ['savings.refundApprove', 'savings.refundInitiate', 'savings.refundSettle'] },
+      { to: '/admin/savings/refunds', label: 'Savings Closure', perm: ['savings.refundApprove', 'savings.refundInitiate', 'savings.refundSettle'] },
     ],
   },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },

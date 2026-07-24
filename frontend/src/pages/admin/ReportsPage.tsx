@@ -1275,7 +1275,7 @@ function SavingsTab() {
       <div className="panel-body">
         {error && <div className="alert-error">{error}</div>}
         <div className="hint" style={{ marginBottom: 12 }}>
-          This report is view-only. Refunds are handled on the Savings Refunds page (initiate → approve → settle).
+          This report is view-only. Savings is closed/refunded on the Savings Closure page (initiate → approve → close).
         </div>
         {rows && (
           <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>

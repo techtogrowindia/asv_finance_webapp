@@ -16,7 +16,7 @@ const EMPLOYEE_NAV: SideNavItem[] = [
     label: 'Savings', icon: '◈', perm: ['member.view', 'savings.refundInitiate', 'savings.refundSettle'],
     children: [
       { to: '/app/savings', label: 'Passbooks', end: true, perm: ['member.view'] },
-      { to: '/app/savings/refunds', label: 'Savings Refunds', perm: ['savings.refundInitiate', 'savings.refundSettle'] },
+      { to: '/app/savings/refunds', label: 'Savings Closure', perm: ['savings.refundInitiate', 'savings.refundSettle'] },
     ],
   },
   {

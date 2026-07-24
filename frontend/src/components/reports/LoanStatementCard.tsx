@@ -90,6 +90,11 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
             value={inr(savingsBalance)}
             hint={st.savings.length ? `Deposited ${inr(savingsDeposited)} · Refunded ${inr(savingsRefunded)}` : undefined}
           />
+          <SummaryCard
+            label="Total Collected"
+            value={inr(totalCollected + savingsDeposited)}
+            hint={`Loan ${inr(totalCollected)} + Savings ${inr(savingsDeposited)}`}
+          />
         </div>
 
         <div className="panel-head" style={{ padding: '0 0 8px', borderBottom: 'none' }}>Repayment Schedule</div>

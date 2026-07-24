@@ -16,8 +16,8 @@ const inr = (v: number) =>
 
 const STATUS_LABEL: Record<string, string> = {
   INITIATED: 'Awaiting approval',
-  APPROVED: 'Approved — awaiting settlement',
-  SETTLED: 'Refunded',
+  APPROVED: 'Approved — awaiting closure',
+  SETTLED: 'Closed',
   REJECTED: 'Rejected',
 };
 
@@ -54,42 +54,42 @@ export function SavingsRefundsPage() {
 
   async function onInitiate(r: SavingsRefundRow) {
     const okc = await confirm({
-      title: 'Initiate savings refund?',
-      message: `Request a refund of ${inr(r.balance)} savings on ${r.loanAccount} for ${r.clientName}? A Branch Manager / Head Office must approve it before it can be paid out.`,
-      confirmLabel: 'Initiate refund',
+      title: 'Initiate savings closure?',
+      message: `Request to close and pay out ${inr(r.balance)} savings on ${r.savingsAccount} for ${r.clientName}? A Branch Manager / Head Office must approve it before it can be paid out.`,
+      confirmLabel: 'Initiate closure',
     });
     if (!okc) return;
-    run(r.loanId, () => initiateSavingsRefund(r.loanId), 'Refund request sent for approval.');
+    run(r.loanId, () => initiateSavingsRefund(r.loanId), 'Closure request sent for approval.');
   }
 
   async function onApprove(r: SavingsRefundRow) {
     const okc = await confirm({
-      title: 'Approve this refund?',
-      message: `Approve refunding ${inr(r.requestAmount ?? r.balance)} savings on ${r.loanAccount} for ${r.clientName}? The field officer will then pay it out and settle.`,
+      title: 'Approve this closure?',
+      message: `Approve closing and paying out ${inr(r.requestAmount ?? r.balance)} savings on ${r.savingsAccount} for ${r.clientName}? The field officer will then pay it out and close it.`,
       confirmLabel: 'Approve',
     });
     if (!okc) return;
-    run(r.requestId!, () => approveSavingsRefund(r.requestId!), 'Refund approved — ready for the field officer to settle.');
+    run(r.requestId!, () => approveSavingsRefund(r.requestId!), 'Closure approved — ready for the field officer to close.');
   }
 
   async function onReject(r: SavingsRefundRow) {
     const okc = await confirm({
-      title: 'Reject this refund?',
-      message: `Reject the savings refund request on ${r.loanAccount} for ${r.clientName}? Nothing is paid out.`,
+      title: 'Reject this closure?',
+      message: `Reject the savings closure request on ${r.savingsAccount} for ${r.clientName}? Nothing is paid out.`,
       confirmLabel: 'Reject', danger: true,
     });
     if (!okc) return;
-    run(r.requestId!, () => rejectSavingsRefund(r.requestId!), 'Refund request rejected.');
+    run(r.requestId!, () => rejectSavingsRefund(r.requestId!), 'Closure request rejected.');
   }
 
   async function onSettle(r: SavingsRefundRow) {
     const okc = await confirm({
-      title: 'Settle (pay out) this refund?',
-      message: `Confirm you have paid ${inr(r.requestAmount ?? r.balance)} savings back to ${r.clientName} for ${r.loanAccount}? This records the refund and clears the savings balance.`,
-      confirmLabel: 'Refund',
+      title: 'Close this savings account?',
+      message: `Confirm you have paid ${inr(r.requestAmount ?? r.balance)} savings back to ${r.clientName} for ${r.savingsAccount}? This records the payout and closes the savings account (clears the balance).`,
+      confirmLabel: 'Close Savings',
     });
     if (!okc) return;
-    run(r.requestId!, () => settleSavingsRefund(r.requestId!), 'Savings refunded and settled.');
+    run(r.requestId!, () => settleSavingsRefund(r.requestId!), 'Savings paid out and closed.');
   }
 
   const canInitiate = can('savings.refundInitiate');
@@ -100,9 +100,9 @@ export function SavingsRefundsPage() {
     <>
       <div className="toolbar">
         <div>
-          <h1 className="page-title">Savings Refunds</h1>
+          <h1 className="page-title">Savings Closure</h1>
           <p className="page-sub" style={{ margin: 0 }}>
-            Refunds are managed separately from loans: a field officer initiates, a Branch Manager / Head Office approves, then the field officer pays out and settles.
+            Savings is closed separately from the loan: a field officer initiates, a Branch Manager / Head Office approves, then the field officer pays out and closes the savings account.
           </p>
         </div>
         <div className="toolbar-actions" style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
@@ -120,7 +120,7 @@ export function SavingsRefundsPage() {
           <thead>
             <tr>
               <th>Client ID</th><th>Member</th><th>Branch</th><th>Center</th>
-              <th>Loan A/c</th><th>Savings A/c</th><th>Balance</th><th>Loan</th><th>Status</th><th></th>
+              <th>Savings A/c</th><th>Balance</th><th>Loan</th><th>Status</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -133,7 +133,6 @@ export function SavingsRefundsPage() {
                   <td>{r.clientName}</td>
                   <td>{r.branchCode} — {r.branchName}</td>
                   <td>{r.centerName}</td>
-                  <td className="mono">{r.loanAccount}</td>
                   <td className="mono">{r.savingsAccount}</td>
                   <td>{inr(r.balance)}</td>
                   <td><span className={`badge ${r.loanType === 'OPEN' ? 'active' : 'closed'}`}>{r.loanType}</span></td>
@@ -148,7 +147,7 @@ export function SavingsRefundsPage() {
                   <td style={{ display: 'flex', gap: 6, whiteSpace: 'nowrap' }}>
                     {!r.requestStatus && canInitiate && r.balance > 0 && (
                       <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => onInitiate(r)}>
-                        {busy ? <span className="spinner" /> : 'Initiate refund'}
+                        {busy ? <span className="spinner" /> : 'Initiate closure'}
                       </button>
                     )}
                     {r.requestStatus === 'INITIATED' && canApprove && (
@@ -161,7 +160,7 @@ export function SavingsRefundsPage() {
                     )}
                     {r.requestStatus === 'APPROVED' && canSettle && (
                       <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => onSettle(r)}>
-                        {busy ? <span className="spinner" /> : 'Refund'}
+                        {busy ? <span className="spinner" /> : 'Close Savings'}
                       </button>
                     )}
                   </td>
@@ -169,7 +168,7 @@ export function SavingsRefundsPage() {
               );
             })}
             {rows && rows.length === 0 && (
-              <tr><td colSpan={10} className="empty">No savings balances to refund right now.</td></tr>
+              <tr><td colSpan={9} className="empty">No savings balances to close right now.</td></tr>
             )}
           </tbody>
         </table>
