@@ -47,7 +47,7 @@ export function LedgerView({ ledger }: { ledger: LoanLedger }) {
           <table className="data">
             <thead>
               <tr>
-                <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Type</th>
+                <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Status</th>
                 <th>Due Pri</th><th>Due Int</th><th>Due Amt</th>
                 <th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Balance</th>
               </tr>

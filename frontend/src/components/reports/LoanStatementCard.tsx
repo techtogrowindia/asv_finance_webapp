@@ -102,7 +102,7 @@ export function LoanStatementCard({ st }: { st: LoanStatement }) {
         <div className="table-wrap" style={{ boxShadow: 'none', border: 'none' }}>
           <table className="data">
             <thead><tr>
-              <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Type</th><th>Due Pri</th><th>Due Int</th>
+              <th>Due No</th><th>Due Date</th><th>Coll Date</th><th>Status</th><th>Due Pri</th><th>Due Int</th>
               <th>Due Amt</th><th>Coll Pri</th><th>Coll Int</th><th>Coll Amt</th><th>Savings</th><th>Balance</th>
             </tr></thead>
             <tbody>

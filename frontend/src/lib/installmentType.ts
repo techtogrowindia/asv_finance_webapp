@@ -2,7 +2,7 @@
  * Classify a repayment-schedule row for the "Type" column shown in loan reports:
  *  - Missed          → nothing collected and the due date is already past
  *  - Advance paid    → fully paid before the due date (paid ahead)
- *  - Current due paid→ fully paid on the due date
+ *  - Paid            → fully paid on the due date
  *  - Arrear paid     → fully paid after the due date (a late / overdue payment)
  *  - Partly paid     → some collected but less than due
  *  - —               → not collected yet and not overdue
@@ -27,5 +27,5 @@ export function installmentType(r: {
   const collDay = dayValue(new Date(r.collDate));
   if (collDay < dueDay) return 'Advance paid';
   if (collDay > dueDay) return 'Arrear paid';
-  return 'Current due paid';
+  return 'Paid';
 }
