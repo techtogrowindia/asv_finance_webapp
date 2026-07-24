@@ -124,8 +124,46 @@ export interface SavingsBalance {
 export const getSavingsBalances = (branchId?: string) =>
   api<SavingsBalance[]>(`/collections/savings/balances${branchId ? `?branchId=${branchId}` : ''}`);
 
-export const refundSavings = (clientId: string) =>
-  api<{ clientId: string; refunded: number }>(`/collections/savings/${clientId}/refund`, { method: 'POST' });
+// ---- Savings refund workflow (FDO initiate → BM/HO approve → FDO settle) ----
+
+export type SavingsRefundStatus = 'INITIATED' | 'APPROVED' | 'SETTLED' | 'REJECTED';
+
+export interface SavingsRefundRow {
+  loanId: string;
+  loanAccount: string;
+  savingsAccount: string;
+  clientName: string;
+  displayId: string;
+  branchCode: string;
+  branchName: string;
+  centerName: string;
+  loanType: 'OPEN' | 'CLOSED';
+  balance: number;
+  requestId: string | null;
+  requestStatus: SavingsRefundStatus | null;
+  requestAmount: number | null;
+  initiatedByName: string | null;
+  approvedByName: string | null;
+}
+
+export const getSavingsRefunds = (branchId?: string) =>
+  api<SavingsRefundRow[]>(`/collections/savings/refunds${branchId ? `?branchId=${branchId}` : ''}`);
+
+export const initiateSavingsRefund = (loanId: string) =>
+  api<{ id: string; status: string; amount: number }>(`/collections/savings/${loanId}/refund/initiate`, { method: 'POST' });
+
+export const approveSavingsRefund = (id: string, notes?: string) =>
+  api<{ id: string; status: string }>(`/collections/savings/refunds/${id}/approve`, {
+    method: 'POST', body: JSON.stringify({ notes }),
+  });
+
+export const rejectSavingsRefund = (id: string, notes?: string) =>
+  api<{ id: string; status: string }>(`/collections/savings/refunds/${id}/reject`, {
+    method: 'POST', body: JSON.stringify({ notes }),
+  });
+
+export const settleSavingsRefund = (id: string) =>
+  api<{ id: string; status: string; refunded: number }>(`/collections/savings/refunds/${id}/settle`, { method: 'POST' });
 
 export interface AdvanceLoan {
   loanId: string;

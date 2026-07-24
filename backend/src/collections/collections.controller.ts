@@ -10,6 +10,7 @@ import { ForecloseDto } from './dto/foreclose.dto';
 import { BulkImportCollectionDto } from './dto/bulk-import-collection.dto';
 import { RequestCorrectionDto } from './dto/request-correction.dto';
 import { ApproveCorrectionDto, RejectCorrectionDto } from './dto/review-correction.dto';
+import { RefundNotesDto } from './dto/refund-notes.dto';
 
 @Controller('collections')
 export class CollectionsController {
@@ -155,17 +156,45 @@ export class CollectionsController {
     return this.collections.foreclose(user, loanId, dto.waiveInterest);
   }
 
-  // ---- Savings (view balances; refund is BM/HO — savings.refund) ----
+  // ---- Savings (view client balances — portfolio report) ----
   @RequirePermission('report.portfolio')
   @Get('savings/balances')
   savingsBalances(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
     return this.collections.savingsBalances(user, branchId);
   }
 
+  // ---- Savings refund workflow (FDO initiate → BM/HO approve → FDO settle) ----
+  @RequirePermission('savings.refundInitiate')
+  @Get('savings/refunds')
+  savingsRefundList(@CurrentUser() user: AuthUser, @Query('branchId') branchId?: string) {
+    return this.collections.savingsRefundList(user, branchId);
+  }
+
+  @Roles('FDO', 'BM', 'HO')
+  @RequirePermission('savings.refundInitiate')
+  @Post('savings/:loanId/refund/initiate')
+  initiateSavingsRefund(@CurrentUser() user: AuthUser, @Param('loanId', ParseUUIDPipe) loanId: string) {
+    return this.collections.initiateSavingsRefund(user, loanId);
+  }
+
   @Roles('BM', 'HO')
-  @RequirePermission('savings.refund')
-  @Post('savings/:clientId/refund')
-  refundSavings(@CurrentUser() user: AuthUser, @Param('clientId', ParseUUIDPipe) clientId: string) {
-    return this.collections.refundSavings(user, clientId);
+  @RequirePermission('savings.refundApprove')
+  @Post('savings/refunds/:id/approve')
+  approveSavingsRefund(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RefundNotesDto) {
+    return this.collections.approveSavingsRefund(user, id, dto.notes);
+  }
+
+  @Roles('BM', 'HO')
+  @RequirePermission('savings.refundApprove')
+  @Post('savings/refunds/:id/reject')
+  rejectSavingsRefund(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RefundNotesDto) {
+    return this.collections.rejectSavingsRefund(user, id, dto.notes);
+  }
+
+  @Roles('FDO', 'BM', 'HO')
+  @RequirePermission('savings.refundSettle')
+  @Post('savings/refunds/:id/settle')
+  settleSavingsRefund(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.collections.settleSavingsRefund(user, id);
   }
 }

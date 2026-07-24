@@ -43,7 +43,9 @@ export const PERMISSION_CATALOG: PermissionGroup[] = [
       { key: 'collection.advance', label: 'Apply loan advance' },
       { key: 'collection.foreclose', label: 'Foreclose (early-close) a loan' },
       { key: 'collection.waive', label: 'Waive interest on foreclosure' },
-      { key: 'savings.refund', label: 'Refund client savings at closure' },
+      { key: 'savings.refundInitiate', label: 'Initiate a savings refund' },
+      { key: 'savings.refundApprove', label: 'Approve/reject a savings refund' },
+      { key: 'savings.refundSettle', label: 'Settle (pay out) an approved savings refund' },
     ],
   },
   {
@@ -96,5 +98,7 @@ export const FIELD_OFFICER_PERMISSIONS: string[] = [
   'collection.view',
   'collection.post',
   'collection.correct',
+  'savings.refundInitiate',
+  'savings.refundSettle',
   'report.monitoring',
 ];

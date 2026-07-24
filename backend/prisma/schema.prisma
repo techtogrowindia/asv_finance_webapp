@@ -126,6 +126,7 @@ model Tenant {
   accessRoles      AccessRole[]
   savingsTxns      SavingsTxn[]
   collectionCorrections CollectionCorrection[]
+  savingsRefundRequests SavingsRefundRequest[]
 
   @@map("tenant")
 }
@@ -547,6 +548,7 @@ model Loan {
   schedule    RepaymentSchedule[]
   collections Collection[]
   corrections CollectionCorrection[]
+  savingsRefundRequests SavingsRefundRequest[]
 
   @@index([tenantId, clientId])
   @@map("loan")
@@ -669,6 +671,40 @@ model SavingsTxn {
 
   @@index([tenantId, clientId])
   @@map("savings_txn")
+}
+
+enum SavingsRefundStatus {
+  INITIATED
+  APPROVED
+  SETTLED
+  REJECTED
+}
+
+/// Maker-checker savings refund: an FDO INITIATES a refund of a loan's savings
+/// sub-account, a BM/HO APPROVES (or REJECTS) it, then an FDO SETTLES it — which
+/// is when the money actually moves (a REFUND SavingsTxn is written). Savings no
+/// longer auto-refunds at loan closure; it's handled separately through this flow.
+model SavingsRefundRequest {
+  id          String              @id @default(uuid()) @db.Uuid
+  tenantId    String              @map("tenant_id") @db.Uuid
+  loanId      String              @map("loan_id") @db.Uuid // the savings sub-account = per loan
+  clientId    String              @map("client_id") @db.Uuid
+  amount      Decimal             @map("amount") @db.Decimal(14, 2) // snapshot of the balance at initiation
+  status      SavingsRefundStatus @default(INITIATED)
+  notes       String?
+  initiatedBy String              @map("initiated_by") @db.Uuid
+  approvedBy  String?             @map("approved_by") @db.Uuid
+  settledBy   String?             @map("settled_by") @db.Uuid
+  createdAt   DateTime            @default(now()) @map("created_at")
+  approvedAt  DateTime?           @map("approved_at")
+  settledAt   DateTime?           @map("settled_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  loan   Loan   @relation(fields: [loanId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, loanId])
+  @@map("savings_refund_request")
 }
 
 // ---- Audit log (generic, money-affecting actions) --------------------------

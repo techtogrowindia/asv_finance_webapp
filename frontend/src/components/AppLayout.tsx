@@ -12,7 +12,13 @@ const EMPLOYEE_NAV: SideNavItem[] = [
   { to: '/app/clients', label: 'Members', icon: '☺', perm: ['member.view'] },
   { to: '/app/enroll', label: 'Enroll Member', icon: '＋', perm: ['member.create'] },
   { to: '/app/loans', label: 'Loans', icon: '₹', perm: ['loan.apply', 'loan.view'] },
-  { to: '/app/savings', label: 'Savings', icon: '◈', perm: ['member.view'] },
+  {
+    label: 'Savings', icon: '◈', perm: ['member.view', 'savings.refundInitiate', 'savings.refundSettle'],
+    children: [
+      { to: '/app/savings', label: 'Passbooks', end: true, perm: ['member.view'] },
+      { to: '/app/savings/refunds', label: 'Savings Refunds', perm: ['savings.refundInitiate', 'savings.refundSettle'] },
+    ],
+  },
   {
     label: 'Collections', icon: '✓', perm: ['collection.view'],
     children: [

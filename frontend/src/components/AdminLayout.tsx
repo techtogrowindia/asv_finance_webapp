@@ -33,7 +33,13 @@ const ADMIN_NAV: SideNavItem[] = [
       { to: '/admin/collection-corrections', label: 'Corrections', perm: ['collection.approveCorrection'] },
     ],
   },
-  { to: '/admin/savings', label: 'Savings', icon: '◈', perm: ['member.view'] },
+  {
+    label: 'Savings', icon: '◈', perm: ['member.view', 'savings.refundApprove', 'savings.refundInitiate'],
+    children: [
+      { to: '/admin/savings', label: 'Passbooks', end: true, perm: ['member.view'] },
+      { to: '/admin/savings/refunds', label: 'Savings Refunds', perm: ['savings.refundApprove', 'savings.refundInitiate', 'savings.refundSettle'] },
+    ],
+  },
   { to: '/admin/eod', label: 'End of Day', icon: '◨', perm: ['eod.view'] },
   { to: '/admin/reports', label: 'Reports', icon: '▦', perm: ['report.monitoring', 'report.portfolio'] },
   { to: '/admin/masters', label: 'Business Settings', icon: '⚙', perm: ['master.manage'] },

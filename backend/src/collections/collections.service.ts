@@ -519,9 +519,9 @@ export class CollectionsService {
         data: { loanType: 'CLOSED', closedDate: workingDate },
       });
 
-      // Foreclosing closes the loan immediately, so its own savings refund
-      // right away too — same as a normal full repayment closure.
-      const savingsRefunded = await this.refundLoanSavings(tx, user, { id: loan.id, clientId: loan.clientId }, workingDate);
+      // Savings is NOT auto-refunded on foreclosure any more — it's handled
+      // separately via the savings refund workflow (initiate → approve → settle).
+      const savingsRefunded = 0;
 
       await this.audit.record(tx, {
         tenantId: user.tenantId,
@@ -589,97 +589,202 @@ export class CollectionsService {
     });
   }
 
-  /** Refund a client's held savings once all their loans are closed. */
-  async refundSavings(user: AuthUser, clientId: string) {
+  // ---- Savings refund workflow (FDO initiate → BM/HO approve → FDO settle) ----
+
+  /** Per-loan savings sub-accounts that still hold a balance or have a refund in
+   *  progress — the working list for the whole refund workflow (all roles). */
+  async savingsRefundList(user: AuthUser, branchId?: string) {
     return this.prisma.withTenant(user, async (tx) => {
-      const client = await tx.client.findFirst({
-        where: { id: clientId, ...clientCenterScope(user) },
-        include: {
-          loans: { where: { loanType: 'OPEN' }, select: { id: true } },
-          center: { select: { branchId: true } },
-        },
+      // Loans whose savings could be refunded: closed loans (savings held past
+      // closure now that it's no longer auto-refunded), plus any loan that
+      // already has an in-progress request.
+      const requests = await tx.savingsRefundRequest.findMany({
+        where: { status: { in: ['INITIATED', 'APPROVED'] }, loan: { client: clientCenterScope(user, branchId) } },
       });
-      if (!client) throw new NotFoundException('Member not found');
+      const reqByLoan = new Map(requests.map((r) => [r.loanId, r]));
 
-      const balance = round2(Number(client.savingsBalance));
-      if (balance <= 0) throw new BadRequestException('No savings balance to refund');
-      if (client.loans.length > 0) throw new BadRequestException('Client still has an open loan — refund after all loans close');
+      const loans = await tx.loan.findMany({
+        where: {
+          client: clientCenterScope(user, branchId),
+          OR: [{ loanType: 'CLOSED' }, { id: { in: [...reqByLoan.keys()] } }],
+        },
+        include: {
+          client: {
+            select: {
+              name: true, savingsAccount: true, memberNo: true,
+              group: { select: { groupNo: true } },
+              center: { select: { code: true, name: true, branch: { select: { code: true, name: true } } } },
+            },
+          },
+        },
+        orderBy: { closedDate: 'desc' },
+      });
 
-      const workingDate = await this.resolveWorkingDate(tx, client.center.branchId);
-      await tx.savingsTxn.create({
+      const empIds = [...new Set(requests.flatMap((r) => [r.initiatedBy, r.approvedBy]).filter((x): x is string => !!x))];
+      const emps = empIds.length ? await tx.employee.findMany({ where: { id: { in: empIds } }, select: { id: true, name: true } }) : [];
+      const empName = new Map(emps.map((e) => [e.id, e.name]));
+
+      const rows = await Promise.all(
+        loans.map(async (l) => {
+          const balance = await this.loanSavingsBalance(tx, l.id);
+          const req = reqByLoan.get(l.id);
+          const c = l.client;
+          return {
+            loanId: l.id,
+            loanAccount: l.loanAccount,
+            savingsAccount: `${c.savingsAccount}_${l.loanAccount}`,
+            clientName: c.name,
+            displayId: `${stripLeadingZeros(c.center.branch.code)}.${stripLeadingZeros(c.center.code)}.${c.group.groupNo}.${c.memberNo}`,
+            branchCode: c.center.branch.code,
+            branchName: c.center.branch.name,
+            centerName: `${c.center.code} — ${c.center.name}`,
+            loanType: l.loanType,
+            balance,
+            requestId: req?.id ?? null,
+            requestStatus: req?.status ?? null,
+            requestAmount: req ? round2(Number(req.amount)) : null,
+            initiatedByName: req ? empName.get(req.initiatedBy) ?? null : null,
+            approvedByName: req?.approvedBy ? empName.get(req.approvedBy) ?? null : null,
+          };
+        }),
+      );
+      // Only rows that need attention: a live balance to refund, or a request in flight.
+      return rows.filter((r) => r.balance > 0 || r.requestId);
+    });
+  }
+
+  /** FDO asks to refund a loan's savings sub-account. Snapshots the balance. */
+  async initiateSavingsRefund(user: AuthUser, loanId: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const loan = await tx.loan.findFirst({
+        where: { id: loanId, client: clientCenterScope(user) },
+        include: { client: { select: { id: true, name: true } } },
+      });
+      if (!loan) throw new NotFoundException('Loan not found');
+
+      const active = await tx.savingsRefundRequest.findFirst({
+        where: { loanId, status: { in: ['INITIATED', 'APPROVED'] } },
+      });
+      if (active) throw new ConflictException('A savings refund is already in progress for this account.');
+
+      const balance = await this.loanSavingsBalance(tx, loanId);
+      if (balance <= 0) throw new BadRequestException('No savings balance to refund on this account.');
+
+      const created = await tx.savingsRefundRequest.create({
         data: {
           tenantId: user.tenantId,
-          clientId,
-          loanId: null,
+          loanId,
+          clientId: loan.clientId,
           amount: balance,
-          kind: 'REFUND',
-          collectedOn: workingDate,
-          enteredBy: user.employeeId,
+          status: 'INITIATED',
+          initiatedBy: user.employeeId,
         },
       });
-      await tx.client.update({ where: { id: clientId }, data: { savingsBalance: 0 } });
-
       await this.audit.record(tx, {
         tenantId: user.tenantId,
-        entity: 'Client',
-        entityId: clientId,
-        action: 'SAVINGS_REFUND',
+        entity: 'SavingsRefundRequest',
+        entityId: created.id,
+        action: 'SAVINGS_REFUND_INITIATE',
         employeeId: user.employeeId,
-        after: { refunded: balance, eodDate: workingDate },
+        after: { loanId, amount: balance },
       });
+      return { id: created.id, status: created.status, amount: balance };
+    });
+  }
 
-      return { clientId, refunded: balance };
+  /** BM/HO approves a savings refund (must be someone other than the initiator). */
+  async approveSavingsRefund(user: AuthUser, id: string, notes?: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const req = await tx.savingsRefundRequest.findFirst({ where: { id, loan: { client: clientCenterScope(user) } } });
+      if (!req) throw new NotFoundException('Refund request not found');
+      if (req.status !== 'INITIATED') throw new BadRequestException('This refund has already been reviewed.');
+      if (req.initiatedBy === user.employeeId) {
+        throw new ForbiddenException('You cannot approve your own refund request — ask another approver.');
+      }
+      await tx.savingsRefundRequest.update({
+        where: { id },
+        data: { status: 'APPROVED', approvedBy: user.employeeId, approvedAt: new Date(), notes: notes ?? null },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId, entity: 'SavingsRefundRequest', entityId: id,
+        action: 'SAVINGS_REFUND_APPROVE', employeeId: user.employeeId, after: { notes: notes ?? null },
+      });
+      return { id, status: 'APPROVED' };
+    });
+  }
+
+  /** BM/HO rejects a savings refund request — no money moves. */
+  async rejectSavingsRefund(user: AuthUser, id: string, notes?: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const req = await tx.savingsRefundRequest.findFirst({ where: { id, loan: { client: clientCenterScope(user) } } });
+      if (!req) throw new NotFoundException('Refund request not found');
+      if (req.status !== 'INITIATED') throw new BadRequestException('This refund has already been reviewed.');
+      await tx.savingsRefundRequest.update({
+        where: { id },
+        data: { status: 'REJECTED', approvedBy: user.employeeId, approvedAt: new Date(), notes: notes ?? null },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId, entity: 'SavingsRefundRequest', entityId: id,
+        action: 'SAVINGS_REFUND_REJECT', employeeId: user.employeeId, after: { notes: notes ?? null },
+      });
+      return { id, status: 'REJECTED' };
+    });
+  }
+
+  /** FDO settles an approved refund — this is when the money actually moves:
+   *  a REFUND SavingsTxn is written for the account's current balance. */
+  async settleSavingsRefund(user: AuthUser, id: string) {
+    return this.prisma.withTenant(user, async (tx) => {
+      const req = await tx.savingsRefundRequest.findFirst({
+        where: { id, loan: { client: clientCenterScope(user) } },
+        include: { loan: { select: { clientId: true, client: { select: { center: { select: { branchId: true } } } } } } },
+      });
+      if (!req) throw new NotFoundException('Refund request not found');
+      if (req.status !== 'APPROVED') throw new BadRequestException('This refund is not approved yet.');
+
+      const workingDate = await this.resolveWorkingDate(tx, req.loan.client.center.branchId);
+      const balance = await this.loanSavingsBalance(tx, req.loanId);
+      const refund = round2(Math.min(Number(req.amount), balance));
+
+      if (refund > 0) {
+        await tx.savingsTxn.create({
+          data: {
+            tenantId: user.tenantId,
+            clientId: req.loan.clientId,
+            loanId: req.loanId,
+            amount: refund,
+            kind: 'REFUND',
+            collectedOn: workingDate,
+            enteredBy: user.employeeId,
+          },
+        });
+        await tx.client.update({ where: { id: req.loan.clientId }, data: { savingsBalance: { decrement: refund } } });
+      }
+      await tx.savingsRefundRequest.update({
+        where: { id },
+        data: { status: 'SETTLED', settledBy: user.employeeId, settledAt: new Date() },
+      });
+      await this.audit.record(tx, {
+        tenantId: user.tenantId, entity: 'SavingsRefundRequest', entityId: id,
+        action: 'SAVINGS_REFUND_SETTLE', employeeId: user.employeeId, after: { refunded: refund, eodDate: workingDate },
+      });
+      return { id, status: 'SETTLED', refunded: refund };
     });
   }
 
   // ---- internals -----------------------------------------------------------
 
   /** Net savings tied to one loan: deposits collected against it, minus any
-   *  refund already made for it. */
+   *  refund already made, plus any signed correction-reversal adjustments. */
   private async loanSavingsBalance(tx: Prisma.TransactionClient, loanId: string): Promise<number> {
-    const [deposits, refunds] = await Promise.all([
+    const [deposits, refunds, corrections] = await Promise.all([
       tx.savingsTxn.aggregate({ where: { loanId, kind: 'DEPOSIT' }, _sum: { amount: true } }),
       tx.savingsTxn.aggregate({ where: { loanId, kind: 'REFUND' }, _sum: { amount: true } }),
+      tx.savingsTxn.aggregate({ where: { loanId, kind: 'CORRECTION_REVERSAL' }, _sum: { amount: true } }),
     ]);
-    return round2(Number(deposits._sum.amount ?? 0) - Number(refunds._sum.amount ?? 0));
-  }
-
-  /**
-   * Refund the savings tied to one loan automatically the moment it closes —
-   * foreclosed or fully repaid — rather than making the client wait for every
-   * loan of theirs to close. Returns the amount refunded (0 if none held).
-   */
-  private async refundLoanSavings(
-    tx: Prisma.TransactionClient,
-    user: AuthUser,
-    loan: { id: string; clientId: string },
-    workingDate: Date,
-  ): Promise<number> {
-    const balance = await this.loanSavingsBalance(tx, loan.id);
-    if (balance <= 0) return 0;
-
-    await tx.savingsTxn.create({
-      data: {
-        tenantId: user.tenantId,
-        clientId: loan.clientId,
-        loanId: loan.id,
-        amount: balance,
-        kind: 'REFUND',
-        collectedOn: workingDate,
-        enteredBy: user.employeeId,
-      },
-    });
-    await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { decrement: balance } } });
-
-    await this.audit.record(tx, {
-      tenantId: user.tenantId,
-      entity: 'Loan',
-      entityId: loan.id,
-      action: 'SAVINGS_REFUND',
-      employeeId: user.employeeId,
-      after: { refunded: balance, eodDate: workingDate },
-    });
-    return balance;
+    return round2(
+      Number(deposits._sum.amount ?? 0) - Number(refunds._sum.amount ?? 0) + Number(corrections._sum.amount ?? 0),
+    );
   }
 
   /** Bank a savings deposit for one collection event; returns the amount
@@ -791,16 +896,17 @@ export class CollectionsService {
 
     const stillOpen = await tx.repaymentSchedule.findFirst({ where: { loanId, dueBalance: { gt: 0 } } });
     let loanClosed = false;
-    let savingsRefunded = 0;
     if (!stillOpen) {
       await tx.loan.update({ where: { id: loanId }, data: { loanType: 'CLOSED', closedDate: workingDate } });
       loanClosed = true;
-      // A normally-closed loan (fully repaid) refunds its own savings right
-      // away too — same as foreclosure — instead of waiting for every other
-      // loan of the client to close.
-      savingsRefunded = await this.refundLoanSavings(tx, user, { id: loanId, clientId }, workingDate);
+      // Savings is NOT auto-refunded at closure any more — it's managed
+      // separately through the FDO-initiate → BM/HO-approve → FDO-settle
+      // refund workflow (see savings refund requests). The balance simply
+      // stays on the loan's savings sub-account until refunded.
     }
-    return { applied, remaining, loanClosed, savingsCollected, savingsRefunded };
+    // savingsRefunded is retained in the return shape (always 0 now) so callers
+    // and their success messages don't need to change.
+    return { applied, remaining, loanClosed, savingsCollected, savingsRefunded: 0 };
   }
 
   /** Rows with an outstanding balance (collAmt < dueAmt), oldest first; if `asOf`
@@ -1188,29 +1294,11 @@ export class CollectionsService {
         await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { decrement: originalSavings } } });
       }
 
-      // 3. If that day had closed the loan, re-open it and restore its auto savings-refund.
-      let refundRestored = 0;
+      // 3. If that day had closed the loan, just re-open it. Savings is no longer
+      //    auto-refunded at closure, so there's nothing to claw back here.
+      const refundRestored = 0;
       if (wasClosed) {
         await tx.loan.update({ where: { id: corr.loanId }, data: { loanType: 'OPEN', closedDate: null } });
-        const lastRefund = await tx.savingsTxn.findFirst({
-          where: { loanId: corr.loanId, kind: 'REFUND' },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (lastRefund) {
-          refundRestored = Number(lastRefund.amount);
-          await tx.savingsTxn.create({
-            data: {
-              tenantId: user.tenantId,
-              clientId: loan.clientId,
-              loanId: corr.loanId,
-              amount: refundRestored,
-              kind: 'DEPOSIT',
-              collectedOn: today,
-              enteredBy: user.employeeId,
-            },
-          });
-          await tx.client.update({ where: { id: loan.clientId }, data: { savingsBalance: { increment: refundRestored } } });
-        }
       }
 
       // 4. Deposit the corrected savings amount, if this correction includes one.
