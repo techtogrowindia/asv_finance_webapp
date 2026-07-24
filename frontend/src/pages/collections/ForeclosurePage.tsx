@@ -63,7 +63,7 @@ export function ForeclosurePage() {
       message: `Close ${quote.loanAccount} early for a payoff of ${inr(quote.payoffTotal)}`
         + (quote.foreclosureCharge > 0 ? ` (includes ${inr(quote.foreclosureCharge)} foreclosure charge)` : '')
         + `${quote.interestWaived > 0 ? `, with ${inr(quote.interestWaived)} interest waived` : ''}`
-        + `${quote.savingsToRefund > 0 ? `. ${inr(quote.savingsToRefund)} of held savings will be refunded to the client automatically` : ''}? This settles and closes the loan — it cannot be undone.`,
+        + `${quote.savingsToRefund > 0 ? `. ${inr(quote.savingsToRefund)} of held savings stays on the savings account — refund it separately from Savings Refunds` : ''}? This settles and closes the loan — it cannot be undone.`,
       confirmLabel: 'Foreclose',
       danger: true,
     });
@@ -134,10 +134,10 @@ export function ForeclosurePage() {
               </div>
               <div className="detail-item"><div className="k">Advance on hand</div><div className="v">{inr(quote.advanceBalance)}</div></div>
               <div className="detail-item">
-                <div className="k">Savings to be refunded</div>
+                <div className="k">Savings held (refund separately)</div>
                 <div className="v">{inr(quote.savingsToRefund)}
                   {quote.savingsToRefund > 0 && (
-                    <span className="hint" style={{ display: 'block', marginTop: 2 }}>Paid to the client automatically once foreclosed.</span>
+                    <span className="hint" style={{ display: 'block', marginTop: 2 }}>Stays on the savings account — refund from the Savings Refunds page.</span>
                   )}
                 </div>
               </div>
