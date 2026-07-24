@@ -36,6 +36,7 @@ export const getDue = (centerId: string, date?: string) =>
 
 export interface RecentCollection {
   id: string;
+  loanId: string;
   collectedOn: string;
   clientName: string;
   displayId: string;

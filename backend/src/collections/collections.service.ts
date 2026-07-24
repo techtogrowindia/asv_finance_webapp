@@ -213,6 +213,7 @@ export class CollectionsService {
         const cl = r.loan.client;
         return {
           id: r.id,
+          loanId: r.loanId,
           collectedOn: r.collectedOn,
           clientName: cl.name,
           displayId: `${stripLeadingZeros(cl.center.branch.code)}.${stripLeadingZeros(cl.center.code)}.${cl.group.groupNo}.${cl.memberNo}`,
